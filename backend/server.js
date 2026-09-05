@@ -1,4 +1,5 @@
-﻿import express from "express";
+﻿
+import express from "express";
 import cors from "cors";
 import Database from "better-sqlite3";
 import {
@@ -66,49 +67,6 @@ db.prepare(`
 `).run();
 
 console.log("Product table ready.");
-
-// =====================================
-// CREATE DEFAULT SUPER ADMIN
-// =====================================
-
-const existingSuperAdmin = db.prepare(`
-  SELECT id
-  FROM staff
-  WHERE username = ?
-`).get("superadmin");
-
-if (!existingSuperAdmin) {
-  const passwordHash = await hashPassword("JustBrand@2026");
-
-  db.prepare(`
-    INSERT INTO staff (
-      name,
-      username,
-      passwordHash,
-      role,
-      status,
-      permissions,
-      createdAt
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    "JustBrand Super Admin",
-    "superadmin",
-    passwordHash,
-    "super_admin",
-    "active",
-    JSON.stringify({
-      all: true,
-      staffManagement: true,
-      productApproval: true,
-      finance: true,
-      payments: true,
-    }),
-    new Date().toISOString()
-  );
-
-  console.log("Default Super Admin created.");
-}
 
 // =====================================
 // HELPER
@@ -218,7 +176,6 @@ app.post("/api/staff/login", async (req, res) => {
       token,
       staff: publicStaff(updatedStaff),
     });
-
   } catch (error) {
     console.error("STAFF LOGIN ERROR:", error);
 
@@ -262,7 +219,6 @@ app.get(
         success: true,
         staff: publicStaff(staff),
       });
-
     } catch (error) {
       console.error("STAFF ME ERROR:", error);
 
@@ -303,7 +259,6 @@ app.get(
         success: true,
         staff: staff.map(publicStaff),
       });
-
     } catch (error) {
       console.error("GET STAFF ERROR:", error);
 
@@ -361,8 +316,7 @@ app.post(
       if (!password || String(password).length < 6) {
         return res.status(400).json({
           success: false,
-          message:
-            "Password must be at least 6 characters.",
+          message: "Password must be at least 6 characters.",
         });
       }
 
@@ -436,7 +390,6 @@ app.post(
         message: "Staff account created successfully.",
         staff: publicStaff(newStaff),
       });
-
     } catch (error) {
       console.error("CREATE STAFF ERROR:", error);
 
@@ -481,7 +434,6 @@ app.put(
         });
       }
 
-      // Super admin account cannot be changed to another role.
       if (
         staff.role === "super_admin" &&
         req.body.role &&
@@ -489,8 +441,7 @@ app.put(
       ) {
         return res.status(403).json({
           success: false,
-          message:
-            "Super Admin role cannot be changed.",
+          message: "Super Admin role cannot be changed.",
         });
       }
 
@@ -572,7 +523,6 @@ app.put(
         message: "Staff account updated successfully.",
         staff: publicStaff(updatedStaff),
       });
-
     } catch (error) {
       console.error("UPDATE STAFF ERROR:", error);
 
@@ -596,15 +546,12 @@ app.put(
   async (req, res) => {
     try {
       const id = Number(req.params.id);
-      const password = String(
-        req.body.password || ""
-      );
+      const password = String(req.body.password || "");
 
       if (!password || password.length < 6) {
         return res.status(400).json({
           success: false,
-          message:
-            "Password must be at least 6 characters.",
+          message: "Password must be at least 6 characters.",
         });
       }
 
@@ -634,7 +581,6 @@ app.put(
         success: true,
         message: "Staff password changed successfully.",
       });
-
     } catch (error) {
       console.error(
         "CHANGE PASSWORD ERROR:",
@@ -700,7 +646,6 @@ app.delete(
         success: true,
         message: "Staff account deleted successfully.",
       });
-
     } catch (error) {
       console.error(
         "DELETE STAFF ERROR:",
@@ -731,7 +676,6 @@ app.get("/api/products", (req, res) => {
     `).all();
 
     res.json(products);
-
   } catch (error) {
     console.error(error);
 
@@ -766,7 +710,6 @@ app.get(
         success: true,
         products,
       });
-
     } catch (error) {
       console.error(error);
 
@@ -853,7 +796,6 @@ app.post("/api/products", (req, res) => {
         "Product submitted for admin approval.",
       product,
     });
-
   } catch (error) {
     console.error(error);
 
@@ -906,7 +848,6 @@ app.put(
           "Product approved successfully.",
         product,
       });
-
     } catch (error) {
       console.error(error);
 
@@ -961,7 +902,6 @@ app.put(
           "Product rejected.",
         product,
       });
-
     } catch (error) {
       console.error(error);
 
@@ -1005,7 +945,6 @@ app.delete(
         message:
           "Product deleted.",
       });
-
     } catch (error) {
       console.error(error);
 
@@ -1052,7 +991,6 @@ app.get(
         success: true,
         products,
       });
-
     } catch (error) {
       console.error(error);
 
@@ -1199,7 +1137,6 @@ app.get(
         results:
           compareResults,
       });
-
     } catch (error) {
       console.error(error);
 
@@ -1213,15 +1150,95 @@ app.get(
 );
 
 // =====================================================
-// SERVER
+// SERVER START
 // =====================================================
 
-const PORT = 5000;
+async function startServer() {
+  // =====================================
+  // CREATE DEFAULT SUPER ADMIN
+  // =====================================
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log("=====================================");
-  console.log("JustBrand Backend running");
-  console.log(`Local:   http://localhost:${PORT}`);
-  console.log(`Network: http://10.133.123.2:${PORT}`);
-  console.log("=====================================");
+  const existingSuperAdmin = db.prepare(`
+    SELECT id
+    FROM staff
+    WHERE username = ?
+  `).get("superadmin");
+
+  if (!existingSuperAdmin) {
+    const passwordHash =
+      await hashPassword(
+        "JustBrand@2026"
+      );
+
+    db.prepare(`
+      INSERT INTO staff (
+        name,
+        username,
+        passwordHash,
+        role,
+        status,
+        permissions,
+        createdAt
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      "JustBrand Super Admin",
+      "superadmin",
+      passwordHash,
+      "super_admin",
+      "active",
+      JSON.stringify({
+        all: true,
+        staffManagement: true,
+        productApproval: true,
+        finance: true,
+        payments: true,
+      }),
+      new Date().toISOString()
+    );
+
+    console.log(
+      "Default Super Admin created."
+    );
+  }
+
+  // =====================================
+  // HOSTINGER PORT
+  // =====================================
+
+  const PORT =
+    Number(process.env.PORT) || 5000;
+
+  app.listen(
+    PORT,
+    "0.0.0.0",
+    () => {
+      console.log(
+        "====================================="
+      );
+      console.log(
+        "JustBrand Backend running"
+      );
+      console.log(
+        `Port: ${PORT}`
+      );
+      console.log(
+        "====================================="
+      );
+    }
+  );
+}
+
+// =====================================
+// START APPLICATION
+// =====================================
+
+startServer().catch((error) => {
+  console.error(
+    "SERVER START ERROR:",
+    error
+  );
+
+  process.exit(1);
 });
+
