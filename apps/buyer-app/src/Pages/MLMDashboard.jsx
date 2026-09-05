@@ -1,0 +1,1522 @@
+import React, { useEffect, useState } from "react";
+import MLMCommission from "./MLMCommission";
+
+function MLMDashboard({ member, onLogout }) {
+  const [activeMenu, setActiveMenu] = useState("dashboard");
+
+  const [mlmMember, setMlmMember] = useState(() => {
+    try {
+      const saved = localStorage.getItem("justbrand_mlm_member");
+      return saved ? JSON.parse(saved) : member || {};
+    } catch {
+      return member || {};
+    }
+  });
+
+  const [wallet, setWallet] = useState(0);
+  const [earnings, setEarnings] = useState(0);
+  const [leftTeam, setLeftTeam] = useState([]);
+  const [rightTeam, setRightTeam] = useState([]);
+  const [transactions, setTransactions] = useState([]);
+
+  useEffect(() => {
+    loadMLMData();
+
+    const timer = setInterval(() => {
+      loadMLMData();
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  function loadMLMData() {
+    try {
+      const savedMember = localStorage.getItem("justbrand_mlm_member");
+
+      if (savedMember) {
+        const data = JSON.parse(savedMember);
+
+        if (data && typeof data === "object") {
+          setMlmMember(data);
+        }
+      }
+
+      const savedWallet = localStorage.getItem("justbrand_mlm_wallet");
+
+      if (savedWallet) {
+        setWallet(Number(savedWallet) || 0);
+      }
+
+      const savedEarnings = localStorage.getItem(
+        "justbrand_mlm_earnings"
+      );
+
+      if (savedEarnings) {
+        setEarnings(Number(savedEarnings) || 0);
+      }
+
+      loadTeamMembers();
+
+      const savedTransactions = localStorage.getItem(
+        "justbrand_mlm_transactions"
+      );
+
+      if (savedTransactions) {
+        const data = JSON.parse(savedTransactions);
+
+        if (Array.isArray(data)) {
+          setTransactions(data);
+        }
+      }
+    } catch (error) {
+      console.log("MLM data loading error:", error);
+    }
+  }
+
+  function loadTeamMembers() {
+    try {
+      const currentMemberRaw = localStorage.getItem(
+        "justbrand_mlm_member"
+      );
+
+      const membersRaw = localStorage.getItem(
+        "justbrand_mlm_members"
+      );
+
+      if (!currentMemberRaw || !membersRaw) {
+        setLeftTeam([]);
+        setRightTeam([]);
+        return;
+      }
+
+      const currentMember = JSON.parse(currentMemberRaw);
+      const allMembers = JSON.parse(membersRaw);
+
+      if (!Array.isArray(allMembers)) {
+        setLeftTeam([]);
+        setRightTeam([]);
+        return;
+      }
+
+      const currentId =
+        currentMember?.memberId ||
+        currentMember?.id ||
+        null;
+
+      if (!currentId) {
+        setLeftTeam([]);
+        setRightTeam([]);
+        return;
+      }
+
+      const children = allMembers.filter((item) => {
+        const parentId =
+          item?.parentId ||
+          item?.sponsorId ||
+          item?.parentMemberId ||
+          null;
+
+        return String(parentId) === String(currentId);
+      });
+
+      const left = children.filter((item) => {
+        return String(item?.position || "").toLowerCase() === "left";
+      });
+
+      const right = children.filter((item) => {
+        return String(item?.position || "").toLowerCase() === "right";
+      });
+
+      setLeftTeam(left);
+      setRightTeam(right);
+    } catch (error) {
+      console.log("Team loading error:", error);
+
+      setLeftTeam([]);
+      setRightTeam([]);
+    }
+  }
+
+  const memberName =
+    mlmMember?.name ||
+    mlmMember?.memberName ||
+    mlmMember?.fullName ||
+    "MLM Member";
+
+  const memberId =
+    mlmMember?.memberId ||
+    mlmMember?.id ||
+    "JB-MEMBER";
+
+  const mobile =
+    mlmMember?.mobile ||
+    mlmMember?.phone ||
+    "Not Added";
+
+  const email =
+    mlmMember?.email ||
+    "Not Added";
+
+  const referralCode =
+    mlmMember?.referralCode ||
+    mlmMember?.referral ||
+    memberId;
+
+  const leftCount = leftTeam.length;
+  const rightCount = rightTeam.length;
+  const totalTeam = leftCount + rightCount;
+
+  function copyReferralLink() {
+    const link =
+      `${window.location.origin}/mlm-register?ref=${referralCode}`;
+
+    if (
+      navigator.clipboard &&
+      navigator.clipboard.writeText
+    ) {
+      navigator.clipboard
+        .writeText(link)
+        .then(() => {
+          alert("Referral link copied successfully!");
+        })
+        .catch(() => {
+          alert(link);
+        });
+    } else {
+      alert(link);
+    }
+  }
+
+  function handleLogout() {
+    if (onLogout) {
+      onLogout();
+    }
+  }
+
+  return (
+    <div style={styles.page}>
+
+      <header style={styles.header}>
+        <div style={styles.headerLeft}>
+          <div style={styles.logo}>
+            JustBrand
+          </div>
+
+          <div style={styles.panelText}>
+            MLM Dashboard
+          </div>
+        </div>
+
+        <div style={styles.memberMini}>
+          <div style={styles.avatar}>
+            {memberName.charAt(0).toUpperCase()}
+          </div>
+
+          <div>
+            <div style={styles.memberName}>
+              {memberName}
+            </div>
+
+            <div style={styles.memberId}>
+              ID: {memberId}
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div style={styles.layout}>
+
+        <aside style={styles.sidebar}>
+
+          <div style={styles.menuTitle}>
+            MLM MENU
+          </div>
+
+          <MenuButton
+            icon="🏠"
+            text="Dashboard"
+            active={activeMenu === "dashboard"}
+            onClick={() => setActiveMenu("dashboard")}
+          />
+
+          <MenuButton
+            icon="🌳"
+            text="My Team"
+            active={activeMenu === "team"}
+            onClick={() => setActiveMenu("team")}
+          />
+
+          <MenuButton
+            icon="💳"
+            text="Wallet"
+            active={activeMenu === "wallet"}
+            onClick={() => setActiveMenu("wallet")}
+          />
+
+          <MenuButton
+            icon="💰"
+            text="Commission"
+            active={activeMenu === "commission"}
+            onClick={() => setActiveMenu("commission")}
+          />
+
+          <MenuButton
+            icon="💵"
+            text="Earnings"
+            active={activeMenu === "earnings"}
+            onClick={() => setActiveMenu("earnings")}
+          />
+
+          <MenuButton
+            icon="🔗"
+            text="Referral"
+            active={activeMenu === "referral"}
+            onClick={() => setActiveMenu("referral")}
+          />
+
+          <MenuButton
+            icon="📜"
+            text="Income History"
+            active={activeMenu === "history"}
+            onClick={() => setActiveMenu("history")}
+          />
+
+          <div style={styles.divider} />
+
+          <div style={styles.menuTitle}>
+            ACCOUNT
+          </div>
+
+          <MenuButton
+            icon="👤"
+            text="My Profile"
+            active={activeMenu === "profile"}
+            onClick={() => setActiveMenu("profile")}
+          />
+
+          <div style={styles.logoutArea}>
+            <button
+              onClick={handleLogout}
+              style={styles.logoutButton}
+            >
+              🚪 Logout
+            </button>
+          </div>
+
+        </aside>
+
+        <main style={styles.content}>
+
+          {activeMenu === "commission" && (
+            <MLMCommission
+              onBack={() => setActiveMenu("dashboard")}
+            />
+          )}
+
+          {activeMenu === "dashboard" && (
+            <>
+              <div style={styles.welcomeBox}>
+
+                <div>
+                  <h1 style={styles.welcomeTitle}>
+                    Welcome, {memberName} 👋
+                  </h1>
+
+                  <p style={styles.welcomeText}>
+                    Welcome to your JustBrand MLM dashboard.
+                  </p>
+                </div>
+
+                <div style={styles.memberBadge}>
+                  Member ID: {memberId}
+                </div>
+
+              </div>
+
+              <div style={styles.statsGrid}>
+
+                <StatCard
+                  icon="💳"
+                  title="Wallet Balance"
+                  value={`₹${wallet.toLocaleString("en-IN")}`}
+                  description="Available balance"
+                />
+
+                <StatCard
+                  icon="💰"
+                  title="Total Earnings"
+                  value={`₹${earnings.toLocaleString("en-IN")}`}
+                  description="Lifetime earnings"
+                />
+
+                <StatCard
+                  icon="👥"
+                  title="Total Team"
+                  value={totalTeam}
+                  description="Left + Right team"
+                />
+
+                <StatCard
+                  icon="🎁"
+                  title="Referral Code"
+                  value={referralCode}
+                  description="Share and grow"
+                />
+
+              </div>
+
+              <section style={styles.section}>
+
+                <h2 style={styles.sectionTitle}>
+                  🌳 Binary Team
+                </h2>
+
+                <p style={styles.sectionSubtitle}>
+                  Your left and right team.
+                </p>
+
+                <div style={styles.binaryGrid}>
+
+                  <TeamCard
+                    side="LEFT"
+                    icon="⬅️"
+                    count={leftCount}
+                    members={leftTeam}
+                  />
+
+                  <div style={styles.treeCenter}>
+
+                    <div style={styles.treeCircle}>
+                      👤
+                    </div>
+
+                    <div style={styles.treeName}>
+                      {memberName}
+                    </div>
+
+                    <div style={styles.treeId}>
+                      {memberId}
+                    </div>
+
+                  </div>
+
+                  <TeamCard
+                    side="RIGHT"
+                    icon="➡️"
+                    count={rightCount}
+                    members={rightTeam}
+                  />
+
+                </div>
+
+              </section>
+
+              <section style={styles.section}>
+
+                <h2 style={styles.sectionTitle}>
+                  🔗 Your Referral
+                </h2>
+
+                <p style={styles.sectionSubtitle}>
+                  Invite new members to JustBrand Family.
+                </p>
+
+                <div style={styles.referralBox}>
+
+                  <div>
+                    <div style={styles.smallLabel}>
+                      REFERRAL CODE
+                    </div>
+
+                    <div style={styles.referralCode}>
+                      {referralCode}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={copyReferralLink}
+                    style={styles.copyButton}
+                  >
+                    🔗 Copy Referral Link
+                  </button>
+
+                </div>
+
+              </section>
+
+              <section style={styles.section}>
+
+                <h2 style={styles.sectionTitle}>
+                  📜 Recent Income
+                </h2>
+
+                <p style={styles.sectionSubtitle}>
+                  Your latest MLM income.
+                </p>
+
+                {transactions.length === 0 ? (
+                  <div style={styles.emptyBox}>
+                    <div style={styles.emptyIcon}>
+                      💰
+                    </div>
+
+                    <h3>
+                      No Income Yet
+                    </h3>
+
+                    <p>
+                      Your MLM earnings will appear here.
+                    </p>
+                  </div>
+                ) : (
+                  <div style={styles.transactionList}>
+                    {transactions
+                      .slice(0, 5)
+                      .map((item, index) => (
+                        <Transaction
+                          key={item.id || index}
+                          item={item}
+                        />
+                      ))}
+                  </div>
+                )}
+
+              </section>
+            </>
+          )}
+
+          {activeMenu === "team" && (
+            <PageBox
+              icon="🌳"
+              title="My Team"
+              subtitle="Manage your binary MLM team."
+            >
+
+              <div style={styles.bigTeamGrid}>
+
+                <TeamCard
+                  side="LEFT"
+                  icon="⬅️"
+                  count={leftCount}
+                  members={leftTeam}
+                />
+
+                <TeamCard
+                  side="RIGHT"
+                  icon="➡️"
+                  count={rightCount}
+                  members={rightTeam}
+                />
+
+              </div>
+
+            </PageBox>
+          )}
+
+          {activeMenu === "wallet" && (
+            <PageBox
+              icon="💳"
+              title="MLM Wallet"
+              subtitle="Manage your JustBrand wallet."
+            >
+
+              <div style={styles.walletCard}>
+
+                <div style={styles.walletIcon}>
+                  💳
+                </div>
+
+                <div style={styles.walletLabel}>
+                  Available Balance
+                </div>
+
+                <div style={styles.walletAmount}>
+                  ₹{wallet.toLocaleString("en-IN")}
+                </div>
+
+              </div>
+
+              <div style={styles.infoMessage}>
+                ℹ️ Approved commission will be added
+                to your wallet after the applicable
+                return period.
+              </div>
+
+            </PageBox>
+          )}
+
+          {activeMenu === "earnings" && (
+            <PageBox
+              icon="💵"
+              title="My Earnings"
+              subtitle="Track your MLM income."
+            >
+
+              <div style={styles.earningsCard}>
+
+                <div style={styles.earningsIcon}>
+                  💰
+                </div>
+
+                <div style={styles.earningsLabel}>
+                  Total Earnings
+                </div>
+
+                <div style={styles.earningsAmount}>
+                  ₹{earnings.toLocaleString("en-IN")}
+                </div>
+
+              </div>
+
+              <div style={styles.infoMessage}>
+                🎁 Direct referral, shopping and
+                binary commissions will be shown here.
+              </div>
+
+            </PageBox>
+          )}
+
+          {activeMenu === "referral" && (
+            <PageBox
+              icon="🔗"
+              title="Referral Center"
+              subtitle="Invite new members."
+            >
+
+              <div style={styles.referralLarge}>
+
+                <div style={styles.smallLabel}>
+                  YOUR REFERRAL CODE
+                </div>
+
+                <div style={styles.largeReferralCode}>
+                  {referralCode}
+                </div>
+
+                <button
+                  onClick={copyReferralLink}
+                  style={styles.primaryButton}
+                >
+                  🔗 Copy Referral Link
+                </button>
+
+              </div>
+
+            </PageBox>
+          )}
+
+          {activeMenu === "history" && (
+            <PageBox
+              icon="📜"
+              title="Income History"
+              subtitle="View all MLM transactions."
+            >
+
+              {transactions.length === 0 ? (
+                <div style={styles.emptyBox}>
+
+                  <div style={styles.emptyIcon}>
+                    📜
+                  </div>
+
+                  <h3>
+                    No Transactions
+                  </h3>
+
+                  <p>
+                    Your income history will appear here.
+                  </p>
+
+                </div>
+              ) : (
+                <div style={styles.transactionList}>
+
+                  {transactions.map((item, index) => (
+                    <Transaction
+                      key={item.id || index}
+                      item={item}
+                    />
+                  ))}
+
+                </div>
+              )}
+
+            </PageBox>
+          )}
+
+          {activeMenu === "profile" && (
+            <PageBox
+              icon="👤"
+              title="My Profile"
+              subtitle="Your JustBrand MLM member details."
+            >
+
+              <div style={styles.profileGrid}>
+
+                <InfoBox
+                  icon="👤"
+                  label="Name"
+                  value={memberName}
+                />
+
+                <InfoBox
+                  icon="🆔"
+                  label="Member ID"
+                  value={memberId}
+                />
+
+                <InfoBox
+                  icon="📱"
+                  label="Mobile"
+                  value={mobile}
+                />
+
+                <InfoBox
+                  icon="📧"
+                  label="Email"
+                  value={email}
+                />
+
+                <InfoBox
+                  icon="🔗"
+                  label="Referral Code"
+                  value={referralCode}
+                />
+
+              </div>
+
+            </PageBox>
+          )}
+
+        </main>
+
+      </div>
+
+    </div>
+  );
+}
+
+function MenuButton({
+  icon,
+  text,
+  active,
+  onClick,
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        width: "100%",
+        border: "none",
+        background: active ? "#fff0f5" : "transparent",
+        color: active ? "#ff1493" : "#444",
+        padding: "12px 15px",
+        display: "flex",
+        alignItems: "center",
+        gap: "12px",
+        textAlign: "left",
+        borderRadius: "8px",
+        cursor: "pointer",
+        fontWeight: active ? "bold" : "500",
+        fontSize: "14px",
+        marginBottom: "4px",
+      }}
+    >
+      <span style={{ fontSize: "18px" }}>
+        {icon}
+      </span>
+
+      {text}
+    </button>
+  );
+}
+
+function StatCard({
+  icon,
+  title,
+  value,
+  description,
+}) {
+  return (
+    <div style={styles.statCard}>
+
+      <div style={styles.statIcon}>
+        {icon}
+      </div>
+
+      <div style={styles.statTitle}>
+        {title}
+      </div>
+
+      <div style={styles.statValue}>
+        {value}
+      </div>
+
+      <div style={styles.statDescription}>
+        {description}
+      </div>
+
+    </div>
+  );
+}
+
+function TeamCard({
+  side,
+  icon,
+  count,
+  members,
+}) {
+  return (
+    <div style={styles.teamCard}>
+
+      <div style={styles.teamHeader}>
+
+        <div style={styles.teamSide}>
+          {icon} {side} TEAM
+        </div>
+
+        <div style={styles.teamCount}>
+          {count}
+        </div>
+
+      </div>
+
+      {members.length === 0 ? (
+        <div style={styles.noMember}>
+          No member yet
+        </div>
+      ) : (
+        <div style={styles.memberList}>
+
+          {members.map((item, index) => {
+
+            const name =
+              item?.name ||
+              item?.memberName ||
+              item?.fullName ||
+              `Member ${index + 1}`;
+
+            const id =
+              item?.memberId ||
+              item?.id ||
+              "Member";
+
+            return (
+              <div
+                key={
+                  item?.memberId ||
+                  item?.id ||
+                  index
+                }
+                style={styles.teamMember}
+              >
+
+                <div style={styles.memberAvatar}>
+                  {name.charAt(0).toUpperCase()}
+                </div>
+
+                <div>
+
+                  <div style={styles.memberItemName}>
+                    {name}
+                  </div>
+
+                  <div style={styles.memberItemId}>
+                    {id}
+                  </div>
+
+                </div>
+
+              </div>
+            );
+          })}
+
+        </div>
+      )}
+
+    </div>
+  );
+}
+
+function Transaction({ item }) {
+  const amount = Number(item?.amount || 0);
+
+  return (
+    <div style={styles.transaction}>
+
+      <div style={styles.transactionIcon}>
+        💰
+      </div>
+
+      <div style={styles.transactionContent}>
+
+        <div style={styles.transactionTitle}>
+          {item?.title ||
+            item?.type ||
+            "MLM Income"}
+        </div>
+
+        <div style={styles.transactionDate}>
+          {item?.date ||
+            item?.createdAt ||
+            "Recent"}
+        </div>
+
+      </div>
+
+      <div style={styles.transactionAmount}>
+        +₹{amount.toLocaleString("en-IN")}
+      </div>
+
+    </div>
+  );
+}
+
+function PageBox({
+  icon,
+  title,
+  subtitle,
+  children,
+}) {
+  return (
+    <section style={styles.pageBox}>
+
+      <div style={styles.pageBoxHeader}>
+
+        <div style={styles.pageBoxIcon}>
+          {icon}
+        </div>
+
+        <div>
+
+          <h1 style={styles.pageBoxTitle}>
+            {title}
+          </h1>
+
+          <p style={styles.pageBoxSubtitle}>
+            {subtitle}
+          </p>
+
+        </div>
+
+      </div>
+
+      <div style={styles.pageBoxContent}>
+        {children}
+      </div>
+
+    </section>
+  );
+}
+
+function InfoBox({
+  icon,
+  label,
+  value,
+}) {
+  return (
+    <div style={styles.infoBox}>
+
+      <div style={styles.infoIcon}>
+        {icon}
+      </div>
+
+      <div>
+
+        <div style={styles.infoLabel}>
+          {label}
+        </div>
+
+        <div style={styles.infoValue}>
+          {value}
+        </div>
+
+      </div>
+
+    </div>
+  );
+}
+
+const styles = {
+  page: {
+    minHeight: "100vh",
+    background: "#f5f5f5",
+    color: "#222",
+  },
+
+  header: {
+    minHeight: "70px",
+    background: "linear-gradient(135deg,#ff6b00,#ff1493)",
+    color: "#fff",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "12px 25px",
+    boxSizing: "border-box",
+    gap: "15px",
+  },
+
+  headerLeft: {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+  },
+
+  logo: {
+    fontSize: "25px",
+    fontWeight: "bold",
+  },
+
+  panelText: {
+    borderLeft: "1px solid rgba(255,255,255,0.5)",
+    paddingLeft: "12px",
+    fontSize: "14px",
+  },
+
+  memberMini: {
+    display: "flex",
+    alignItems: "center",
+    gap: "9px",
+  },
+
+  avatar: {
+    width: "40px",
+    height: "40px",
+    borderRadius: "50%",
+    background: "#fff",
+    color: "#ff1493",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontWeight: "bold",
+    fontSize: "18px",
+  },
+
+  memberName: {
+    fontSize: "13px",
+    fontWeight: "bold",
+  },
+
+  memberId: {
+    fontSize: "11px",
+    opacity: 0.85,
+    marginTop: "2px",
+  },
+
+  layout: {
+    display: "flex",
+    minHeight: "calc(100vh - 70px)",
+    alignItems: "stretch",
+  },
+
+  sidebar: {
+    width: "245px",
+    background: "#fff",
+    padding: "20px 12px",
+    boxSizing: "border-box",
+    borderRight: "1px solid #eee",
+    flexShrink: 0,
+  },
+
+  menuTitle: {
+    fontSize: "10px",
+    fontWeight: "bold",
+    color: "#999",
+    padding: "5px 12px 10px",
+    letterSpacing: "0.5px",
+  },
+
+  divider: {
+    height: "1px",
+    background: "#eee",
+    margin: "15px 5px",
+  },
+
+  logoutArea: {
+    marginTop: "25px",
+    padding: "10px 5px",
+    borderTop: "1px solid #eee",
+  },
+
+  logoutButton: {
+    width: "100%",
+    padding: "11px",
+    border: "none",
+    borderRadius: "8px",
+    background: "#fff0f0",
+    color: "#dc3545",
+    cursor: "pointer",
+    fontWeight: "bold",
+  },
+
+  content: {
+    flex: 1,
+    minWidth: 0,
+    padding: "25px",
+    boxSizing: "border-box",
+  },
+
+  welcomeBox: {
+    background: "linear-gradient(135deg,#fff,#fff8f5)",
+    borderRadius: "14px",
+    padding: "22px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "15px",
+    flexWrap: "wrap",
+    boxShadow: "0 2px 10px rgba(0,0,0,0.06)",
+    border: "1px solid #f1f1f1",
+  },
+
+  welcomeTitle: {
+    margin: 0,
+    fontSize: "25px",
+  },
+
+  welcomeText: {
+    margin: "6px 0 0",
+    color: "#777",
+    fontSize: "14px",
+  },
+
+  memberBadge: {
+    padding: "10px 15px",
+    background: "#fff0f5",
+    color: "#ff1493",
+    borderRadius: "20px",
+    fontSize: "12px",
+    fontWeight: "bold",
+  },
+
+  statsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))",
+    gap: "15px",
+    marginTop: "20px",
+  },
+
+  statCard: {
+    background: "#fff",
+    borderRadius: "12px",
+    padding: "18px",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+  },
+
+  statIcon: {
+    fontSize: "27px",
+  },
+
+  statTitle: {
+    marginTop: "7px",
+    color: "#666",
+    fontSize: "13px",
+  },
+
+  statValue: {
+    marginTop: "3px",
+    fontSize: "25px",
+    fontWeight: "bold",
+    wordBreak: "break-word",
+  },
+
+  statDescription: {
+    marginTop: "3px",
+    color: "#999",
+    fontSize: "11px",
+  },
+
+  section: {
+    marginTop: "22px",
+    background: "#fff",
+    borderRadius: "14px",
+    padding: "20px",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+  },
+
+  sectionTitle: {
+    margin: 0,
+    fontSize: "19px",
+  },
+
+  sectionSubtitle: {
+    margin: "5px 0 15px",
+    color: "#888",
+    fontSize: "13px",
+  },
+
+  binaryGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 150px 1fr",
+    gap: "15px",
+    alignItems: "center",
+  },
+
+  bigTeamGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))",
+    gap: "20px",
+  },
+
+  treeCenter: {
+    textAlign: "center",
+  },
+
+  treeCircle: {
+    width: "70px",
+    height: "70px",
+    margin: "0 auto",
+    borderRadius: "50%",
+    background: "linear-gradient(135deg,#ff6b00,#ff1493)",
+    color: "#fff",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "30px",
+  },
+
+  treeName: {
+    marginTop: "8px",
+    fontWeight: "bold",
+    fontSize: "13px",
+  },
+
+  treeId: {
+    marginTop: "3px",
+    color: "#888",
+    fontSize: "11px",
+  },
+
+  teamCard: {
+    background: "#fafafa",
+    border: "1px solid #eee",
+    borderRadius: "12px",
+    padding: "15px",
+  },
+
+  teamHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: "10px",
+  },
+
+  teamSide: {
+    fontWeight: "bold",
+    color: "#ff1493",
+    fontSize: "13px",
+  },
+
+  teamCount: {
+    width: "30px",
+    height: "30px",
+    borderRadius: "50%",
+    background: "#fff0f5",
+    color: "#ff1493",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontWeight: "bold",
+  },
+
+  noMember: {
+    padding: "25px 10px",
+    textAlign: "center",
+    color: "#999",
+    fontSize: "13px",
+  },
+
+  memberList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px",
+  },
+
+  teamMember: {
+    display: "flex",
+    alignItems: "center",
+    gap: "9px",
+    padding: "8px",
+    background: "#fff",
+    borderRadius: "8px",
+  },
+
+  memberAvatar: {
+    width: "32px",
+    height: "32px",
+    borderRadius: "50%",
+    background: "#ffe7d6",
+    color: "#ff6b00",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontWeight: "bold",
+  },
+
+  memberItemName: {
+    fontSize: "12px",
+    fontWeight: "bold",
+  },
+
+  memberItemId: {
+    marginTop: "2px",
+    color: "#999",
+    fontSize: "10px",
+  },
+
+  referralBox: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "15px",
+    flexWrap: "wrap",
+    padding: "15px",
+    background: "#fff8f5",
+    borderRadius: "10px",
+    border: "1px solid #ffe2d0",
+  },
+
+  smallLabel: {
+    color: "#999",
+    fontSize: "10px",
+    fontWeight: "bold",
+  },
+
+  referralCode: {
+    marginTop: "5px",
+    fontSize: "20px",
+    fontWeight: "bold",
+    color: "#ff1493",
+  },
+
+  copyButton: {
+    border: "none",
+    background: "linear-gradient(135deg,#ff6b00,#ff1493)",
+    color: "#fff",
+    padding: "11px 16px",
+    borderRadius: "8px",
+    cursor: "pointer",
+    fontWeight: "bold",
+  },
+
+  emptyBox: {
+    textAlign: "center",
+    padding: "35px 15px",
+    color: "#777",
+  },
+
+  emptyIcon: {
+    fontSize: "45px",
+  },
+
+  transactionList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px",
+  },
+
+  transaction: {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+    padding: "12px",
+    background: "#fafafa",
+    borderRadius: "9px",
+    border: "1px solid #eee",
+  },
+
+  transactionIcon: {
+    width: "38px",
+    height: "38px",
+    borderRadius: "50%",
+    background: "#e9fff1",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  transactionContent: {
+    flex: 1,
+  },
+
+  transactionTitle: {
+    fontSize: "13px",
+    fontWeight: "bold",
+  },
+
+  transactionDate: {
+    marginTop: "3px",
+    fontSize: "10px",
+    color: "#999",
+  },
+
+  transactionAmount: {
+    color: "#198754",
+    fontWeight: "bold",
+    fontSize: "14px",
+  },
+
+  pageBox: {
+    background: "#fff",
+    borderRadius: "14px",
+    padding: "25px",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+  },
+
+  pageBoxHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: "15px",
+    paddingBottom: "20px",
+    borderBottom: "1px solid #eee",
+  },
+
+  pageBoxIcon: {
+    width: "55px",
+    height: "55px",
+    borderRadius: "12px",
+    background: "#fff0f5",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "27px",
+  },
+
+  pageBoxTitle: {
+    margin: 0,
+    fontSize: "24px",
+  },
+
+  pageBoxSubtitle: {
+    margin: "5px 0 0",
+    color: "#888",
+    fontSize: "13px",
+  },
+
+  pageBoxContent: {
+    marginTop: "20px",
+  },
+
+  walletCard: {
+    maxWidth: "450px",
+    padding: "25px",
+    borderRadius: "14px",
+    background: "linear-gradient(135deg,#ff6b00,#ff1493)",
+    color: "#fff",
+  },
+
+  walletIcon: {
+    fontSize: "30px",
+  },
+
+  walletLabel: {
+    marginTop: "15px",
+    fontSize: "13px",
+  },
+
+  walletAmount: {
+    marginTop: "5px",
+    fontSize: "32px",
+    fontWeight: "bold",
+  },
+
+  earningsCard: {
+    maxWidth: "450px",
+    padding: "25px",
+    borderRadius: "14px",
+    background: "linear-gradient(135deg,#ff6b00,#ff1493)",
+    color: "#fff",
+  },
+
+  earningsIcon: {
+    fontSize: "30px",
+  },
+
+  earningsLabel: {
+    marginTop: "15px",
+    fontSize: "13px",
+  },
+
+  earningsAmount: {
+    marginTop: "5px",
+    fontSize: "32px",
+    fontWeight: "bold",
+  },
+
+  infoMessage: {
+    marginTop: "20px",
+    padding: "14px",
+    background: "#eef7ff",
+    borderRadius: "8px",
+    color: "#555",
+    fontSize: "13px",
+    lineHeight: 1.5,
+  },
+
+  referralLarge: {
+    maxWidth: "500px",
+    textAlign: "center",
+    padding: "35px 20px",
+    background: "#fff8f5",
+    borderRadius: "14px",
+    border: "1px solid #ffe2d0",
+  },
+
+  largeReferralCode: {
+    margin: "10px 0 20px",
+    fontSize: "30px",
+    fontWeight: "bold",
+    color: "#ff1493",
+  },
+
+  primaryButton: {
+    border: "none",
+    background: "linear-gradient(135deg,#ff6b00,#ff1493)",
+    color: "#fff",
+    padding: "12px 20px",
+    borderRadius: "8px",
+    cursor: "pointer",
+    fontWeight: "bold",
+  },
+
+  profileGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
+    gap: "12px",
+  },
+
+  infoBox: {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+    padding: "14px",
+    background: "#fafafa",
+    borderRadius: "10px",
+    border: "1px solid #eee",
+  },
+
+  infoIcon: {
+    width: "40px",
+    height: "40px",
+    borderRadius: "50%",
+    background: "#fff0f5",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "19px",
+  },
+
+  infoLabel: {
+    fontSize: "11px",
+    color: "#999",
+  },
+
+  infoValue: {
+    marginTop: "3px",
+    fontSize: "14px",
+    fontWeight: "bold",
+    wordBreak: "break-word",
+  },
+};
+
+export default MLMDashboard;

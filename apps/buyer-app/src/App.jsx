@@ -8,173 +8,343 @@ import ProductDetails from "./pages2/ProductDetails";
 import Cart from "./pages2/Cart";
 import ComparePrice from "./pages2/ComparePrice";
 
-const BACKEND_URL =
-  "http://localhost:5000/api/products";
+// ==========================================
+// MLM PAGES
+// ==========================================
+
+import MLMCommission from "./pages/mlmcommission";
+import MLMCommissionRules from "./pages/mlmcommissionrules";
+import MLMDashboard from "./pages/mlmdashboard";
+import MLMLogin from "./pages/mlmlogin";
+import MLMRegister from "./pages/mlmregister";
+import MLMTree from "./pages/mlmtree";
+import MLMWallet from "./pages/mlmwallet";
+
+// ==========================================
+// BACKEND
+// ==========================================
+
+const BACKEND_URL = "http://10.18.167.2:5000/api/products";
+
+// ==========================================
+// APP
+// ==========================================
 
 function App() {
-  // =====================================
+  // ==========================================
   // CART
-  // =====================================
+  // ==========================================
 
   const [cart, setCart] = useState(() => {
     try {
-      const saved =
-        localStorage.getItem(
-          "justbrand_cart"
-        );
-
-      return saved
-        ? JSON.parse(saved)
-        : [];
+      const saved = localStorage.getItem("justbrand_cart");
+      return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
     }
   });
 
-  // =====================================
+  // ==========================================
   // WISHLIST
-  // =====================================
+  // ==========================================
 
-  const [wishlist, setWishlist] = useState(
-    () => {
-      try {
-        const saved =
-          localStorage.getItem(
-            "justbrand_wishlist"
-          );
-
-        return saved
-          ? JSON.parse(saved)
-          : [];
-      } catch {
-        return [];
-      }
+  const [wishlist, setWishlist] = useState(() => {
+    try {
+      const saved = localStorage.getItem("justbrand_wishlist");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
     }
-  );
+  });
 
-  // =====================================
+  // ==========================================
   // PRODUCTS
-  // =====================================
+  // ==========================================
 
-  const [products, setProducts] =
-    useState([]);
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const [loading, setLoading] =
-    useState(true);
+  // ==========================================
+  // SHOPPING PAGES
+  // ==========================================
 
-  // =====================================
-  // SELECTED PRODUCT
-  // =====================================
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [showCart, setShowCart] = useState(false);
 
-  const [selectedProduct, setSelectedProduct] =
+  // ==========================================
+  // COMPARE
+  // ==========================================
+
+  const [compareProducts, setCompareProducts] = useState([]);
+  const [compareSelectedProduct, setCompareSelectedProduct] =
     useState(null);
+  const [showCompare, setShowCompare] = useState(false);
 
-  // =====================================
-  // CART PAGE
-  // =====================================
-
-  const [showCart, setShowCart] =
-    useState(false);
-
-  // =====================================
-  // COMPARE PRODUCTS
-  // =====================================
-
-  const [compareProducts, setCompareProducts] =
-    useState([]);
-
-  const [showCompare, setShowCompare] =
-    useState(false);
-
-  // =====================================
+  // ==========================================
   // SEARCH
-  // =====================================
+  // ==========================================
 
-  const [search, setSearch] =
-    useState("");
+  const [search, setSearch] = useState("");
 
-  // =====================================
+  // ==========================================
   // CATEGORY
-  // =====================================
+  // ==========================================
 
-  const [category, setCategory] =
-    useState("All");
+  const [category, setCategory] = useState("All");
 
-  // =====================================
+  // ==========================================
+  // MLM PAGE
+  // ==========================================
+
+  const [mlmPage, setMlmPage] = useState(null);
+
+  // ==========================================
+  // MLM MEMBER
+  // ==========================================
+
+  const [mlmMember, setMlmMember] = useState(() => {
+    try {
+      const saved = localStorage.getItem("justbrand_mlm_member");
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  // ==========================================
   // LOAD PRODUCTS
-  // =====================================
+  // ==========================================
 
   useEffect(() => {
     loadProducts();
   }, []);
 
-  const loadProducts = async () => {
+  async function loadProducts() {
     setLoading(true);
 
-    try {
-      const response = await fetch(
-        BACKEND_URL
-      );
+    let loadedProducts = [];
 
-      if (!response.ok) {
-        throw new Error(
-          "Backend response failed"
+    // ========================================
+    // BACKEND PRODUCTS
+    // ========================================
+
+    try {
+      const response = await fetch(BACKEND_URL);
+
+      if (response.ok) {
+        const data = await response.json();
+
+        console.log("Backend products:", data);
+
+        if (Array.isArray(data)) {
+          loadedProducts = data;
+        } else if (
+          data &&
+          Array.isArray(data.products)
+        ) {
+          loadedProducts = data.products;
+        }
+      } else {
+        console.log(
+          "Backend response error:",
+          response.status
         );
       }
-
-      const data =
-        await response.json();
-
-      console.log(
-        "Products received:",
-        data
-      );
-
-      const backendProducts =
-        Array.isArray(data)
-          ? data
-          : Array.isArray(data.products)
-          ? data.products
-          : [];
-
-      setProducts(
-        backendProducts
-      );
     } catch (error) {
-      console.error(
-        "Backend loading error:",
+      console.log(
+        "Backend unavailable:",
         error
       );
+    }
 
-      // Seller products from localStorage
+    // ========================================
+    // LOCAL STORAGE FALLBACK
+    // ========================================
+
+    if (loadedProducts.length === 0) {
       try {
-        const localSellerProducts =
+        const savedProducts =
           localStorage.getItem(
             "justbrand_products"
           );
 
-        if (localSellerProducts) {
-          setProducts(
-            JSON.parse(
-              localSellerProducts
-            )
-          );
-        } else {
-          setProducts([]);
+        if (savedProducts) {
+          const localProducts =
+            JSON.parse(savedProducts);
+
+          if (Array.isArray(localProducts)) {
+            loadedProducts = localProducts;
+          }
         }
-      } catch {
-        setProducts([]);
+      } catch (error) {
+        console.log(
+          "Local products error:",
+          error
+        );
       }
     }
 
+    // ========================================
+    // DEMO PRODUCTS
+    // ========================================
+
+    if (loadedProducts.length === 0) {
+      loadedProducts = [
+        {
+          id: 1,
+          name: "Wireless Earbuds",
+          price: "₹999",
+          category: "Electronics",
+          image: "/images/product1.png",
+          shortDetails:
+            "Premium wireless earbuds",
+        },
+        {
+          id: 2,
+          name: "Smart Watch",
+          price: "₹1499",
+          category: "Electronics",
+          image: "/images/product2.jpeg",
+          shortDetails:
+            "Smart fitness watch",
+        },
+        {
+          id: 3,
+          name: "Men Fashion Shirt",
+          price: "₹799",
+          category: "Fashion",
+          image: "/images/product3.jpeg",
+          shortDetails:
+            "Premium cotton shirt",
+        },
+        {
+          id: 4,
+          name: "Beauty Product",
+          price: "₹599",
+          category: "Beauty",
+          image: "/images/product4.jpg",
+          shortDetails:
+            "Premium beauty product",
+        },
+      ];
+    }
+
+    // ========================================
+    // NORMALIZE PRODUCTS
+    // ========================================
+
+    const normalizedProducts =
+      loadedProducts.map(
+        (product, index) => {
+          let image =
+            product.image ||
+            product.imageUrl ||
+            product.photo ||
+            product.thumbnail ||
+            "";
+
+          // ======================================
+          // IMAGE NORMALIZATION
+          // ======================================
+
+          if (
+            image &&
+            String(image).startsWith("data:image/")
+          ) {
+            // Base64 image - keep unchanged
+          } else {
+            image = String(image);
+
+            // Windows path
+            if (image.includes("\\")) {
+              image = image.split("\\").pop();
+            }
+
+            // Remove public/images path
+            image = image.replace(
+              /^.*[\/\\]public[\/\\]images[\/\\]/i,
+              ""
+            );
+
+            // Remove /images/ or images/
+            image = image.replace(
+              /^\/?images[\/\\]/i,
+              ""
+            );
+
+            if (image) {
+              image = "/images/" + image;
+            }
+          }
+
+          // ======================================
+          // FALLBACK IMAGE
+          // ======================================
+
+          if (!image) {
+            const fallbackImages = [
+              "/images/product1.png",
+              "/images/product2.jpeg",
+              "/images/product3.jpeg",
+              "/images/product4.jpg",
+            ];
+
+            image =
+              fallbackImages[
+                index % fallbackImages.length
+              ];
+          }
+
+          // ======================================
+          // FINAL PRODUCT
+          // ======================================
+
+          return {
+            ...product,
+
+            id:
+              product.id !== undefined &&
+              product.id !== null
+                ? product.id
+                : Date.now() + index,
+
+            name:
+              product.name ||
+              product.productName ||
+              "Product",
+
+            price:
+              product.price ||
+              "₹0",
+
+            category:
+              product.category ||
+              "Other",
+
+            shortDetails:
+              product.shortDetails ||
+              product.description ||
+              "",
+
+            image,
+          };
+        }
+      );
+
+    console.log(
+      "FINAL PRODUCTS:",
+      normalizedProducts
+    );
+
+    setProducts(normalizedProducts);
     setLoading(false);
-  };
+  }
 
-  // =====================================
+  // ==========================================
   // ADD TO CART
-  // =====================================
+  // ==========================================
 
-  const addToCart = (product) => {
+  function addToCart(product) {
     setCart((prevCart) => {
       const existingProduct =
         prevCart.find(
@@ -186,16 +356,19 @@ function App() {
 
       if (existingProduct) {
         updatedCart =
-          prevCart.map((item) =>
-            item.id === product.id
-              ? {
-                  ...item,
-                  quantity:
-                    (item.quantity ||
-                      1) + 1,
-                }
-              : item
-          );
+          prevCart.map((item) => {
+            if (
+              item.id === product.id
+            ) {
+              return {
+                ...item,
+                quantity:
+                  (item.quantity || 1) + 1,
+              };
+            }
+
+            return item;
+          });
       } else {
         updatedCart = [
           ...prevCart,
@@ -208,24 +381,20 @@ function App() {
 
       localStorage.setItem(
         "justbrand_cart",
-        JSON.stringify(
-          updatedCart
-        )
+        JSON.stringify(updatedCart)
       );
 
       return updatedCart;
     });
 
-    alert(
-      "Product added to cart!"
-    );
-  };
+    alert("Product added to cart!");
+  }
 
-  // =====================================
-  // REMOVE CART
-  // =====================================
+  // ==========================================
+  // REMOVE FROM CART
+  // ==========================================
 
-  const removeFromCart = (id) => {
+  function removeFromCart(id) {
     setCart((prevCart) => {
       const updatedCart =
         prevCart.filter(
@@ -235,208 +404,217 @@ function App() {
 
       localStorage.setItem(
         "justbrand_cart",
-        JSON.stringify(
-          updatedCart
-        )
+        JSON.stringify(updatedCart)
       );
 
       return updatedCart;
     });
-  };
+  }
 
-  // =====================================
+  // ==========================================
   // UPDATE QUANTITY
-  // =====================================
+  // ==========================================
 
-  const updateQuantity = (
-    id,
-    quantity
-  ) => {
+  function updateQuantity(id, quantity) {
     setCart((prevCart) => {
       const updatedCart =
-        prevCart.map((item) =>
-          item.id === id
-            ? {
-                ...item,
-                quantity:
-                  Math.max(
-                    1,
-                    Number(
-                      quantity
-                    )
-                  ),
-              }
-            : item
-        );
+        prevCart.map((item) => {
+          if (
+            item.id === id
+          ) {
+            return {
+              ...item,
+              quantity:
+                Math.max(
+                  1,
+                  Number(quantity) || 1
+                ),
+            };
+          }
+
+          return item;
+        });
 
       localStorage.setItem(
         "justbrand_cart",
-        JSON.stringify(
-          updatedCart
-        )
+        JSON.stringify(updatedCart)
       );
 
       return updatedCart;
     });
-  };
+  }
 
-  // =====================================
+  // ==========================================
   // WISHLIST
-  // =====================================
+  // ==========================================
 
-  const addToWishlist = (
-    product
-  ) => {
-    setWishlist(
-      (prevWishlist) => {
-        const alreadyAdded =
-          prevWishlist.some(
-            (item) =>
-              item.id ===
-              product.id
-          );
-
-        if (alreadyAdded) {
-          return prevWishlist;
-        }
-
-        const updatedWishlist = [
-          ...prevWishlist,
-          product,
-        ];
-
-        localStorage.setItem(
-          "justbrand_wishlist",
-          JSON.stringify(
-            updatedWishlist
-          )
+  function addToWishlist(product) {
+    setWishlist((prevWishlist) => {
+      const exists =
+        prevWishlist.some(
+          (item) =>
+            item.id === product.id
         );
 
-        return updatedWishlist;
+      if (exists) {
+        alert("Already in wishlist!");
+        return prevWishlist;
       }
-    );
 
-    alert(
-      "Added to wishlist!"
-    );
-  };
+      const updatedWishlist = [
+        ...prevWishlist,
+        product,
+      ];
 
-  // =====================================
-  // COMPARE PRODUCT
-  // =====================================
+      localStorage.setItem(
+        "justbrand_wishlist",
+        JSON.stringify(updatedWishlist)
+      );
 
-  const onCompare = (product) => {
-    setCompareProducts(
-      (prev) => {
-        const alreadyExists =
-          prev.some(
-            (item) =>
-              item.id ===
-              product.id
-          );
+      alert("Added to wishlist!");
 
-        if (alreadyExists) {
-          setShowCompare(true);
-          return prev;
-        }
+      return updatedWishlist;
+    });
+  }
 
-        if (prev.length >= 4) {
-          alert(
-            "You can compare maximum 4 products."
-          );
+  // ==========================================
+  // COMPARE
+  // ==========================================
 
-          return prev;
-        }
+  function onCompare(product) {
+    // IMPORTANT:
+    // Remember exactly which product
+    // user clicked for comparison.
+    setCompareSelectedProduct(product);
 
-        return [
-          ...prev,
-          product,
-        ];
-      }
-    );
-
-    setShowCompare(true);
-  };
-
-  // =====================================
-  // COMPARE SLIDER PRODUCT
-  // =====================================
-
-  const compareSingleProduct = (
-    product
-  ) => {
-    setCompareProducts([
-      product,
-    ]);
-
-    setShowCompare(true);
-  };
-
-  // =====================================
-  // REMOVE COMPARE
-  // =====================================
-
-  const removeCompare = (id) => {
-    setCompareProducts(
-      (prev) =>
-        prev.filter(
+    setCompareProducts((prevProducts) => {
+      const exists =
+        prevProducts.some(
           (item) =>
-            item.id !== id
+            String(item.id) ===
+            String(product.id)
+        );
+
+      if (exists) {
+        return prevProducts;
+      }
+
+      if (
+        prevProducts.length >= 4
+      ) {
+        alert(
+          "You can compare maximum 4 products."
+        );
+
+        return prevProducts;
+      }
+
+      return [
+        ...prevProducts,
+        product,
+      ];
+    });
+
+    setShowCompare(true);
+  }
+
+  // ==========================================
+  // COMPARE SINGLE PRODUCT
+  // ==========================================
+
+  function compareSingleProduct(product) {
+    onCompare(product);
+  }
+
+  // ==========================================
+  // REMOVE COMPARE
+  // ==========================================
+
+  function removeCompare(id) {
+    setCompareProducts(
+      (prevProducts) =>
+        prevProducts.filter(
+          (item) =>
+            String(item.id) !==
+            String(id)
         )
     );
-  };
 
-  // =====================================
-  // FILTER PRODUCTS
-  // =====================================
+    // If removed product was selected,
+    // select another available product.
+    setCompareSelectedProduct(
+      (prevSelected) => {
+        if (
+          prevSelected &&
+          String(prevSelected.id) ===
+            String(id)
+        ) {
+          const remaining =
+            compareProducts.filter(
+              (item) =>
+                String(item.id) !==
+                String(id)
+            );
 
-  const filteredProducts =
-    products.filter(
-      (product) => {
-        const productName =
-          String(
-            product.name || ""
-          ).toLowerCase();
+          return remaining.length > 0
+            ? remaining[0]
+            : null;
+        }
 
-        const productDetails =
-          String(
-            product.shortDetails ||
-              product.description ||
-              ""
-          ).toLowerCase();
-
-        const productCategory =
-          String(
-            product.category ||
-              ""
-          );
-
-        const searchText =
-          search.toLowerCase();
-
-        const matchesSearch =
-          productName.includes(
-            searchText
-          ) ||
-          productDetails.includes(
-            searchText
-          );
-
-        const matchesCategory =
-          category === "All" ||
-          productCategory ===
-            category;
-
-        return (
-          matchesSearch &&
-          matchesCategory
-        );
+        return prevSelected;
       }
     );
+  }
 
-  // =====================================
-  // SEARCH SUGGESTIONS
-  // =====================================
+  // ==========================================
+  // FILTER PRODUCTS
+  // ==========================================
+
+  const filteredProducts =
+    products.filter((product) => {
+      const productName =
+        String(
+          product.name || ""
+        ).toLowerCase();
+
+      const productDetails =
+        String(
+          product.shortDetails ||
+          product.description ||
+          ""
+        ).toLowerCase();
+
+      const productCategory =
+        String(
+          product.category || ""
+        );
+
+      const searchText =
+        search
+          .toLowerCase()
+          .trim();
+
+      const matchesSearch =
+        productName.includes(
+          searchText
+        ) ||
+        productDetails.includes(
+          searchText
+        );
+
+      const matchesCategory =
+        category === "All" ||
+        productCategory === category;
+
+      return (
+        matchesSearch &&
+        matchesCategory
+      );
+    });
+
+  // ==========================================
+  // SEARCH CATEGORIES
+  // ==========================================
 
   const filteredCategories = [
     ...new Set(
@@ -448,100 +626,219 @@ function App() {
         .filter(Boolean)
     ),
   ].filter((cat) =>
-    cat
+    String(cat)
       .toLowerCase()
       .includes(
         search.toLowerCase()
       )
   );
 
-  // =====================================
+  // ==========================================
   // CART COUNT
-  // =====================================
+  // ==========================================
 
   const cartCount =
     cart.reduce(
       (total, item) =>
         total +
-        (Number(
-          item.quantity
-        ) || 1),
+        (Number(item.quantity) || 1),
       0
     );
 
-  // =====================================
-  // GO HOME
-  // =====================================
+  // ==========================================
+  // COMMON HEADER PROPS
+  // ==========================================
 
-  const goHome = () => {
-    setSelectedProduct(null);
-    setShowCart(false);
-    setShowCompare(false);
+  const commonHeaderProps = {
+    cartCount,
+    search,
+    setSearch,
+    filteredProducts,
+    filteredCategories,
+    onProductSelect:
+      setSelectedProduct,
   };
 
-  // =====================================
+  // ==========================================
+  // MLM LOGIN
+  // ==========================================
+
+  if (mlmPage === "login") {
+    return (
+      <MLMLogin
+        onLogin={(member) => {
+          setMlmMember(member);
+
+          localStorage.setItem(
+            "justbrand_mlm_member",
+            JSON.stringify(member)
+          );
+
+          setMlmPage("dashboard");
+        }}
+        onRegister={() =>
+          setMlmPage("register")
+        }
+        onBack={() =>
+          setMlmPage(null)
+        }
+      />
+    );
+  }
+
+  // ==========================================
+  // MLM REGISTER
+  // ==========================================
+
+  if (mlmPage === "register") {
+    return (
+      <MLMRegister
+        onRegistered={(member) => {
+          setMlmMember(member);
+
+          localStorage.setItem(
+            "justbrand_mlm_member",
+            JSON.stringify(member)
+          );
+
+          setMlmPage("dashboard");
+        }}
+        onBack={() =>
+          setMlmPage(null)
+        }
+      />
+    );
+  }
+
+  // ==========================================
+  // MLM DASHBOARD
+  // ==========================================
+
+  if (mlmPage === "dashboard") {
+    return (
+      <MLMDashboard
+        member={mlmMember}
+        onBack={() =>
+          setMlmPage(null)
+        }
+        onCommission={() =>
+          setMlmPage("commission")
+        }
+        onRules={() =>
+          setMlmPage("rules")
+        }
+        onTree={() =>
+          setMlmPage("tree")
+        }
+        onWallet={() =>
+          setMlmPage("wallet")
+        }
+        onLogout={() => {
+          localStorage.removeItem(
+            "justbrand_mlm_member"
+          );
+
+          setMlmMember(null);
+          setMlmPage("login");
+        }}
+      />
+    );
+  }
+
+  // ==========================================
+  // MLM COMMISSION
+  // ==========================================
+
+  if (mlmPage === "commission") {
+    return (
+      <MLMCommission
+        member={mlmMember}
+        onBack={() =>
+          setMlmPage("dashboard")
+        }
+      />
+    );
+  }
+
+  // ==========================================
+  // MLM RULES
+  // ==========================================
+
+  if (mlmPage === "rules") {
+    return (
+      <MLMCommissionRules
+        onBack={() =>
+          setMlmPage("dashboard")
+        }
+      />
+    );
+  }
+
+  // ==========================================
+  // MLM TREE
+  // ==========================================
+
+  if (mlmPage === "tree") {
+    return (
+      <MLMTree
+        member={mlmMember}
+        onBack={() =>
+          setMlmPage("dashboard")
+        }
+      />
+    );
+  }
+
+  // ==========================================
+  // MLM WALLET
+  // ==========================================
+
+  if (mlmPage === "wallet") {
+    return (
+      <MLMWallet
+        member={mlmMember}
+        onBack={() =>
+          setMlmPage("dashboard")
+        }
+      />
+    );
+  }
+
+  // ==========================================
   // PRODUCT DETAILS
-  // =====================================
+  // ==========================================
 
   if (selectedProduct) {
     return (
       <>
         <Header
-          cartCount={cartCount}
-          search={search}
-          setSearch={setSearch}
-          onCartClick={() =>
+          {...commonHeaderProps}
+          onCart={() =>
             setShowCart(true)
-          }
-          filteredProducts={
-            filteredProducts
-          }
-          filteredCategories={
-            filteredCategories
-          }
-          onProductSelect={
-            setSelectedProduct
           }
         />
 
         <ProductDetails
-          product={
-            selectedProduct
-          }
+          product={selectedProduct}
           onBack={() =>
-            setSelectedProduct(
-              null
-            )
+            setSelectedProduct(null)
           }
-          addToCart={
-            addToCart
-          }
+          addToCart={addToCart}
         />
       </>
     );
   }
 
-  // =====================================
-  // CART PAGE
-  // =====================================
+  // ==========================================
+  // CART
+  // ==========================================
 
   if (showCart) {
     return (
       <>
         <Header
-          cartCount={cartCount}
-          search={search}
-          setSearch={setSearch}
-          onCartClick={() => {}}
-          filteredProducts={
-            filteredProducts
-          }
-          filteredCategories={
-            filteredCategories
-          }
-          onProductSelect={
-            setSelectedProduct
-          }
+          {...commonHeaderProps}
+          onCart={() => {}}
         />
 
         <Cart
@@ -549,96 +846,185 @@ function App() {
           onBack={() =>
             setShowCart(false)
           }
-          removeFromCart={
-            removeFromCart
-          }
-          updateQuantity={
-            updateQuantity
-          }
+          removeFromCart={removeFromCart}
+          updateQuantity={updateQuantity}
         />
       </>
     );
   }
 
-  // =====================================
-  // COMPARE PAGE
-  // =====================================
+  // ==========================================
+  // COMPARE
+  // ==========================================
 
   if (showCompare) {
     return (
       <>
         <Header
-          cartCount={cartCount}
-          search={search}
-          setSearch={setSearch}
-          onCartClick={() =>
+          {...commonHeaderProps}
+          onCart={() =>
             setShowCart(true)
-          }
-          filteredProducts={
-            filteredProducts
-          }
-          filteredCategories={
-            filteredCategories
-          }
-          onProductSelect={
-            setSelectedProduct
           }
         />
 
         <ComparePrice
-          products={
-            compareProducts
+          products={compareProducts}
+          selectedProduct={
+            compareSelectedProduct
           }
-          onBack={() =>
-            setShowCompare(false)
-          }
-          onRemove={
-            removeCompare
-          }
+          onBack={() => {
+            setShowCompare(false);
+          }}
+          onRemove={removeCompare}
         />
       </>
     );
   }
 
-  // =====================================
+  // ==========================================
   // MAIN BUYER PAGE
-  // =====================================
+  // ==========================================
 
   return (
     <div
       style={{
+        width: "100%",
         minHeight: "100vh",
         background: "#f5f5f5",
+        overflowX: "hidden",
       }}
     >
-      {/* =================================
+      {/* ======================================
           HEADER
-      ================================= */}
+      ====================================== */}
 
       <Header
-        cartCount={cartCount}
-        search={search}
-        setSearch={setSearch}
-        onCartClick={() =>
+        {...commonHeaderProps}
+        onCart={() =>
           setShowCart(true)
-        }
-        filteredProducts={
-          filteredProducts
-        }
-        filteredCategories={
-          filteredCategories
-        }
-        onProductSelect={
-          setSelectedProduct
         }
       />
 
-      {/* =================================
-          CATEGORY BAR
-      ================================= */}
+      {/* ======================================
+          MLM MEMBER BUTTON
+      ====================================== */}
 
       <div
         style={{
+          width: "100%",
+          background: "#fff",
+          padding: "10px 20px",
+          boxSizing: "border-box",
+          borderBottom:
+            "1px solid #eee",
+        }}
+      >
+        <div
+          style={{
+            maxWidth: "1200px",
+            margin: "0 auto",
+            display: "flex",
+            justifyContent:
+              "flex-end",
+            gap: "10px",
+            flexWrap: "wrap",
+          }}
+        >
+          {mlmMember ? (
+            <>
+              <button
+                onClick={() =>
+                  setMlmPage("dashboard")
+                }
+                style={
+                  mlmButtonStyle
+                }
+              >
+                👤 My MLM Dashboard
+              </button>
+
+              <button
+                onClick={() =>
+                  setMlmPage("wallet")
+                }
+                style={
+                  mlmWalletButtonStyle
+                }
+              >
+                💰 Commission Wallet
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() =>
+                  setMlmPage("login")
+                }
+                style={
+                  mlmButtonStyle
+                }
+              >
+                🔐 MLM Login
+              </button>
+
+              <button
+                onClick={() =>
+                  setMlmPage("register")
+                }
+                style={
+                  mlmRegisterButtonStyle
+                }
+              >
+                📝 Join JustBrand
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* ======================================
+          BANNER
+      ====================================== */}
+
+      <div
+        style={{
+          width: "100%",
+          maxWidth: "1200px",
+          height: "220px",
+          margin: "15px auto",
+          padding: "0 10px",
+          boxSizing: "border-box",
+        }}
+      >
+        <div
+          style={{
+            width: "100%",
+            height: "100%",
+            background:
+              "linear-gradient(135deg,#ff6b00,#ff1493)",
+            borderRadius: "15px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "#fff",
+            fontSize: "25px",
+            fontWeight: "bold",
+            textAlign: "center",
+            padding: "20px",
+            boxSizing: "border-box",
+          }}
+        >
+          Shop & Earn with JustBrand
+        </div>
+      </div>
+
+      {/* ======================================
+          CATEGORY BAR
+      ====================================== */}
+
+      <div
+        style={{
+          width: "100%",
           background: "white",
           padding: "15px",
           display: "flex",
@@ -646,6 +1032,7 @@ function App() {
           overflowX: "auto",
           borderBottom:
             "1px solid #ddd",
+          boxSizing: "border-box",
         }}
       >
         {[
@@ -676,10 +1063,10 @@ function App() {
                 category === item
                   ? "white"
                   : "#333",
-              cursor:
-                "pointer",
+              cursor: "pointer",
               whiteSpace:
                 "nowrap",
+              flexShrink: 0,
             }}
           >
             {item}
@@ -687,20 +1074,43 @@ function App() {
         ))}
       </div>
 
-      {/* =================================
-          PAGE CONTENT
-      ================================= */}
+      {/* ======================================
+          MAIN CONTENT
+      ====================================== */}
 
       <div
         style={{
+          width: "100%",
           maxWidth: "1200px",
-          margin: "auto",
+          margin: "0 auto",
           padding: "20px",
+          boxSizing: "border-box",
         }}
       >
-        {/* =================================
-            JUSTBRAND PRODUCTS TITLE
-        ================================= */}
+        {/* ====================================
+            COMPARE SLIDER
+        ==================================== */}
+
+        {!loading &&
+          products.length > 0 && (
+            <div
+              style={{
+                marginBottom:
+                  "30px",
+              }}
+            >
+              <ComparePriceSlider
+                products={products}
+                onCompare={
+                  compareSingleProduct
+                }
+              />
+            </div>
+          )}
+
+        {/* ====================================
+            TITLE
+        ==================================== */}
 
         <div
           style={{
@@ -709,16 +1119,17 @@ function App() {
               "space-between",
             alignItems:
               "center",
-            flexWrap:
-              "wrap",
+            flexWrap: "wrap",
             gap: "10px",
+            marginBottom:
+              "20px",
           }}
         >
           <div>
             <h2
               style={{
-                marginBottom:
-                  "5px",
+                margin:
+                  "0 0 5px",
               }}
             >
               JustBrand Products
@@ -727,15 +1138,12 @@ function App() {
             <p
               style={{
                 color: "#666",
-                marginTop: 0,
+                margin: 0,
               }}
             >
-              Best products at
-              best prices
+              Best products at best prices
             </p>
           </div>
-
-          {/* COMPARE COUNT */}
 
           {compareProducts.length >
             0 && (
@@ -763,17 +1171,15 @@ function App() {
               }}
             >
               ⚖️ Compare (
-              {
-                compareProducts.length
-              }
+              {compareProducts.length}
               )
             </button>
           )}
         </div>
 
-        {/* =================================
+        {/* ====================================
             LOADING
-        ================================= */}
+        ==================================== */}
 
         {loading && (
           <div
@@ -786,8 +1192,6 @@ function App() {
                 "center",
               borderRadius:
                 "12px",
-              marginTop:
-                "20px",
             }}
           >
             <h3>
@@ -796,9 +1200,9 @@ function App() {
           </div>
         )}
 
-        {/* =================================
-            PRODUCTS GRID
-        ================================= */}
+        {/* ====================================
+            PRODUCTS
+        ==================================== */}
 
         {!loading &&
           filteredProducts.length >
@@ -808,7 +1212,7 @@ function App() {
                 display:
                   "grid",
                 gridTemplateColumns:
-                  "repeat(auto-fit, minmax(220px, 1fr))",
+                  "repeat(auto-fit,minmax(220px,1fr))",
                 gap: "20px",
               }}
             >
@@ -839,9 +1243,9 @@ function App() {
             </div>
           )}
 
-        {/* =================================
+        {/* ====================================
             NO PRODUCTS
-        ================================= */}
+        ==================================== */}
 
         {!loading &&
           filteredProducts.length ===
@@ -895,23 +1299,48 @@ function App() {
               </button>
             </div>
           )}
-
-        {/* =================================
-            COMPARE PRICE SLIDER
-        ================================= */}
-
-        {!loading &&
-          products.length > 0 && (
-            <ComparePriceSlider
-              products={products}
-              onCompare={
-                compareSingleProduct
-              }
-            />
-          )}
       </div>
     </div>
   );
 }
+
+// ==========================================
+// MLM BUTTON STYLES
+// ==========================================
+
+const mlmButtonStyle = {
+  background:
+    "linear-gradient(135deg,#ff6b00,#ff1493)",
+  color: "#fff",
+  border: "none",
+  padding: "10px 16px",
+  borderRadius: "8px",
+  cursor: "pointer",
+  fontWeight: "bold",
+};
+
+const mlmRegisterButtonStyle = {
+  background: "#fff",
+  color: "#ff1493",
+  border: "1px solid #ff1493",
+  padding: "10px 16px",
+  borderRadius: "8px",
+  cursor: "pointer",
+  fontWeight: "bold",
+};
+
+const mlmWalletButtonStyle = {
+  background: "#fff7e8",
+  color: "#ff6b00",
+  border: "1px solid #ffb347",
+  padding: "10px 16px",
+  borderRadius: "8px",
+  cursor: "pointer",
+  fontWeight: "bold",
+};
+
+// ==========================================
+// EXPORT
+// ==========================================
 
 export default App;

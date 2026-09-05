@@ -16,32 +16,50 @@ function Slider() {
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [banners.length]);
+  }, []);
 
   return (
     <div
       style={{
         width: "100%",
         maxWidth: "1200px",
-        margin: "20px auto",
+        margin: "15px auto",
+        padding: "0 10px",
+        boxSizing: "border-box",
       }}
     >
-      <img
-        key={current}
-        src={banners[current]}
-        alt={`Banner ${current + 1}`}
+      {/* Stable Banner Area */}
+      <div
         style={{
           width: "100%",
-          height: "400px",
-          objectFit: "cover",
+          aspectRatio: "16 / 6",
+          minHeight: "160px",
+          overflow: "hidden",
           borderRadius: "15px",
+          position: "relative",
+          background: "#f2f2f2",
         }}
-      />
+      >
+        <img
+          src={banners[current]}
+          alt={`Banner ${current + 1}`}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            display: "block",
+            objectFit: "cover",
+          }}
+        />
+      </div>
 
+      {/* Banner Number */}
       <div
         style={{
           textAlign: "center",
-          marginTop: "10px",
+          marginTop: "8px",
+          fontSize: "13px",
           fontWeight: "bold",
         }}
       >

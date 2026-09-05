@@ -1,5 +1,19 @@
-﻿node_modules/
+node_modules/
 dist/
 .env
 .env.*
 !.env.example
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# Android generated files
+**/android/.gradle/
+**/android/build/
+**/android/app/build/
+**/android/.idea/
+
+# Backups
+**/*backup*

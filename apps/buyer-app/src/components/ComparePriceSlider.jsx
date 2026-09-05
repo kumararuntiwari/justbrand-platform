@@ -1,48 +1,219 @@
-import React from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 function ComparePriceSlider({
   products = [],
   onCompare,
 }) {
-  // Image path
-  const getImageUrl = (image) => {
-    if (!image) {
-      return "/images/product1.png";
-    }
+  const [search, setSearch] = useState("");
+  const [currentIndex, setCurrentIndex] = useState(0);
 
+  const sliderRef = useRef(null);
+
+  // =====================================
+  // FORMAT PRICE
+  // =====================================
+
+  const formatPrice = (value) => {
     if (
-      image.startsWith("http://") ||
-      image.startsWith("https://")
+      value === undefined ||
+      value === null ||
+      value === ""
     ) {
-      return image;
+      return "₹0";
     }
 
-    if (image.startsWith("/images/")) {
-      return image;
-    }
+    const text = String(value);
 
-    const fileName = image
-      .split("/")
-      .pop();
-
-    return `/images/${fileName}`;
+    return text.includes("₹")
+      ? text
+      : `₹${text}`;
   };
 
-  // No products
-  if (products.length === 0) {
-    return null;
-  }
+  // =====================================
+  // SEARCH
+  // =====================================
+
+  const searchText = search
+    .toLowerCase()
+    .trim();
+
+  const filteredProducts = useMemo(() => {
+    return products.filter((product) => {
+      const name = String(
+        product?.name || ""
+      ).toLowerCase();
+
+      const category = String(
+        product?.category || ""
+      ).toLowerCase();
+
+      return (
+        name.includes(searchText) ||
+        category.includes(searchText)
+      );
+    });
+  }, [products, searchText]);
+
+  // =====================================
+  // RESET SLIDER
+  // =====================================
+
+  useEffect(() => {
+    setCurrentIndex(0);
+
+    if (sliderRef.current) {
+      sliderRef.current.scrollTo({
+        left: 0,
+        behavior: "smooth",
+      });
+    }
+  }, [searchText]);
+
+  // =====================================
+  // AUTO SLIDER
+  // =====================================
+
+  useEffect(() => {
+    if (filteredProducts.length <= 1) {
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setCurrentIndex((prev) => {
+        if (
+          prev >=
+          filteredProducts.length - 1
+        ) {
+          return 0;
+        }
+
+        return prev + 1;
+      });
+    }, 3000);
+
+    return () => {
+      clearInterval(timer);
+    };
+  }, [filteredProducts.length]);
+
+  // =====================================
+  // MOVE SLIDER
+  // =====================================
+
+  useEffect(() => {
+    const container = sliderRef.current;
+
+    if (!container) {
+      return;
+    }
+
+    const card =
+      container.children[currentIndex];
+
+    if (!card) {
+      return;
+    }
+
+    const containerWidth =
+      container.clientWidth;
+
+    const cardWidth =
+      card.offsetWidth;
+
+    const cardLeft =
+      card.offsetLeft;
+
+    const targetScroll =
+      cardLeft -
+      containerWidth / 2 +
+      cardWidth / 2;
+
+    container.scrollTo({
+      left: Math.max(
+        0,
+        targetScroll
+      ),
+      behavior: "smooth",
+    });
+  }, [
+    currentIndex,
+    filteredProducts.length,
+  ]);
+
+  // =====================================
+  // SELECT PRODUCT
+  // =====================================
+
+  const selectProduct = (product) => {
+    if (onCompare) {
+      onCompare(product);
+    }
+  };
+
+  // =====================================
+  // PREVIOUS
+  // =====================================
+
+  const previous = () => {
+    if (filteredProducts.length === 0) {
+      return;
+    }
+
+    setCurrentIndex((prev) => {
+      if (prev <= 0) {
+        return filteredProducts.length - 1;
+      }
+
+      return prev - 1;
+    });
+  };
+
+  // =====================================
+  // NEXT
+  // =====================================
+
+  const next = () => {
+    if (filteredProducts.length === 0) {
+      return;
+    }
+
+    setCurrentIndex((prev) => {
+      if (
+        prev >=
+        filteredProducts.length - 1
+      ) {
+        return 0;
+      }
+
+      return prev + 1;
+    });
+  };
+
+  // =====================================
+  // RETURN
+  // =====================================
 
   return (
     <section
       style={{
-        background: "white",
+        width: "100%",
+        marginTop: "35px",
+        background: "#ffffff",
+        borderRadius: "16px",
         padding: "20px",
-        marginTop: "20px",
+        boxShadow:
+          "0 3px 14px rgba(0,0,0,0.09)",
+        boxSizing: "border-box",
+        overflow: "hidden",
       }}
     >
       {/* =================================
-          TITLE
+          HEADER
       ================================= */}
 
       <div
@@ -50,27 +221,86 @@ function ComparePriceSlider({
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: "15px",
+          gap: "15px",
+          flexWrap: "wrap",
+          marginBottom: "18px",
         }}
       >
+        {/* TITLE */}
+
         <div>
           <h2
             style={{
               margin: 0,
               color: "#222",
+              fontSize: "22px",
+              fontWeight: "700",
             }}
           >
-            ⚖️ Compare Price
+            ⚖️ Compare Products
           </h2>
 
           <p
             style={{
               margin: "5px 0 0",
-              color: "#666",
+              color: "#777",
+              fontSize: "14px",
             }}
           >
-            Compare prices before you buy
+            Select products and compare
+            their prices
           </p>
+        </div>
+
+        {/* SEARCH */}
+
+        <div
+          style={{
+            display: "flex",
+            gap: "8px",
+            width: "100%",
+            maxWidth: "400px",
+          }}
+        >
+          <input
+            type="text"
+            placeholder="🔎 Search Products"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+            }}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              padding: "11px 14px",
+              border:
+                "1px solid #d5d5d5",
+              borderRadius: "8px",
+              outline: "none",
+              fontSize: "14px",
+              boxSizing: "border-box",
+            }}
+          />
+
+          <button
+            type="button"
+            onClick={() => {
+              setCurrentIndex(0);
+            }}
+            style={{
+              padding: "10px 18px",
+              background:
+                "linear-gradient(135deg, #ff6b00, #ff1493)",
+              color: "white",
+              border: "none",
+              borderRadius: "8px",
+              cursor: "pointer",
+              fontWeight: "bold",
+              flexShrink: 0,
+            }}
+          >
+            Search
+          </button>
         </div>
       </div>
 
@@ -78,113 +308,286 @@ function ComparePriceSlider({
           SLIDER
       ================================= */}
 
-      <div
-        style={{
-          display: "flex",
-          gap: "18px",
-          overflowX: "auto",
-          paddingBottom: "10px",
-          scrollBehavior: "smooth",
-        }}
-      >
-        {products.map((product) => (
+      {filteredProducts.length > 0 ? (
+        <div
+          style={{
+            position: "relative",
+            width: "100%",
+          }}
+        >
+          {/* LEFT */}
+
+          {filteredProducts.length > 1 && (
+            <button
+              type="button"
+              onClick={previous}
+              aria-label="Previous products"
+              style={{
+                position: "absolute",
+                left: "5px",
+                top: "50%",
+                transform:
+                  "translateY(-50%)",
+                zIndex: 10,
+                width: "40px",
+                height: "40px",
+                borderRadius: "50%",
+                border: "none",
+                background:
+                  "linear-gradient(135deg, #ff6b00, #ff1493)",
+                color: "white",
+                fontSize: "26px",
+                cursor: "pointer",
+                boxShadow:
+                  "0 3px 10px rgba(0,0,0,0.25)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              ‹
+            </button>
+          )}
+
+          {/* PRODUCTS */}
+
           <div
-            key={product.id}
+            ref={sliderRef}
             style={{
-              minWidth: "230px",
-              maxWidth: "230px",
-              background: "#fff",
-              borderRadius: "12px",
-              padding: "12px",
-              boxShadow:
-                "0 2px 8px rgba(0,0,0,0.12)",
-              border:
-                "1px solid #eee",
-              flexShrink: 0,
+              width: "100%",
+              display: "flex",
+              gap: "16px",
+              overflowX: "auto",
+              overflowY: "hidden",
+              padding: "10px 52px",
+              boxSizing: "border-box",
+              scrollBehavior: "smooth",
+              scrollbarWidth: "none",
+              overscrollBehaviorX: "contain",
+              overscrollBehaviorY: "none",
+              touchAction: "pan-x",
             }}
           >
-            {/* PRODUCT IMAGE */}
+            {filteredProducts.map(
+              (product, index) => {
+                const image =
+                  product?.image ||
+                  "/images/product1.png";
 
-            <div
-              style={{
-                height: "170px",
-                background: "#f5f5f5",
-                borderRadius: "10px",
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                overflow: "hidden",
-              }}
-            >
-              <img
-                src={getImageUrl(
-                  product.image
-                )}
-                alt={product.name}
-                onError={(e) => {
-                  e.currentTarget.src =
-                    "/images/product1.png";
-                }}
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "contain",
-                }}
-              />
-            </div>
+                const name =
+                  product?.name ||
+                  "Product";
 
-            {/* PRODUCT NAME */}
+                const price =
+                  product?.price;
 
-            <h3
-              style={{
-                fontSize: "16px",
-                margin:
-                  "10px 0 5px",
-                whiteSpace:
-                  "nowrap",
-                overflow: "hidden",
-                textOverflow:
-                  "ellipsis",
-              }}
-            >
-              {product.name}
-            </h3>
+                return (
+                  <div
+                    key={
+                      product?.id ??
+                      `${name}-${index}`
+                    }
+                    onClick={() => {
+                      selectProduct(product);
+                    }}
+                    style={{
+                      minWidth: "195px",
+                      maxWidth: "195px",
+                      flex:
+                        "0 0 195px",
+                      background:
+                        "#ffffff",
+                      border:
+                        "1px solid #e5e5e5",
+                      borderRadius: "13px",
+                      padding: "10px",
+                      cursor: "pointer",
+                      textAlign: "center",
+                      boxSizing: "border-box",
+                      transition:
+                        "transform 0.2s ease, box-shadow 0.2s ease",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform =
+                        "translateY(-3px)";
 
-            {/* JUSTBRAND PRICE */}
+                      e.currentTarget.style.boxShadow =
+                        "0 6px 16px rgba(0,0,0,0.12)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform =
+                        "translateY(0)";
 
-            <h3
-              style={{
-                color: "#ff6b00",
-                margin: "5px 0",
-              }}
-            >
-              {product.price}
-            </h3>
+                      e.currentTarget.style.boxShadow =
+                        "none";
+                    }}
+                  >
+                    {/* IMAGE */}
 
-            {/* COMPARE BUTTON */}
+                    <div
+                      style={{
+                        width: "100%",
+                        height: "150px",
+                        background:
+                          "#f7f7f7",
+                        borderRadius: "10px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        overflow: "hidden",
+                        position: "relative",
+                      }}
+                    >
+                      <img
+                        src={image}
+                        alt={name}
+                        onError={(e) => {
+                          e.currentTarget.src =
+                            "/images/product1.png";
+                        }}
+                        style={{
+                          width: "100%",
+                          height: "150px",
+                          objectFit: "contain",
+                          display: "block",
+                        }}
+                      />
+                    </div>
 
-            <button
-              onClick={() =>
-                onCompare(product)
+                    {/* NAME */}
+
+                    <h3
+                      style={{
+                        fontSize: "15px",
+                        margin:
+                          "10px 0 6px",
+                        color: "#222",
+                        fontWeight: "600",
+                        whiteSpace:
+                          "nowrap",
+                        overflow:
+                          "hidden",
+                        textOverflow:
+                          "ellipsis",
+                      }}
+                    >
+                      {name}
+                    </h3>
+
+                    {/* PRICE */}
+
+                    <div
+                      style={{
+                        fontWeight: "700",
+                        color: "#ff6b00",
+                        fontSize: "18px",
+                        marginBottom: "9px",
+                      }}
+                    >
+                      {formatPrice(price)}
+                    </div>
+
+                    {/* COMPARE */}
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+
+                        selectProduct(product);
+                      }}
+                      style={{
+                        width: "100%",
+                        padding: "9px",
+                        background:
+                          "linear-gradient(135deg, #ff1493, #ff6b00)",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "8px",
+                        cursor: "pointer",
+                        fontWeight: "700",
+                        fontSize: "13px",
+                      }}
+                    >
+                      ⚖️ Compare Price
+                    </button>
+                  </div>
+                );
               }
+            )}
+          </div>
+
+          {/* RIGHT */}
+
+          {filteredProducts.length > 1 && (
+            <button
+              type="button"
+              onClick={next}
+              aria-label="Next products"
               style={{
-                width: "100%",
-                padding: "11px",
-                marginTop: "8px",
-                background:
-                  "#ff1493",
-                color: "white",
+                position: "absolute",
+                right: "5px",
+                top: "50%",
+                transform:
+                  "translateY(-50%)",
+                zIndex: 10,
+                width: "40px",
+                height: "40px",
+                borderRadius: "50%",
                 border: "none",
-                borderRadius: "8px",
+                background:
+                  "linear-gradient(135deg, #ff6b00, #ff1493)",
+                color: "white",
+                fontSize: "26px",
                 cursor: "pointer",
-                fontWeight: "bold",
+                boxShadow:
+                  "0 3px 10px rgba(0,0,0,0.25)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
               }}
             >
-              ⚖️ Compare Price
+              ›
             </button>
+          )}
+        </div>
+      ) : (
+        <div
+          style={{
+            padding: "35px 20px",
+            textAlign: "center",
+            color: "#777",
+          }}
+        >
+          <div
+            style={{
+              fontSize: "40px",
+              marginBottom: "8px",
+            }}
+          >
+            🔍
           </div>
-        ))}
-      </div>
+
+          <h3
+            style={{
+              margin: "0 0 5px",
+              color: "#333",
+            }}
+          >
+            No products found
+          </h3>
+
+          <p
+            style={{
+              margin: 0,
+              fontSize: "14px",
+            }}
+          >
+            Try another product name or
+            category.
+          </p>
+        </div>
+      )}
     </section>
   );
 }

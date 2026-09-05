@@ -1,11 +1,17 @@
-import React, { useState } from "react";
 
-function ComparePrice({ products = [], onBack }) {
+import React, { useEffect, useState } from "react";
+
+function ComparePrice({
+  products = [],
+  selectedProduct = null,
+  onBack,
+  onRemove,
+}) {
   const [current, setCurrent] = useState(0);
   const [search, setSearch] = useState("");
 
   // =====================================
-  // IMAGE PATH
+  // IMAGE URL
   // =====================================
 
   const getImageUrl = (image) => {
@@ -13,36 +19,84 @@ function ComparePrice({ products = [], onBack }) {
       return "/images/product1.png";
     }
 
+    const imageValue = String(image).trim();
+
+    if (!imageValue) {
+      return "/images/product1.png";
+    }
+
+    // Full external URL
     if (
-      image.startsWith("http://") ||
-      image.startsWith("https://")
+      imageValue.startsWith("http://") ||
+      imageValue.startsWith("https://")
     ) {
-      return image;
+      return imageValue;
     }
 
-    if (image.startsWith("/images/")) {
-      return image;
+    // Local public image
+    if (imageValue.startsWith("/images/")) {
+      return imageValue;
     }
 
-    const fileName = image
-      .split("/")
-      .pop();
+    // Other local public path
+    if (imageValue.startsWith("/")) {
+      return imageValue;
+    }
+
+    // Filename only
+    const fileName = imageValue.split("/").pop();
 
     return `/images/${fileName}`;
   };
 
   // =====================================
-  // PRODUCTS
+  // SELECTED PRODUCT FIRST
   // =====================================
 
-  const visibleProducts = products.filter(
+  const orderedProducts = selectedProduct
+    ? [
+        selectedProduct,
+        ...products.filter(
+          (product) =>
+            String(product.id) !==
+            String(selectedProduct.id)
+        ),
+      ]
+    : products;
+
+  // =====================================
+  // SEARCH
+  // =====================================
+
+  const visibleProducts = orderedProducts.filter(
     (product) =>
       String(product.name || "")
         .toLowerCase()
-        .includes(
-          search.toLowerCase()
-        )
+        .includes(search.toLowerCase())
   );
+
+  // =====================================
+  // SELECTED PRODUCT POSITION
+  // =====================================
+
+  useEffect(() => {
+    if (!selectedProduct) {
+      setCurrent(0);
+      return;
+    }
+
+    const index = visibleProducts.findIndex(
+      (product) =>
+        String(product.id) ===
+        String(selectedProduct.id)
+    );
+
+    setCurrent(index >= 0 ? index : 0);
+  }, [selectedProduct, search]);
+
+  // =====================================
+  // CURRENT PRODUCT
+  // =====================================
 
   const product =
     visibleProducts.length > 0
@@ -51,7 +105,7 @@ function ComparePrice({ products = [], onBack }) {
       : null;
 
   // =====================================
-  // NEXT
+  // NEXT PRODUCT
   // =====================================
 
   const nextProduct = () => {
@@ -67,7 +121,7 @@ function ComparePrice({ products = [], onBack }) {
   };
 
   // =====================================
-  // PREVIOUS
+  // PREVIOUS PRODUCT
   // =====================================
 
   const previousProduct = () => {
@@ -99,6 +153,19 @@ function ComparePrice({ products = [], onBack }) {
     alert(
       `${site} link will be connected with authorized API / affiliate integration at final stage.`
     );
+  };
+
+  // =====================================
+  // REMOVE
+  // =====================================
+
+  const handleRemove = () => {
+    if (!product || !onRemove) {
+      return;
+    }
+
+    onRemove(product.id);
+    setCurrent(0);
   };
 
   // =====================================
@@ -139,9 +206,7 @@ function ComparePrice({ products = [], onBack }) {
             boxShadow: "0 2px 10px #ddd",
           }}
         >
-          <h2>
-            ⚖️ Compare Price
-          </h2>
+          <h2>⚖️ Compare Price</h2>
 
           <p>
             No product available for comparison.
@@ -152,6 +217,16 @@ function ComparePrice({ products = [], onBack }) {
   }
 
   // =====================================
+  // CURRENT PRODUCT IMAGE
+  // =====================================
+
+  const productImage = getImageUrl(product.image);
+
+  console.log("COMPARE PRODUCT:", product);
+console.log("COMPARE IMAGE:", product.image);
+console.log("COMPARE IMAGE URL:", productImage);
+
+  // =====================================
   // PRICE
   // =====================================
 
@@ -159,22 +234,23 @@ function ComparePrice({ products = [], onBack }) {
     Number(
       String(product.price || "0")
         .replace("₹", "")
-        .replace(",", "")
+        .replace(/,/g, "")
+        .trim()
     ) || 0;
 
   const amazonPrice =
     justBrandPrice > 0
-      ? justBrandPrice - 50
+      ? Math.max(1, justBrandPrice - 50)
       : 949;
 
   const flipkartPrice =
     justBrandPrice > 0
-      ? justBrandPrice - 30
+      ? Math.max(1, justBrandPrice - 30)
       : 969;
 
   const meeshoPrice =
     justBrandPrice > 0
-      ? justBrandPrice - 80
+      ? Math.max(1, justBrandPrice - 80)
       : 919;
 
   const prices = [
@@ -185,7 +261,9 @@ function ComparePrice({ products = [], onBack }) {
   ].filter((price) => price > 0);
 
   const bestPrice =
-    Math.min(...prices);
+    prices.length > 0
+      ? Math.min(...prices)
+      : 0;
 
   // =====================================
   // PAGE
@@ -211,6 +289,7 @@ function ComparePrice({ products = [], onBack }) {
           alignItems: "center",
           gap: "20px",
           marginBottom: "20px",
+          flexWrap: "wrap",
         }}
       >
         <button
@@ -234,6 +313,23 @@ function ComparePrice({ products = [], onBack }) {
         >
           ⚖️ Compare Price
         </h2>
+
+        {onRemove && (
+          <button
+            onClick={handleRemove}
+            style={{
+              marginLeft: "auto",
+              background: "#dc3545",
+              color: "white",
+              border: "none",
+              padding: "10px 15px",
+              borderRadius: "8px",
+              cursor: "pointer",
+            }}
+          >
+            🗑 Remove
+          </button>
+        )}
       </div>
 
       {/* =================================
@@ -264,7 +360,31 @@ function ComparePrice({ products = [], onBack }) {
       </div>
 
       {/* =================================
-          MAIN PRODUCT SLIDER
+          SELECTED PRODUCT
+      ================================= */}
+
+      {selectedProduct && (
+        <div
+          style={{
+            maxWidth: "700px",
+            margin: "0 auto 20px",
+            background:
+              "linear-gradient(135deg, #fff7ed, #fff)",
+            border: "1px solid #ffd6a8",
+            borderRadius: "12px",
+            padding: "12px 16px",
+            textAlign: "center",
+          }}
+        >
+          <strong>
+            🔎 Comparing selected product:
+          </strong>{" "}
+          {selectedProduct.name}
+        </div>
+      )}
+
+      {/* =================================
+          MAIN PRODUCT
       ================================= */}
 
       <div
@@ -296,15 +416,21 @@ function ComparePrice({ products = [], onBack }) {
             }}
           >
             <img
-              src={getImageUrl(
-                product.image
-              )}
-              alt={product.name}
+              src={productImage}
+              alt={product.name || "Product"}
               onError={(e) => {
                 console.log(
-                  "Compare image error:",
+                  "Compare product image error:",
                   product.image
                 );
+
+                if (
+                  e.currentTarget.src.endsWith(
+                    "/images/product1.png"
+                  )
+                ) {
+                  return;
+                }
 
                 e.currentTarget.src =
                   "/images/product1.png";
@@ -323,12 +449,26 @@ function ComparePrice({ products = [], onBack }) {
           <h2
             style={{
               textAlign: "center",
-              margin:
-                "15px 0 5px",
+              margin: "15px 0 5px",
             }}
           >
             {product.name}
           </h2>
+
+          {/* SELLER */}
+
+          {product.sellerName && (
+            <p
+              style={{
+                textAlign: "center",
+                color: "#555",
+                margin: "5px",
+                fontWeight: "500",
+              }}
+            >
+              Seller: {product.sellerName}
+            </p>
+          )}
 
           {/* CATEGORY */}
 
@@ -339,11 +479,10 @@ function ComparePrice({ products = [], onBack }) {
               margin: "5px",
             }}
           >
-            {product.category ||
-              "Product"}
+            {product.category || "Product"}
           </p>
 
-          {/* JUSTBRAND PRICE */}
+          {/* PRICE */}
 
           <h2
             style={{
@@ -352,7 +491,7 @@ function ComparePrice({ products = [], onBack }) {
               margin: "10px",
             }}
           >
-            ₹{justBrandPrice}
+            ₹{justBrandPrice.toLocaleString("en-IN")}
           </h2>
 
           {/* =================================
@@ -362,25 +501,20 @@ function ComparePrice({ products = [], onBack }) {
           <div
             style={{
               display: "flex",
-              justifyContent:
-                "space-between",
+              justifyContent: "space-between",
               alignItems: "center",
               marginTop: "20px",
             }}
           >
             <button
-              onClick={
-                previousProduct
-              }
+              onClick={previousProduct}
               style={{
                 width: "55px",
                 height: "45px",
-                background:
-                  "#ff6b00",
+                background: "#ff6b00",
                 color: "white",
                 border: "none",
-                borderRadius:
-                  "8px",
+                borderRadius: "8px",
                 cursor: "pointer",
                 fontSize: "24px",
               }}
@@ -398,12 +532,10 @@ function ComparePrice({ products = [], onBack }) {
               style={{
                 width: "55px",
                 height: "45px",
-                background:
-                  "#ff6b00",
+                background: "#ff6b00",
                 color: "white",
                 border: "none",
-                borderRadius:
-                  "8px",
+                borderRadius: "8px",
                 cursor: "pointer",
                 fontSize: "24px",
               }}
@@ -421,8 +553,7 @@ function ComparePrice({ products = [], onBack }) {
       <div
         style={{
           maxWidth: "1100px",
-          margin:
-            "30px auto 15px",
+          margin: "30px auto 15px",
         }}
       >
         <h2
@@ -464,10 +595,9 @@ function ComparePrice({ products = [], onBack }) {
           icon="🟠"
           price={justBrandPrice}
           best={
-            justBrandPrice ===
-            bestPrice
+            justBrandPrice === bestPrice
           }
-          image={product.image}
+          image={productImage}
           onBuy={() =>
             buyNow("JustBrand")
           }
@@ -480,10 +610,9 @@ function ComparePrice({ products = [], onBack }) {
           icon="🟡"
           price={amazonPrice}
           best={
-            amazonPrice ===
-            bestPrice
+            amazonPrice === bestPrice
           }
-          image={product.image}
+          image={productImage}
           onBuy={() =>
             buyNow("Amazon")
           }
@@ -496,10 +625,9 @@ function ComparePrice({ products = [], onBack }) {
           icon="🔵"
           price={flipkartPrice}
           best={
-            flipkartPrice ===
-            bestPrice
+            flipkartPrice === bestPrice
           }
-          image={product.image}
+          image={productImage}
           onBuy={() =>
             buyNow("Flipkart")
           }
@@ -512,10 +640,9 @@ function ComparePrice({ products = [], onBack }) {
           icon="🟣"
           price={meeshoPrice}
           best={
-            meeshoPrice ===
-            bestPrice
+            meeshoPrice === bestPrice
           }
-          image={product.image}
+          image={productImage}
           onBuy={() =>
             buyNow("Meesho")
           }
@@ -537,27 +664,6 @@ function CompareCard({
   image,
   onBuy,
 }) {
-  const getImage = (image) => {
-    if (!image) {
-      return "/images/product1.png";
-    }
-
-    if (
-      image.startsWith("http://") ||
-      image.startsWith("https://")
-    ) {
-      return image;
-    }
-
-    if (image.startsWith("/images/")) {
-      return image;
-    }
-
-    return `/images/${image
-      .split("/")
-      .pop()}`;
-  };
-
   return (
     <div
       style={{
@@ -570,14 +676,15 @@ function CompareCard({
         position: "relative",
       }}
     >
+      {/* BEST PRICE */}
+
       {best && (
         <div
           style={{
             position: "absolute",
             top: "10px",
             right: "10px",
-            background:
-              "#28a745",
+            background: "#28a745",
             color: "white",
             padding: "5px 8px",
             borderRadius: "6px",
@@ -589,9 +696,13 @@ function CompareCard({
         </div>
       )}
 
+      {/* SITE */}
+
       <h3>
         {icon} {site}
       </h3>
+
+      {/* PRODUCT IMAGE */}
 
       <div
         style={{
@@ -605,31 +716,49 @@ function CompareCard({
         }}
       >
         <img
-          src={getImage(image)}
+          src={image || "/images/product1.png"}
           alt={site}
           onError={(e) => {
-            e.currentTarget.src =
-              "/images/product1.png";
+            console.log(
+              `${site} image error:`,
+              image
+            );
+
+            if (
+              !e.currentTarget.src.endsWith(
+                "/images/product1.png"
+              )
+            ) {
+              e.currentTarget.src =
+                "/images/product1.png";
+            }
           }}
           style={{
             width: "100%",
             height: "100%",
             objectFit: "contain",
+            display: "block",
           }}
         />
       </div>
+
+      {/* PRICE */}
 
       <h2
         style={{
           color: "#ff6b00",
         }}
       >
-        ₹{price}
+        ₹{Number(price || 0).toLocaleString("en-IN")}
       </h2>
+
+      {/* RATING */}
 
       <p>
         ⭐ 4.5 Rating
       </p>
+
+      {/* AVAILABILITY */}
 
       <p
         style={{
@@ -639,15 +768,16 @@ function CompareCard({
         ✓ Available
       </p>
 
+      {/* BUY */}
+
       <button
         onClick={onBuy}
         style={{
           width: "100%",
           padding: "12px",
-          background:
-            best
-              ? "#28a745"
-              : "#ff6b00",
+          background: best
+            ? "#28a745"
+            : "#ff6b00",
           color: "white",
           border: "none",
           borderRadius: "8px",
