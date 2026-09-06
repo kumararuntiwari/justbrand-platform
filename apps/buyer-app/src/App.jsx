@@ -1,6 +1,6 @@
-import ProductDetails from "./pages2/productdetails";
-import Cart from "./pages2/cart";
-import ComparePrice from "./pages2/compareprice";
+import ProductDetails from "./pages2/ProductDetails";
+import Cart from "./pages2/Cart";
+import ComparePrice from "./pages2/ComparePrice";
 
 // ==========================================
 // MLM PAGES
