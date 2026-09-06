@@ -4,27 +4,27 @@ import Header from "./components/Header";
 import ProductCard from "./components/ProductCard";
 import ComparePriceSlider from "./components/ComparePriceSlider";
 
-import ProductDetails from "./pages2/ProductDetails";
-import Cart from "./pages2/Cart";
-import ComparePrice from "./pages2/ComparePrice";
+import ProductDetails from "./Pages2/ProductDetails";
+import Cart from "./Pages2/Cart";
+import ComparePrice from "./Pages2/ComparePrice";
 
 // ==========================================
 // MLM PAGES
 // ==========================================
 
-import MLMCommission from "./pages/mlmcommission";
-import MLMCommissionRules from "./pages/mlmcommissionrules";
-import MLMDashboard from "./pages/mlmdashboard";
-import MLMLogin from "./pages/mlmlogin";
-import MLMRegister from "./pages/mlmregister";
-import MLMTree from "./pages/mlmtree";
-import MLMWallet from "./pages/mlmwallet";
+import MLMCommission from "./Pages/MLMcommission";
+import MLMCommissionRules from "./Pages/MLMcommissionrules";
+import MLMDashboard from "./Pages/MLMdashboard";
+import MLMLogin from "./Pages/MLMlogin";
+import MLMRegister from "./Pages/MLMRegister";
+import MLMTree from "./Pages/MLMtree";
+import MLMWallet from "./Pages/MLMwallet";
 
 // ==========================================
 // BACKEND
 // ==========================================
 
-const BACKEND_URL = "http://10.18.167.2:5000/api/products";
+const BACKEND_URL = "https://justbrand.in/api/products";
 
 // ==========================================
 // APP
