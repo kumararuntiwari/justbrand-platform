@@ -1,24 +1,18 @@
-import React, { useEffect, useState } from "react";
-
-import Header from "./components/Header";
-import ProductCard from "./components/ProductCard";
-import ComparePriceSlider from "./components/ComparePriceSlider";
-
-import ProductDetails from "./Pages2/ProductDetails";
-import Cart from "./Pages2/Cart";
-import ComparePrice from "./Pages2/ComparePrice";
+import ProductDetails from "./pages2/productdetails";
+import Cart from "./pages2/cart";
+import ComparePrice from "./pages2/compareprice";
 
 // ==========================================
 // MLM PAGES
 // ==========================================
 
-import MLMCommission from "./Pages/MLMcommission";
-import MLMCommissionRules from "./Pages/MLMcommissionrules";
-import MLMDashboard from "./Pages/MLMdashboard";
-import MLMLogin from "./Pages/MLMlogin";
+import MLMCommission from "./Pages/MLMCommission";
+import MLMCommissionRules from "./Pages/MLMCommissionRules";
+import MLMDashboard from "./Pages/MLMDashboard";
+import MLMLogin from "./Pages/MLMLogin";
 import MLMRegister from "./Pages/MLMRegister";
-import MLMTree from "./Pages/MLMtree";
-import MLMWallet from "./Pages/MLMwallet";
+import MLMTree from "./Pages/MLMTree";
+import MLMWallet from "./Pages/MLMWallet";
 
 // ==========================================
 // BACKEND
