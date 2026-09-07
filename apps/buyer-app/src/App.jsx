@@ -1,3 +1,7 @@
+import ProductCard from "./components/ProductCard";
+import ComparePriceSlider from "./components/ComparePriceSlider";
+import Header from "./components/Header";
+import { useState, useEffect } from 'react';
 import ProductDetails from "./pages2/ProductDetails";
 import Cart from "./pages2/Cart";
 import ComparePrice from "./pages2/ComparePrice";
