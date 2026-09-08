@@ -25,26 +25,18 @@ function Header({
   // ==================================================
 
   const handleSeller = () => {
-    closeMenu();
+  closeMenu();
 
-    // Current Buyer App jis host par chal raha hai,
-    // usi host par Seller App ko port 5176 par open karega.
-    //
-    // Laptop:
-    // http://localhost:5177
-    //       ↓
-    // http://localhost:5176
-    //
-    // Mobile:
-    // http://10.133.123.2:5177
-    //       ↓
-    // http://10.133.123.2:5176
+  const isLocal =
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1";
 
-    const sellerUrl =
-      `${window.location.protocol}//${window.location.hostname}:5178/`;
+  const sellerUrl = isLocal
+    ? `${window.location.protocol}//${window.location.hostname}:5175/`
+    : "https://seller.justbrand.in/";
 
-    window.location.href = sellerUrl;
-  };
+  window.location.href = sellerUrl;
+};
 
   // ==================================================
   // PRODUCT SELECT
