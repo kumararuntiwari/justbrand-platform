@@ -1034,9 +1034,6 @@ app.get(
         `%${search.toLowerCase()}%`
       );
 
-      const productName =
-        product?.name || search;
-
       if (!product) {
         return res.json({
           success: true,
