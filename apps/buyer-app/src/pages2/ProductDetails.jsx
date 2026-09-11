@@ -90,33 +90,21 @@ function ProductDetails({ product, addToCart, onBack }) {
                 color: "#ff6b00",
               }}
             >
-              {product.price}
+              {product.price || "Price unavailable"}
             </span>
 
-            <span
-              style={{
-                marginLeft: "15px",
-                color: "#888",
-                textDecoration: "line-through",
-                fontSize: "18px",
-              }}
-            >
-              {product.oldPrice}
-            </span>
-          </div>
-
-          {/* OFFER */}
-          <div
-            style={{
-              background: "#fff3e8",
-              padding: "12px",
-              borderRadius: "8px",
-              marginBottom: "20px",
-              color: "#e85d00",
-              fontWeight: "bold",
-            }}
-          >
-            🔥 Special Offer Available
+            {product.comparePrice && (
+              <span
+                style={{
+                  marginLeft: "15px",
+                  color: "#888",
+                  textDecoration: "line-through",
+                  fontSize: "18px",
+                }}
+              >
+                {product.comparePrice}
+              </span>
+            )}
           </div>
 
           {/* DESCRIPTION */}
@@ -126,8 +114,9 @@ function ProductDetails({ product, addToCart, onBack }) {
               lineHeight: "1.6",
             }}
           >
-            High quality product available on JustBrand.
-            Shop easily and get the best price.
+            {product.description ||
+              product.shortDetails ||
+              "No description provided."}
           </p>
 
           {/* ADD TO CART */}
