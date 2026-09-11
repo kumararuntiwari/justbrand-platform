@@ -249,7 +249,17 @@ function ProductCard({
               ) && (
               <span
                 style={{
-                  fontSize: "1        {/* DISCOUNT */}
+                  fontSize: "13px",
+                  color: "#888",
+                  textDecoration: "line-through",
+                }}
+              >
+                {formatPrice(product.comparePrice)}
+              </span>
+            )}
+        </div>
+
+        {/* DISCOUNT */}
         {Number(discount) > 0 && (
           <p
             style={{
@@ -260,17 +270,6 @@ function ProductCard({
             }}
           >
             Discount: {discount}%
-          </p>
-        )}
-
-tyle={{
-              margin: "3px 0 7px",
-              color: "#d32f2f",
-              fontSize: "13px",
-              fontWeight: "600",
-            }}
-          >
-            🔥 Great Deal
           </p>
         )}
 
