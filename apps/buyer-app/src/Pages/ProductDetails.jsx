@@ -46,11 +46,13 @@ function ProductDetails({ product, onBack, addToCart }) {
 
         <h1 style={{ color: "#ff6b00" }}>{product.price}</h1>
 
-        <p>⭐⭐⭐⭐⭐ (4.8 Rating)</p>
-
+        {product.rating && (
+          <p>⭐⭐⭐⭐⭐ ({product.rating} Rating)</p>
+        )}
         <p>
-          Premium quality product with best price, trusted seller and fast
-          delivery.
+          {product.description ||
+            product.shortDetails ||
+            "No description provided."}
         </p>
 
         <button
