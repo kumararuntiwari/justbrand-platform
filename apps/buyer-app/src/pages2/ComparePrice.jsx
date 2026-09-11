@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 function ComparePrice({
   products = [],
@@ -47,6 +47,15 @@ function ComparePrice({
     const fileName = imageValue.split("/").pop();
 
     return `/images/${fileName}`;
+  };
+
+  const formatPrice = (value) => {
+    if (value === undefined || value === null || value === "") {
+      return "Price unavailable";
+    }
+
+    const text = String(value);
+    return text.includes("₹") ? text : "₹" + text;
   };
 
   // =====================================
