@@ -20,22 +20,16 @@ function ProductCard({
       ? product.price
       : 0;
 
-  const rating =
-    product && product.rating
-      ? product.rating
-      : 4.5;
+  const rating = product?.rating;
 
-  const discount =
-    product && product.discount !== undefined
-      ? product.discount
-      : 20;
+  const discount = product?.discount;
 
   const trustedSeller =
-    product?.trustedSeller !== false;
+    product?.trustedSeller === true;
 
   const formatPrice = (value) => {
     if (value === undefined || value === null || value === "") {
-      return "₹0";
+      return "Price unavailable";
     }
 
     const text = String(value);
@@ -193,36 +187,40 @@ function ProductCard({
         </h3>
 
         {/* RATING */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "7px",
-            marginBottom: "7px",
-          }}
-        >
-          <span
-            style={{
-              background: "#f5a623",
-              color: "white",
-              padding: "3px 7px",
-              borderRadius: "5px",
-              fontSize: "12px",
-              fontWeight: "bold",
-            }}
-          >
-            ★ {rating}
-          </span>
+        {rating !== undefined &&
+          rating !== null &&
+          rating !== "" && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "7px",
+                marginBottom: "7px",
+              }}
+            >
+              <span
+                style={{
+                  background: "#f5a623",
+                  color: "white",
+                  padding: "3px 7px",
+                  borderRadius: "5px",
+                  fontSize: "12px",
+                  fontWeight: "bold",
+                }}
+              >
+                ★ {rating}
+              </span>
 
-          <span
-            style={{
-              fontSize: "12px",
-              color: "#777",
-            }}
-          >
-            Rating
-          </span>
-        </div>
+              <span
+                style={{
+                  fontSize: "12px",
+                  color: "#777",
+                }}
+              >
+                Rating
+              </span>
+            </div>
+          )}
 
         {/* PRICE */}
         <div
@@ -244,27 +242,28 @@ function ProductCard({
             {formatPrice(price)}
           </span>
 
-          {product?.mrp &&
-            Number(product.mrp) >
+          {product?.comparePrice &&
+            Number(product.comparePrice) >
               Number(
                 String(price).replace("₹", "")
               ) && (
               <span
                 style={{
-                  fontSize: "13px",
-                  color: "#888",
-                  textDecoration: "line-through",
-                }}
-              >
-                {formatPrice(product.mrp)}
-              </span>
-            )}
-        </div>
-
-        {/* DISCOUNT */}
-        {discount > 0 && (
+                  fontSize: "1        {/* DISCOUNT */}
+        {Number(discount) > 0 && (
           <p
             style={{
+              margin: "3px 0 7px",
+              color: "#d32f2f",
+              fontSize: "13px",
+              fontWeight: "600",
+            }}
+          >
+            Discount: {discount}%
+          </p>
+        )}
+
+tyle={{
               margin: "3px 0 7px",
               color: "#d32f2f",
               fontSize: "13px",
