@@ -237,19 +237,35 @@ function App() {
             name:
               product.name ||
               product.productName ||
-              "Product",
+              "",
 
             price:
               product.price ||
-              "₹0",
+              "",
+
+            comparePrice:
+              product.comparePrice ||
+              "",
 
             category:
               product.category ||
-              "Other",
+              "",
 
             shortDetails:
               product.shortDetails ||
               product.description ||
+              "",
+
+            description:
+              product.description ||
+              "",
+
+            sellerId:
+              product.sellerId ||
+              "",
+
+            sellerName:
+              product.sellerName ||
               "",
 
             image,
