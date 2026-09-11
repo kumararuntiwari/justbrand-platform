@@ -22,7 +22,7 @@ import MLMWallet from "./Pages/MLMWallet";
 // BACKEND
 // ==========================================
 
-const BACKEND_URL = "https://justbrand.in/api/products";
+const BACKEND_URL = "https://justbrand-in-144629.hostingersite.com/api/products";
 
 // ==========================================
 // APP
@@ -153,78 +153,6 @@ function App() {
         "Backend unavailable:",
         error
       );
-    }
-
-    // ========================================
-    // LOCAL STORAGE FALLBACK
-    // ========================================
-
-    if (loadedProducts.length === 0) {
-      try {
-        const savedProducts =
-          localStorage.getItem(
-            "justbrand_products"
-          );
-
-        if (savedProducts) {
-          const localProducts =
-            JSON.parse(savedProducts);
-
-          if (Array.isArray(localProducts)) {
-            loadedProducts = localProducts;
-          }
-        }
-      } catch (error) {
-        console.log(
-          "Local products error:",
-          error
-        );
-      }
-    }
-
-    // ========================================
-    // DEMO PRODUCTS
-    // ========================================
-
-    if (loadedProducts.length === 0) {
-      loadedProducts = [
-        {
-          id: 1,
-          name: "Wireless Earbuds",
-          price: "₹999",
-          category: "Electronics",
-          image: "/images/product1.png",
-          shortDetails:
-            "Premium wireless earbuds",
-        },
-        {
-          id: 2,
-          name: "Smart Watch",
-          price: "₹1499",
-          category: "Electronics",
-          image: "/images/product2.jpeg",
-          shortDetails:
-            "Smart fitness watch",
-        },
-        {
-          id: 3,
-          name: "Men Fashion Shirt",
-          price: "₹799",
-          category: "Fashion",
-          image: "/images/product3.jpeg",
-          shortDetails:
-            "Premium cotton shirt",
-        },
-        {
-          id: 4,
-          name: "Beauty Product",
-          price: "₹599",
-          category: "Beauty",
-          image: "/images/product4.jpg",
-          shortDetails:
-            "Premium beauty product",
-        },
-      ];
     }
 
     // ========================================
