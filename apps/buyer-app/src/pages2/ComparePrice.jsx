@@ -677,28 +677,12 @@ function CompareCard({
           color: "#ff6b00",
         }}
       >
-        ₹{price === undefined || price === null || price === ""
+        {price === undefined || price === null || price === ""
           ? "Price unavailable"
           : String(price).includes("₹")
             ? price
             : "₹" + price}
       </h2>
-
-      {/* RATING */}
-
-      <p>
-        ⭐ 4.5 Rating
-      </p>
-
-      {/* AVAILABILITY */}
-
-      <p
-        style={{
-          color: "green",
-        }}
-      >
-        ✓ Available
-      </p>
 
       {/* BUY */}
 
