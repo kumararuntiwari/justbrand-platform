@@ -1037,105 +1037,33 @@ app.get(
       const productName =
         product?.name || search;
 
-      const justBrandPrice =
-        product?.price || "999";
+      if (!product) {
+        return res.json({
+          success: true,
+          search,
+          product: null,
+          results: [],
+        });
+      }
 
       const compareResults = [
         {
           platform: "JustBrand",
-          productName,
-          image:
-            product?.image ||
-            "/images/product1.png",
-          price: justBrandPrice,
-          rating: "4.5",
-          delivery:
-            "Fast Delivery",
-          link: "#",
-          isBestPrice: false,
-        },
-        {
-          platform: "Amazon",
-          productName,
-          image:
-            product?.image ||
-            "/images/product1.png",
-          price: "949",
-          rating: "4.4",
-          delivery:
-            "Prime Delivery",
-          link: "#",
-          isBestPrice: false,
-        },
-        {
-          platform: "Flipkart",
-          productName,
-          image:
-            product?.image ||
-            "/images/product1.png",
-          price: "929",
-          rating: "4.3",
-          delivery:
-            "Free Delivery",
-          link: "#",
-          isBestPrice: false,
-        },
-        {
-          platform: "Meesho",
-          productName,
-          image:
-            product?.image ||
-            "/images/product1.png",
-          price: "899",
-          rating: "4.2",
-          delivery:
-            "Standard Delivery",
-          link: "#",
-          isBestPrice: false,
+          productName: product.name,
+          image: product.image || null,
+          price: product.price,
+          rating: null,
+          delivery: null,
+          link: null,
+          isBestPrice: true,
         },
       ];
-
-      const prices =
-        compareResults.map(
-          (item) =>
-            Number(
-              String(item.price)
-                .replace("₹", "")
-                .replace("Γé╣", "")
-                .replace(",", "")
-                .trim()
-            )
-        );
-
-      const lowestPrice =
-        Math.min(...prices);
-
-      compareResults.forEach(
-        (item) => {
-          const price =
-            Number(
-              String(item.price)
-                .replace("₹", "")
-                .replace("Γé╣", "")
-                .replace(",", "")
-                .trim()
-            );
-
-          if (
-            price === lowestPrice
-          ) {
-            item.isBestPrice = true;
-          }
-        }
-      );
 
       res.json({
         success: true,
         search,
-        product:
-          product || null,
-        results:
-          compareResults,
+        product,
+        results: compareResults,
       });
     } catch (error) {
       console.error(error);
