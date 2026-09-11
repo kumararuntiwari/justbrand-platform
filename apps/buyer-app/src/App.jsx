@@ -22,7 +22,7 @@ import MLMWallet from "./Pages/MLMWallet";
 // BACKEND
 // ==========================================
 
-const BACKEND_URL = "https://justbrand.in/api/products";
+const BACKEND_URL = "https://justbrand-in-144629.hostingersite.com/api/products";
 
 // ==========================================
 // APP

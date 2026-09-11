@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import EditProduct from "../components/EditProduct";
 
-const API_URL = "http://localhost:5000";
+const API_URL = "https://justbrand-in-144629.hostingersite.com";
 
 function MyProducts({ onBack, onAddProduct }) {
   const [products, setProducts] = useState([]);

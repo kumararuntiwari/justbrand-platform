@@ -1,7 +1,7 @@
 ﻿import { useEffect, useState } from "react";
 import "./App.css";
 
-const API = "http://localhost:5000";
+const API = "https://justbrand-in-144629.hostingersite.com";
 
 function App() {
   const [token, setToken] = useState(
