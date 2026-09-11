@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 
-const API_URL = "https://justbrand.in";
+const API_URL = "https://justbrand-in-144629.hostingersite.com";
 
 export default function AddProduct() {
   const [form, setForm] = useState({
