@@ -456,7 +456,7 @@ console.log("COMPARE IMAGE URL:", productImage);
               margin: "10px",
             }}
           >
-            ₹{justBrandPrice.toLocaleString("en-IN")}
+            {formatPrice(justBrandPrice)}
           </h2>
 
           {/* =================================
