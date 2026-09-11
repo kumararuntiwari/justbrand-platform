@@ -151,7 +151,7 @@ function ComparePrice({
 
   const buyNow = (site) => {
     alert(
-      `${site} link will be connected with authorized API / affiliate integration at final stage.`
+      `Checkout is not connected yet for ${site}.`
     );
   };
 
@@ -228,44 +228,9 @@ console.log("COMPARE IMAGE URL:", productImage);
 
   // =====================================
   // PRICE
-  // =====================================
 
-  const justBrandPrice =
-    Number(
-      String(product.price || "0")
-        .replace("₹", "")
-        .replace(/,/g, "")
-        .trim()
-    ) || 0;
+  const justBrandPrice = product.price;
 
-  const amazonPrice =
-    justBrandPrice > 0
-      ? Math.max(1, justBrandPrice - 50)
-      : 949;
-
-  const flipkartPrice =
-    justBrandPrice > 0
-      ? Math.max(1, justBrandPrice - 30)
-      : 969;
-
-  const meeshoPrice =
-    justBrandPrice > 0
-      ? Math.max(1, justBrandPrice - 80)
-      : 919;
-
-  const prices = [
-    justBrandPrice,
-    amazonPrice,
-    flipkartPrice,
-    meeshoPrice,
-  ].filter((price) => price > 0);
-
-  const bestPrice =
-    prices.length > 0
-      ? Math.min(...prices)
-      : 0;
-
-  // =====================================
   // PAGE
   // =====================================
 
@@ -569,8 +534,7 @@ console.log("COMPARE IMAGE URL:", productImage);
             color: "#666",
           }}
         >
-          {product.name} की कीमत अलग-अलग
-          shopping sites पर compare करें
+          Verified JustBrand price for {product.name}
         </p>
       </div>
 
@@ -588,65 +552,29 @@ console.log("COMPARE IMAGE URL:", productImage);
           gap: "20px",
         }}
       >
-        {/* JUSTBRAND */}
-
         <CompareCard
           site="JustBrand"
           icon="🟠"
           price={justBrandPrice}
-          best={
-            justBrandPrice === bestPrice
-          }
+          best={false}
           image={productImage}
           onBuy={() =>
             buyNow("JustBrand")
           }
         />
 
-        {/* AMAZON */}
-
-        <CompareCard
-          site="Amazon"
-          icon="🟡"
-          price={amazonPrice}
-          best={
-            amazonPrice === bestPrice
-          }
-          image={productImage}
-          onBuy={() =>
-            buyNow("Amazon")
-          }
-        />
-
-        {/* FLIPKART */}
-
-        <CompareCard
-          site="Flipkart"
-          icon="🔵"
-          price={flipkartPrice}
-          best={
-            flipkartPrice === bestPrice
-          }
-          image={productImage}
-          onBuy={() =>
-            buyNow("Flipkart")
-          }
-        />
-
-        {/* MEESHO */}
-
-        <CompareCard
-          site="Meesho"
-          icon="🟣"
-          price={meeshoPrice}
-          best={
-            meeshoPrice === bestPrice
-          }
-          image={productImage}
-          onBuy={() =>
-            buyNow("Meesho")
-          }
-        />
+        <p
+          style={{
+            gridColumn: "1 / -1",
+            margin: "0",
+            color: "#666",
+            textAlign: "center",
+            fontSize: "14px",
+          }}
+        >
+          External marketplace prices are not connected. Only the verified
+          JustBrand price is shown.
+        </p>
       </div>
     </div>
   );
@@ -749,7 +677,11 @@ function CompareCard({
           color: "#ff6b00",
         }}
       >
-        ₹{Number(price || 0).toLocaleString("en-IN")}
+        ₹{price === undefined || price === null || price === ""
+          ? "Price unavailable"
+          : String(price).includes("₹")
+            ? price
+            : "₹" + price}
       </h2>
 
       {/* RATING */}
