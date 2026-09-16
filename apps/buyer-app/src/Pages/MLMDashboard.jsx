@@ -20,9 +20,34 @@ function MLMDashboard({ member, onLogout }) {
 
   const [wallet, setWallet] = useState(0);
   const [earnings, setEarnings] = useState(0);
+  const [pendingEarnings, setPendingEarnings] = useState(0);
+  const [withdrawn, setWithdrawn] = useState(0);
+  const [payouts, setPayouts] = useState([]);
   const [leftTeam, setLeftTeam] = useState([]);
   const [rightTeam, setRightTeam] = useState([]);
   const [transactions, setTransactions] = useState([]);
+
+  // Mobile: collapse the sidebar into a toggleable menu (additive;
+  // desktop layout is untouched — the toggle only appears ≤768px).
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== "undefined" &&
+      window.innerWidth <= 768
+  );
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    function handleResize() {
+      const nowMobile = window.innerWidth <= 768;
+      setIsMobile(nowMobile);
+
+      if (!nowMobile) {
+        setMobileMenuOpen(false);
+      }
+    }
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   useEffect(() => {
     loadMLMData();
@@ -59,6 +84,8 @@ function MLMDashboard({ member, onLogout }) {
       // Backend wallet: balance (payable), totalEarned, pending.
       setWallet(Number(data?.wallet?.balance) || 0);
       setEarnings(Number(data?.wallet?.totalEarned) || 0);
+      setPendingEarnings(Number(data?.wallet?.pending) || 0);
+      setWithdrawn(Number(data?.wallet?.totalPaid) || 0);
 
       // Direct A/B/C placements from the backend.
       // Dashboard shows two team columns: A on the left,
@@ -100,6 +127,21 @@ function MLMDashboard({ member, onLogout }) {
           status: record.status,
         }))
       );
+
+      // Withdrawal request history (own only) for the payouts section.
+      try {
+        const payoutsResponse = await api("/api/mlm/payout-requests", {
+          token,
+        });
+
+        setPayouts(
+          Array.isArray(payoutsResponse?.requests)
+            ? payoutsResponse.requests
+            : []
+        );
+      } catch {
+        // Payout history is optional — dashboard still loads without it.
+      }
     } catch (error) {
       if (error?.status === 401 || error?.status === 403) {
         // Session expired — clear the token so the login gate shows.
@@ -172,6 +214,31 @@ function MLMDashboard({ member, onLogout }) {
 
       <header style={styles.header}>
         <div style={styles.headerLeft}>
+
+          {isMobile && (
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              style={{
+                ...styles.mobileMenuBtn,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: "40px",
+                height: "40px",
+                marginRight: "10px",
+                border: "1px solid #eee",
+                borderRadius: "10px",
+                background: "#fff",
+                fontSize: "18px",
+                cursor: "pointer",
+                flexShrink: 0,
+              }}
+              aria-label="Toggle menu"
+            >
+              ☰
+            </button>
+          )}
+
           <div style={styles.logo}>
             JustBrand
           </div>
@@ -198,9 +265,21 @@ function MLMDashboard({ member, onLogout }) {
         </div>
       </header>
 
-      <div style={styles.layout}>
+      <div
+        style={
+          isMobile
+            ? { ...styles.layout, flexDirection: "column" }
+            : styles.layout
+        }
+      >
 
-        <aside style={styles.sidebar}>
+        <aside
+          style={
+            isMobile
+              ? { ...styles.sidebar, display: "none" }
+              : styles.sidebar
+          }
+        >
 
           <div style={styles.menuTitle}>
             MLM MENU
@@ -279,6 +358,38 @@ function MLMDashboard({ member, onLogout }) {
 
         </aside>
 
+        {isMobile && mobileMenuOpen && (
+          <div
+            style={{
+              padding: "10px 12px 0",
+              background: "#fff",
+              borderBottom: "1px solid #eee",
+            }}
+          >
+            {[
+              { id: "dashboard", icon: "🏠", text: "Dashboard" },
+              { id: "team", icon: "🌳", text: "My Team" },
+              { id: "wallet", icon: "💳", text: "Wallet" },
+              { id: "commission", icon: "💰", text: "Commission" },
+              { id: "earnings", icon: "💵", text: "Earnings" },
+              { id: "referral", icon: "🔗", text: "Referral" },
+              { id: "history", icon: "📜", text: "Income History" },
+              { id: "profile", icon: "👤", text: "My Profile" },
+            ].map((item) => (
+              <MenuButton
+                key={item.id}
+                icon={item.icon}
+                text={item.text}
+                active={activeMenu === item.id}
+                onClick={() => {
+                  setActiveMenu(item.id);
+                  setMobileMenuOpen(false);
+                }}
+              />
+            ))}
+          </div>
+        )}
+
         <main style={styles.content}>
 
           {activeMenu === "commission" && (
@@ -328,6 +439,13 @@ function MLMDashboard({ member, onLogout }) {
                   title="Total Team"
                   value={totalTeam}
                   description="Left + Right team"
+                />
+
+                <StatCard
+                  icon="⏳"
+                  title="On Hold"
+                  value={`₹${pendingEarnings.toLocaleString("en-IN")}`}
+                  description="In return window"
                 />
 
                 <StatCard
@@ -415,6 +533,67 @@ function MLMDashboard({ member, onLogout }) {
                   </button>
 
                 </div>
+
+              </section>
+
+              <section style={styles.section}>
+
+                <h2 style={styles.sectionTitle}>
+                  🏦 Withdrawal Status
+                </h2>
+
+                <p style={styles.sectionSubtitle}>
+                  Your payout requests and their progress.
+                </p>
+
+                <div style={styles.statsGrid}>
+
+                  <StatCard
+                    icon="💳"
+                    title="Available"
+                    value={`₹${wallet.toLocaleString("en-IN")}`}
+                    description="Ready to withdraw"
+                  />
+
+                  <StatCard
+                    icon="⏳"
+                    title="On Hold"
+                    value={`₹${pendingEarnings.toLocaleString("en-IN")}`}
+                    description="Return window active"
+                  />
+
+                  <StatCard
+                    icon="🏦"
+                    title="Withdrawn"
+                    value={`₹${withdrawn.toLocaleString("en-IN")}`}
+                    description="Paid to you"
+                  />
+
+                </div>
+
+                {payouts.length === 0 ? (
+                  <div style={styles.emptyBox}>
+                    <p style={{ margin: 0, color: "#777", fontSize: 14 }}>
+                      No withdrawal requests yet. Withdrawals from your Family
+                      Wallet appear here with their status.
+                    </p>
+                  </div>
+                ) : (
+                  <div style={styles.transactionList}>
+                    {payouts.slice(0, 5).map((payout) => (
+                      <Transaction
+                        key={payout.id}
+                        item={{
+                          id: payout.id,
+                          title: `${payout.method || "Bank"} withdrawal`,
+                          date: payout.createdAt,
+                          amount: -(Number(payout.amount) || 0),
+                          status: payout.status || "Processing",
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
 
               </section>
 
@@ -916,6 +1095,8 @@ const styles = {
     minHeight: "100vh",
     background: "#f5f5f5",
     color: "#222",
+    maxWidth: "100%",
+    overflowX: "hidden",
   },
 
   header: {
@@ -928,17 +1109,22 @@ const styles = {
     padding: "12px 25px",
     boxSizing: "border-box",
     gap: "15px",
+    flexWrap: "wrap",
+    maxWidth: "100%",
   },
 
   headerLeft: {
     display: "flex",
     alignItems: "center",
     gap: "12px",
+    minWidth: 0,
+    flex: "1 1 auto",
   },
 
   logo: {
     fontSize: "25px",
     fontWeight: "bold",
+    whiteSpace: "nowrap",
   },
 
   panelText: {
@@ -951,6 +1137,7 @@ const styles = {
     display: "flex",
     alignItems: "center",
     gap: "9px",
+    minWidth: 0,
   },
 
   avatar: {
@@ -969,6 +1156,10 @@ const styles = {
   memberName: {
     fontSize: "13px",
     fontWeight: "bold",
+    maxWidth: "130px",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
   },
 
   memberId: {
@@ -981,6 +1172,7 @@ const styles = {
     display: "flex",
     minHeight: "calc(100vh - 70px)",
     alignItems: "stretch",
+    flexDirection: "row",
   },
 
   sidebar: {
@@ -1028,6 +1220,16 @@ const styles = {
     minWidth: 0,
     padding: "25px",
     boxSizing: "border-box",
+    maxWidth: "100%",
+    overflowX: "hidden",
+  },
+
+  contentInner: {
+    width: "100%",
+  },
+
+  mobileMenuBtn: {
+    display: "none",
   },
 
   welcomeBox: {
@@ -1124,6 +1326,13 @@ const styles = {
     gridTemplateColumns: "1fr 150px 1fr",
     gap: "15px",
     alignItems: "center",
+    // Stack vertically on phones (JS-derived; 360px widths otherwise clip).
+    ...(typeof window !== "undefined" && window.innerWidth <= 620
+      ? {
+          gridTemplateColumns: "1fr",
+          justifyItems: "center",
+        }
+      : {}),
   },
 
   bigTeamGrid: {
@@ -1166,6 +1375,9 @@ const styles = {
     border: "1px solid #eee",
     borderRadius: "12px",
     padding: "15px",
+    minWidth: 0,
+    width: "100%",
+    boxSizing: "border-box",
   },
 
   teamHeader: {
@@ -1204,6 +1416,8 @@ const styles = {
     display: "flex",
     flexDirection: "column",
     gap: "8px",
+    maxWidth: "100%",
+    overflowX: "hidden",
   },
 
   teamMember: {
@@ -1213,6 +1427,7 @@ const styles = {
     padding: "8px",
     background: "#fff",
     borderRadius: "8px",
+    minWidth: 0,
   },
 
   memberAvatar: {
@@ -1230,6 +1445,7 @@ const styles = {
   memberItemName: {
     fontSize: "12px",
     fontWeight: "bold",
+    overflowWrap: "anywhere",
   },
 
   memberItemId: {
@@ -1261,6 +1477,7 @@ const styles = {
     fontSize: "20px",
     fontWeight: "bold",
     color: "#ff1493",
+    overflowWrap: "anywhere",
   },
 
   copyButton: {
@@ -1297,6 +1514,7 @@ const styles = {
     background: "#fafafa",
     borderRadius: "9px",
     border: "1px solid #eee",
+    minWidth: 0,
   },
 
   transactionIcon: {
@@ -1316,6 +1534,7 @@ const styles = {
   transactionTitle: {
     fontSize: "13px",
     fontWeight: "bold",
+    overflowWrap: "anywhere",
   },
 
   transactionDate: {
@@ -1328,6 +1547,8 @@ const styles = {
     color: "#198754",
     fontWeight: "bold",
     fontSize: "14px",
+    whiteSpace: "nowrap",
+    flexShrink: 0,
   },
 
   pageBox: {

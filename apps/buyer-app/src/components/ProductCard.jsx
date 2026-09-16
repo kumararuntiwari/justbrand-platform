@@ -99,17 +99,20 @@ function ProductCard({
       }}
       onClick={openDetails}
     >
-      {/* FOUR PRODUCT IMAGES */}
+      {/* PRODUCT IMAGE — clean marketplace-style box with a
+          consistent aspect ratio; contain keeps the full product
+          visible without distortion regardless of image dimensions */}
       <div
         style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: "5px",
-          height: "210px",
+          width: "100%",
+          aspectRatio: "1 / 1",
           background: "#fafafa",
           borderRadius: "12px",
           overflow: "hidden",
           position: "relative",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
         }}
       >
         {discount > 0 && (
@@ -162,34 +165,21 @@ function ProductCard({
           </button>
         )}
 
-        {productImages.map((image, index) => (
-          <div
-            key={`${product?.id || productName}-image-${index}`}
-            style={{
-              background: "white",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              minWidth: 0,
-              minHeight: 0,
-            }}
-          >
-            <img
-              src={image}
-              alt={`${productName} view ${index + 1}`}
-              onError={(e) => {
-                e.currentTarget.src = fallbackImages[index];
-              }}
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "contain",
-                padding: "4px",
-                boxSizing: "border-box",
-              }}
-            />
-          </div>
-        ))}
+        <img
+          src={productImages[0]}
+          alt={productName}
+          onError={(e) => {
+            e.currentTarget.src = fallbackImages[0];
+          }}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "contain",
+            padding: "10px",
+            boxSizing: "border-box",
+            display: "block",
+          }}
+        />
       </div>
 
       {/* PRODUCT DETAILS */}

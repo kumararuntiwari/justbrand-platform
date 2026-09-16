@@ -6,6 +6,7 @@ function ComparePrice({
   selectedProduct = null,
   onBack,
   onRemove,
+  onBuyNow,
 }) {
   const [current, setCurrent] = useState(0);
   const [search, setSearch] = useState("");
@@ -150,6 +151,12 @@ function ComparePrice({
   // =====================================
 
   const buyNow = (site) => {
+    if (site === "JustBrand" && selectedProduct && onBuyNow) {
+      // Real checkout for JustBrand products.
+      onBuyNow(selectedProduct);
+      return;
+    }
+
     alert(
       `${site} link will be connected with authorized API / affiliate integration at final stage.`
     );
@@ -389,7 +396,7 @@ console.log("COMPARE IMAGE URL:", productImage);
 
       <div
         style={{
-          maxWidth: "550px",
+          maxWidth: "580px",
           margin: "auto",
         }}
       >
@@ -406,13 +413,15 @@ console.log("COMPARE IMAGE URL:", productImage);
           <div
             style={{
               width: "100%",
-              height: "320px",
+              height: "380px",
               background: "#eeeeee",
               borderRadius: "12px",
               display: "flex",
               justifyContent: "center",
               alignItems: "center",
               overflow: "hidden",
+              padding: "14px",
+              boxSizing: "border-box",
             }}
           >
             <img
@@ -706,13 +715,15 @@ function CompareCard({
 
       <div
         style={{
-          height: "150px",
+          height: "170px",
           background: "#f5f5f5",
           borderRadius: "10px",
           display: "flex",
           justifyContent: "center",
           alignItems: "center",
           overflow: "hidden",
+          padding: "8px",
+          boxSizing: "border-box",
         }}
       >
         <img
