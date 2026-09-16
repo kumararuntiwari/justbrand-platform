@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "test": "node ../tests/jb-flow.test.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

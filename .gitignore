@@ -17,3 +17,10 @@ dist/
 
 # Backups
 **/*backup*
+
+# Downloadable ZIP artifacts (local packaging only, never commit)
+/justbrand-*.zip
+/downloads/
+
+# Test suite throwaway database
+tests/.tmp/
