@@ -141,6 +141,30 @@ function App() {
 
   const [buyerPage, setBuyerPage] = useState(null);
 
+  // Product chosen via "Buy Now" — a single-item cart used for the
+  // express checkout flow (does not disturb the normal cart).
+  // Persisted so Buy Now → login → checkout survives a page reload.
+  const [buyNowItem, setBuyNowItem] = useState(() => {
+    try {
+      const saved = localStorage.getItem("justbrand_buynow");
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      if (buyNowItem) {
+        localStorage.setItem("justbrand_buynow", JSON.stringify(buyNowItem));
+      } else {
+        localStorage.removeItem("justbrand_buynow");
+      }
+    } catch {
+      /* storage unavailable */
+    }
+  }, [buyNowItem]);
+
   function handleCustomerAuth(authCustomer) {
     setCustomer(authCustomer);
 
@@ -149,7 +173,9 @@ function App() {
       JSON.stringify(authCustomer)
     );
 
-    setBuyerPage("account");
+    // If the customer logged in from a Buy Now flow, resume checkout
+    // with the saved item; otherwise go to the normal account page.
+    setBuyerPage(buyNowItem ? "checkout" : "account");
   }
 
   function handleCustomerLogout() {
@@ -910,6 +936,19 @@ function App() {
             setSelectedProduct(null)
           }
           addToCart={addToCart}
+          onBuyNow={(product) => {
+            setSelectedProduct(null);
+            setBuyNowItem({
+              ...product,
+              quantity: 1,
+            });
+
+            setBuyerPage(
+              customer && customerToken
+                ? "checkout"
+                : "auth"
+            );
+          }}
         />
       </>
     );
@@ -949,6 +988,14 @@ function App() {
         onOrders={() => setBuyerPage("orders")}
         onWishlist={() => setBuyerPage("wishlist")}
         onLogout={handleCustomerLogout}
+        onProfileUpdated={(updatedCustomer) => {
+          setCustomer(updatedCustomer);
+
+          localStorage.setItem(
+            "justbrand_customer",
+            JSON.stringify(updatedCustomer)
+          );
+        }}
       />
     );
   }
@@ -1010,15 +1057,18 @@ function App() {
 
     return (
       <Checkout
-        cart={cart}
+        cart={buyNowItem ? [buyNowItem] : cart}
         customer={customer}
         token={customerToken}
         onBack={() => setBuyerPage(null)}
         onOrderPlaced={() => {
-          // Cart is cleared only after a successful
-          // backend order — see Checkout success view.
-          setCart([]);
-          localStorage.removeItem("justbrand_cart");
+          // Clear whichever cart the order came from.
+          if (buyNowItem) {
+            setBuyNowItem(null);
+          } else {
+            setCart([]);
+            localStorage.removeItem("justbrand_cart");
+          }
         }}
       />
     );
@@ -1045,6 +1095,10 @@ function App() {
           updateQuantity={updateQuantity}
           onCheckout={() => {
             setShowCart(false);
+
+            // Normal cart checkout — clear any leftover Buy Now item so
+            // the checkout always shows exactly the cart contents.
+            setBuyNowItem(null);
 
             setBuyerPage(
               customer && customerToken
@@ -1080,6 +1134,19 @@ function App() {
             setShowCompare(false);
           }}
           onRemove={removeCompare}
+          onBuyNow={(product) => {
+            setShowCompare(false);
+            setBuyNowItem({
+              ...product,
+              quantity: 1,
+            });
+
+            setBuyerPage(
+              customer && customerToken
+                ? "checkout"
+                : "auth"
+            );
+          }}
         />
       </>
     );

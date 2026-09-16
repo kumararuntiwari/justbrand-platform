@@ -11,6 +11,21 @@ function ComparePrice({
   const [current, setCurrent] = useState(0);
   const [search, setSearch] = useState("");
 
+  // Mobile: main comparison image gets a shorter height so it stays
+  // fully visible above the fold; desktop keeps the larger height.
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== "undefined" && window.innerWidth <= 768
+  );
+
+  useEffect(() => {
+    function handleResize() {
+      setIsMobile(window.innerWidth <= 768);
+    }
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
   // =====================================
   // IMAGE URL
   // =====================================
@@ -413,7 +428,7 @@ console.log("COMPARE IMAGE URL:", productImage);
           <div
             style={{
               width: "100%",
-              height: "380px",
+              height: isMobile ? "340px" : "420px",
               background: "#eeeeee",
               borderRadius: "12px",
               display: "flex",

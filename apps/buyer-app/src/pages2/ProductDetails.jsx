@@ -1,10 +1,45 @@
-function ProductDetails({ product, addToCart, onBack }) {
+import React, { useState, useEffect } from "react";
+
+function ProductDetails({ product, addToCart, onBack, onBuyNow }) {
+  // Mobile: gallery stacks above the details (vertical hierarchy).
+  // Desktop: gallery left, details right. Desktop layout is unchanged.
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== "undefined" && window.innerWidth <= 768
+  );
+
+  useEffect(() => {
+    function handleResize() {
+      setIsMobile(window.innerWidth <= 768);
+    }
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  if (!product) {
+    return null;
+  }
+
+  const price = product.price;
+  const mrp = product.comparePrice || product.oldPrice || product.mrp;
+
+  // Discount % derived from the product's own price fields (display only).
+  const priceNum = Number(String(price || "0").replace(/[^0-9.]/g, ""));
+  const mrpNum = Number(String(mrp || "0").replace(/[^0-9.]/g, ""));
+  const discountPercent =
+    mrpNum > priceNum && priceNum > 0
+      ? Math.round(((mrpNum - priceNum) / mrpNum) * 100)
+      : 0;
+
+  const rating = product.rating || 4.5;
+  const trustedSeller = product.trustedSeller !== false;
+
   return (
     <div
       style={{
         minHeight: "100vh",
         background: "#f5f5f5",
-        padding: "20px",
+        padding: isMobile ? "12px" : "20px",
       }}
     >
       {/* BACK BUTTON */}
@@ -24,28 +59,33 @@ function ProductDetails({ product, addToCart, onBack }) {
       </button>
 
       {/* PRODUCT DETAILS CARD */}
+      {/* Mobile: one column (gallery on top, details below).
+          Desktop: two columns (gallery left, details right). */}
       <div
         style={{
           maxWidth: "1000px",
           margin: "auto",
           background: "white",
           borderRadius: "15px",
-          padding: "25px",
+          padding: isMobile ? "16px" : "25px",
           display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: "30px",
+          gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+          gap: isMobile ? "20px" : "30px",
           boxShadow: "0 2px 10px #ddd",
+          boxSizing: "border-box",
         }}
       >
-        {/* PRODUCT IMAGE */}
+        {/* PRODUCT IMAGE / GALLERY — always first: full image, never cropped */}
         <div
           style={{
-            height: "400px",
+            height: isMobile ? "390px" : "400px",
             background: "#f8f8f8",
             borderRadius: "12px",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
+            overflow: "hidden",
+            width: "100%",
           }}
         >
           <img
@@ -55,17 +95,26 @@ function ProductDetails({ product, addToCart, onBack }) {
               width: "100%",
               height: "100%",
               objectFit: "contain",
+              padding: "8px",
+              boxSizing: "border-box",
               borderRadius: "12px",
             }}
           />
         </div>
 
         {/* PRODUCT INFORMATION */}
-        <div>
+        <div
+          style={{
+            minWidth: 0,
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
           <p
             style={{
               color: "#777",
-              marginBottom: "8px",
+              margin: "0 0 8px",
+              fontSize: "14px",
             }}
           >
             {product.category}
@@ -73,36 +122,99 @@ function ProductDetails({ product, addToCart, onBack }) {
 
           <h1
             style={{
-              fontSize: "30px",
+              fontSize: isMobile ? "22px" : "30px",
               marginTop: "0",
-              marginBottom: "15px",
+              marginBottom: "10px",
+              lineHeight: "1.3",
+              overflowWrap: "anywhere",
             }}
           >
             {product.name}
           </h1>
 
-          {/* PRICE */}
-          <div style={{ marginBottom: "20px" }}>
+          {/* RATING + TRUSTED SELLER */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              flexWrap: "wrap",
+              marginBottom: "12px",
+            }}
+          >
             <span
               style={{
-                fontSize: "30px",
+                background: "#f5a623",
+                color: "white",
+                padding: "3px 8px",
+                borderRadius: "5px",
+                fontSize: "13px",
+                fontWeight: "bold",
+              }}
+            >
+              ★ {rating}
+            </span>
+            <span style={{ fontSize: "13px", color: "#777" }}>Rating</span>
+
+            {trustedSeller && (
+              <span
+                style={{
+                  color: "#168a3a",
+                  fontSize: "13px",
+                  fontWeight: "600",
+                }}
+              >
+                ✓ Trusted Seller
+              </span>
+            )}
+          </div>
+
+          {/* PRICE / MRP / DISCOUNT */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+              flexWrap: "wrap",
+              marginBottom: "16px",
+            }}
+          >
+            <span
+              style={{
+                fontSize: isMobile ? "26px" : "30px",
                 fontWeight: "bold",
                 color: "#ff6b00",
               }}
             >
-              {product.price}
+              {price}
             </span>
 
-            <span
-              style={{
-                marginLeft: "15px",
-                color: "#888",
-                textDecoration: "line-through",
-                fontSize: "18px",
-              }}
-            >
-              {product.oldPrice}
-            </span>
+            {mrp && mrpNum > priceNum ? (
+              <span
+                style={{
+                  color: "#888",
+                  textDecoration: "line-through",
+                  fontSize: "17px",
+                }}
+              >
+                {mrp}
+              </span>
+            ) : null}
+
+            {discountPercent > 0 && (
+              <span
+                style={{
+                  background: "#fff0f0",
+                  color: "#d32f2f",
+                  padding: "3px 8px",
+                  borderRadius: "5px",
+                  fontSize: "13px",
+                  fontWeight: "bold",
+                }}
+              >
+                {discountPercent}% OFF
+              </span>
+            )}
           </div>
 
           {/* OFFER */}
@@ -111,61 +223,80 @@ function ProductDetails({ product, addToCart, onBack }) {
               background: "#fff3e8",
               padding: "12px",
               borderRadius: "8px",
-              marginBottom: "20px",
+              marginBottom: "16px",
               color: "#e85d00",
               fontWeight: "bold",
+              fontSize: "14px",
             }}
           >
             🔥 Special Offer Available
           </div>
 
-          {/* DESCRIPTION */}
-          <p
-            style={{
-              color: "#555",
-              lineHeight: "1.6",
-            }}
-          >
-            High quality product available on JustBrand.
-            Shop easily and get the best price.
-          </p>
+          {/* SELLER + DETAILS */}
+          {product.sellerName && (
+            <p style={{ color: "#666", fontSize: "14px", margin: "0 0 10px" }}>
+              Sold by: <strong>{product.sellerName}</strong>
+            </p>
+          )}
 
-          {/* ADD TO CART */}
-          <button
-            onClick={() => addToCart(product)}
-            style={{
-              width: "100%",
-              background: "#ff6b00",
-              color: "white",
-              border: "none",
-              padding: "15px",
-              borderRadius: "10px",
-              cursor: "pointer",
-              fontSize: "18px",
-              fontWeight: "bold",
-              marginTop: "20px",
-            }}
-          >
-            🛒 Add to Cart
-          </button>
+          {(product.shortDetails || product.description) && (
+            <p
+              style={{
+                color: "#555",
+                lineHeight: "1.6",
+                marginTop: 0,
+                overflowWrap: "anywhere",
+              }}
+            >
+              {product.shortDetails || product.description}
+            </p>
+          )}
 
-          {/* BUY NOW */}
-          <button
+          {/* ACTION BUTTONS */}
+          <div
             style={{
-              width: "100%",
-              background: "#ff9f00",
-              color: "white",
-              border: "none",
-              padding: "15px",
-              borderRadius: "10px",
-              cursor: "pointer",
-              fontSize: "18px",
-              fontWeight: "bold",
-              marginTop: "12px",
+              marginTop: "auto",
+              paddingTop: isMobile ? "8px" : "16px",
             }}
           >
-            ⚡ Buy Now
-          </button>
+            {/* ADD TO CART */}
+            <button
+              onClick={() => addToCart(product)}
+              style={{
+                width: "100%",
+                background: "#ff6b00",
+                color: "white",
+                border: "none",
+                padding: "15px",
+                borderRadius: "10px",
+                cursor: "pointer",
+                fontSize: "17px",
+                fontWeight: "bold",
+              }}
+            >
+              🛒 Add to Cart
+            </button>
+
+            {/* BUY NOW — direct checkout of THIS product only.
+                Never adds the product to the cart. */}
+            <button
+              onClick={() => onBuyNow && onBuyNow(product)}
+              style={{
+                width: "100%",
+                background: "#ff9f00",
+                color: "white",
+                border: "none",
+                padding: "15px",
+                borderRadius: "10px",
+                cursor: "pointer",
+                fontSize: "17px",
+                fontWeight: "bold",
+                marginTop: "12px",
+              }}
+            >
+              ⚡ Buy Now
+            </button>
+          </div>
         </div>
       </div>
     </div>
