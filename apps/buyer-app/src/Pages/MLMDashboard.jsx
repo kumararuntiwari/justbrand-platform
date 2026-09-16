@@ -1,5 +1,10 @@
 import React, { useEffect, useState } from "react";
 import MLMCommission from "./MLMCommission";
+import {
+  api,
+  getMlmToken,
+  setMlmToken,
+} from "../api";
 
 function MLMDashboard({ member, onLogout }) {
   const [activeMenu, setActiveMenu] = useState("dashboard");
@@ -22,118 +27,87 @@ function MLMDashboard({ member, onLogout }) {
   useEffect(() => {
     loadMLMData();
 
+    // Periodic refresh of backend data (wallet/commissions change
+    // server-side as orders are delivered and return windows pass).
     const timer = setInterval(() => {
       loadMLMData();
-    }, 1000);
+    }, 15000);
 
     return () => clearInterval(timer);
   }, []);
 
-  function loadMLMData() {
-    try {
-      const savedMember = localStorage.getItem("justbrand_mlm_member");
+  async function loadMLMData() {
+    const token = getMlmToken();
 
-      if (savedMember) {
-        const data = JSON.parse(savedMember);
-
-        if (data && typeof data === "object") {
-          setMlmMember(data);
-        }
-      }
-
-      const savedWallet = localStorage.getItem("justbrand_mlm_wallet");
-
-      if (savedWallet) {
-        setWallet(Number(savedWallet) || 0);
-      }
-
-      const savedEarnings = localStorage.getItem(
-        "justbrand_mlm_earnings"
-      );
-
-      if (savedEarnings) {
-        setEarnings(Number(savedEarnings) || 0);
-      }
-
-      loadTeamMembers();
-
-      const savedTransactions = localStorage.getItem(
-        "justbrand_mlm_transactions"
-      );
-
-      if (savedTransactions) {
-        const data = JSON.parse(savedTransactions);
-
-        if (Array.isArray(data)) {
-          setTransactions(data);
-        }
-      }
-    } catch (error) {
-      console.log("MLM data loading error:", error);
+    if (!token) {
+      // No backend session yet — keep any cached member display.
+      return;
     }
-  }
 
-  function loadTeamMembers() {
     try {
-      const currentMemberRaw = localStorage.getItem(
-        "justbrand_mlm_member"
+      const data = await api("/api/mlm/me", { token });
+
+      if (data?.member) {
+        setMlmMember(data.member);
+
+        localStorage.setItem(
+          "justbrand_mlm_member",
+          JSON.stringify(data.member)
+        );
+      }
+
+      // Backend wallet: balance (payable), totalEarned, pending.
+      setWallet(Number(data?.wallet?.balance) || 0);
+      setEarnings(Number(data?.wallet?.totalEarned) || 0);
+
+      // Direct A/B/C placements from the backend.
+      // Dashboard shows two team columns: A on the left,
+      // B and C on the right (matches the two-box layout).
+      const directTeam = Array.isArray(data?.directTeam)
+        ? data.directTeam
+        : [];
+
+      setLeftTeam(
+        directTeam.filter(
+          (item) =>
+            String(item?.position || "").toUpperCase() === "A"
+        )
       );
 
-      const membersRaw = localStorage.getItem(
-        "justbrand_mlm_members"
+      setRightTeam(
+        directTeam.filter((item) => {
+          const position = String(item?.position || "").toUpperCase();
+
+          return position === "B" || position === "C";
+        })
       );
 
-      if (!currentMemberRaw || !membersRaw) {
-        setLeftTeam([]);
-        setRightTeam([]);
-        return;
-      }
-
-      const currentMember = JSON.parse(currentMemberRaw);
-      const allMembers = JSON.parse(membersRaw);
-
-      if (!Array.isArray(allMembers)) {
-        setLeftTeam([]);
-        setRightTeam([]);
-        return;
-      }
-
-      const currentId =
-        currentMember?.memberId ||
-        currentMember?.id ||
-        null;
-
-      if (!currentId) {
-        setLeftTeam([]);
-        setRightTeam([]);
-        return;
-      }
-
-      const children = allMembers.filter((item) => {
-        const parentId =
-          item?.parentId ||
-          item?.sponsorId ||
-          item?.parentMemberId ||
-          null;
-
-        return String(parentId) === String(currentId);
+      // Commission history -> transaction list shape.
+      const commissionsResponse = await api("/api/mlm/commissions", {
+        token,
       });
 
-      const left = children.filter((item) => {
-        return String(item?.position || "").toLowerCase() === "left";
-      });
+      const records = Array.isArray(commissionsResponse?.commissions)
+        ? commissionsResponse.commissions
+        : [];
 
-      const right = children.filter((item) => {
-        return String(item?.position || "").toLowerCase() === "right";
-      });
-
-      setLeftTeam(left);
-      setRightTeam(right);
+      setTransactions(
+        records.slice(0, 20).map((record) => ({
+          id: record.id,
+          title: record.description || record.type || "Family Income",
+          date: record.createdAt,
+          amount: Number(record.amount) || 0,
+          status: record.status,
+        }))
+      );
     } catch (error) {
-      console.log("Team loading error:", error);
+      if (error?.status === 401 || error?.status === 403) {
+        // Session expired — clear the token so the login gate shows.
+        setMlmToken("");
+        return;
+      }
 
-      setLeftTeam([]);
-      setRightTeam([]);
+      console.log("MLM data loading error:", error);
     }
   }
 
@@ -141,7 +115,7 @@ function MLMDashboard({ member, onLogout }) {
     mlmMember?.name ||
     mlmMember?.memberName ||
     mlmMember?.fullName ||
-    "MLM Member";
+    "Family Member";
 
   const memberId =
     mlmMember?.memberId ||
@@ -203,7 +177,7 @@ function MLMDashboard({ member, onLogout }) {
           </div>
 
           <div style={styles.panelText}>
-            MLM Dashboard
+            Family Dashboard
           </div>
         </div>
 
@@ -323,7 +297,7 @@ function MLMDashboard({ member, onLogout }) {
                   </h1>
 
                   <p style={styles.welcomeText}>
-                    Welcome to your JustBrand MLM dashboard.
+                    Welcome to your JustBrand Family dashboard.
                   </p>
                 </div>
 
@@ -451,7 +425,7 @@ function MLMDashboard({ member, onLogout }) {
                 </h2>
 
                 <p style={styles.sectionSubtitle}>
-                  Your latest MLM income.
+                  Your latest Family income.
                 </p>
 
                 {transactions.length === 0 ? (
@@ -465,7 +439,7 @@ function MLMDashboard({ member, onLogout }) {
                     </h3>
 
                     <p>
-                      Your MLM earnings will appear here.
+                      Your Family earnings will appear here.
                     </p>
                   </div>
                 ) : (
@@ -489,7 +463,7 @@ function MLMDashboard({ member, onLogout }) {
             <PageBox
               icon="🌳"
               title="My Team"
-              subtitle="Manage your binary MLM team."
+              subtitle="Manage your binary Family team."
             >
 
               <div style={styles.bigTeamGrid}>
@@ -516,7 +490,7 @@ function MLMDashboard({ member, onLogout }) {
           {activeMenu === "wallet" && (
             <PageBox
               icon="💳"
-              title="MLM Wallet"
+              title="Family Wallet"
               subtitle="Manage your JustBrand wallet."
             >
 
@@ -549,7 +523,7 @@ function MLMDashboard({ member, onLogout }) {
             <PageBox
               icon="💵"
               title="My Earnings"
-              subtitle="Track your MLM income."
+              subtitle="Track your Family income."
             >
 
               <div style={styles.earningsCard}>
@@ -609,7 +583,7 @@ function MLMDashboard({ member, onLogout }) {
             <PageBox
               icon="📜"
               title="Income History"
-              subtitle="View all MLM transactions."
+              subtitle="View all Family transactions."
             >
 
               {transactions.length === 0 ? (
@@ -648,7 +622,7 @@ function MLMDashboard({ member, onLogout }) {
             <PageBox
               icon="👤"
               title="My Profile"
-              subtitle="Your JustBrand MLM member details."
+              subtitle="Your JustBrand Family member details."
             >
 
               <div style={styles.profileGrid}>
@@ -853,7 +827,7 @@ function Transaction({ item }) {
         <div style={styles.transactionTitle}>
           {item?.title ||
             item?.type ||
-            "MLM Income"}
+            "Family Income"}
         </div>
 
         <div style={styles.transactionDate}>

@@ -1,48 +1,41 @@
 import React, { useEffect, useState } from "react";
+import { api } from "../api";
+
+const DEFAULT_RULES = {
+  directCommission: 10,
+  levelCommission: 5,
+  binaryCommission: 5,
+  shoppingCommission: 3,
+  returnPeriodDays: 7,
+  directMemberLimit: 3,
+  commissionAfterReturn: true,
+  cancelCommission: false,
+  returnCommission: false,
+};
 
 function MLMCommissionRules() {
-  const [rules, setRules] = useState(() => {
-    try {
-      const saved = localStorage.getItem(
-        "justbrand_mlm_commission_rules"
-      );
-
-      return saved
-        ? JSON.parse(saved)
-        : {
-            directCommission: 10,
-            levelCommission: 5,
-            binaryCommission: 5,
-            shoppingCommission: 3,
-            returnPeriodDays: 7,
-            directMemberLimit: 3,
-            commissionAfterReturn: true,
-            cancelCommission: false,
-            returnCommission: false,
-          };
-    } catch {
-      return {
-        directCommission: 10,
-        levelCommission: 5,
-        binaryCommission: 5,
-        shoppingCommission: 3,
-        returnPeriodDays: 7,
-        directMemberLimit: 3,
-        commissionAfterReturn: true,
-        cancelCommission: false,
-        returnCommission: false,
-      };
-    }
-  });
+  const [rules, setRules] = useState({ ...DEFAULT_RULES });
 
   const [saved, setSaved] = useState(false);
 
+  const [rulesMessage, setRulesMessage] = useState("");
+
+  // Load the live, admin-configured rules from the backend.
   useEffect(() => {
-    localStorage.setItem(
-      "justbrand_mlm_commission_rules",
-      JSON.stringify(rules)
-    );
-  }, [rules]);
+    async function loadRules() {
+      try {
+        const data = await api("/api/mlm/settings");
+
+        if (data?.rules) {
+          setRules({ ...DEFAULT_RULES, ...data.rules });
+        }
+      } catch (error) {
+        console.log("Commission rules loading error:", error);
+      }
+    }
+
+    loadRules();
+  }, []);
 
   function updateRule(key, value) {
     setRules((old) => ({
@@ -53,40 +46,52 @@ function MLMCommissionRules() {
     setSaved(false);
   }
 
-  function saveRules() {
-    localStorage.setItem(
-      "justbrand_mlm_commission_rules",
-      JSON.stringify(rules)
-    );
+  async function saveRules() {
+    // Commission rules are admin-configurable. Saving requires a
+    // JustBrand staff (Super Admin) login; members see the live rules.
+    const staffToken =
+      localStorage.getItem("justbrand_staff_token") || "";
 
-    setSaved(true);
+    if (!staffToken) {
+      setRulesMessage(
+        "Only a JustBrand Super Admin can change commission rules."
+      );
+      return;
+    }
 
-    setTimeout(() => {
-      setSaved(false);
-    }, 2500);
+    try {
+      const data = await api("/api/admin/mlm/settings", {
+        method: "PUT",
+        token: staffToken,
+        body: rules,
+      });
+
+      if (data?.rules) {
+        setRules({ ...DEFAULT_RULES, ...data.rules });
+      }
+
+      setSaved(true);
+      setRulesMessage("");
+
+      setTimeout(() => {
+        setSaved(false);
+      }, 2500);
+    } catch (error) {
+      setRulesMessage(
+        error?.message ||
+          "Failed to save commission rules."
+      );
+    }
   }
 
   function resetRules() {
-    const defaultRules = {
-      directCommission: 10,
-      levelCommission: 5,
-      binaryCommission: 5,
-      shoppingCommission: 3,
-      returnPeriodDays: 7,
-      directMemberLimit: 3,
-      commissionAfterReturn: true,
-      cancelCommission: false,
-      returnCommission: false,
-    };
+    // Reset the form view to the platform defaults. Persisting the
+    // reset still requires saving with a Super Admin account.
+    setRules({ ...DEFAULT_RULES });
 
-    setRules(defaultRules);
-
-    localStorage.setItem(
-      "justbrand_mlm_commission_rules",
-      JSON.stringify(defaultRules)
+    setRulesMessage(
+      "Showing platform defaults. Press Save Commission Rules with a Super Admin account to apply."
     );
-
-    setSaved(true);
   }
 
   return (
@@ -102,11 +107,11 @@ function MLMCommissionRules() {
             </div>
 
             <h1 style={styles.title}>
-              MLM Commission Rules
+              Family Commission Rules
             </h1>
 
             <p style={styles.subtitle}>
-              Configure commission rules for the JustBrand MLM system.
+              Configure commission rules for the JustBrand Family system.
             </p>
           </div>
 
@@ -120,6 +125,12 @@ function MLMCommissionRules() {
         {saved && (
           <div style={styles.success}>
             ✓ Commission rules saved successfully.
+          </div>
+        )}
+
+        {rulesMessage && (
+          <div style={styles.warning}>
+            {rulesMessage}
           </div>
         )}
 
@@ -207,7 +218,7 @@ function MLMCommissionRules() {
           <div style={styles.info}>
             🛍️ When an eligible customer completes
             shopping on JustBrand, the applicable
-            commission can be generated for the MLM network.
+            commission can be generated for the Family network.
           </div>
         </section>
 
@@ -223,7 +234,7 @@ function MLMCommissionRules() {
               </h2>
 
               <p style={styles.cardSubtitle}>
-                Commission generated from the MLM network levels.
+                Commission generated from the Family network levels.
               </p>
             </div>
           </div>

@@ -1,4 +1,8 @@
 import React, { useEffect, useState } from "react";
+import {
+  api,
+  getMlmToken,
+} from "../api";
 
 function MLMCommission({ onBack }) {
   const [commissions, setCommissions] = useState([]);
@@ -25,24 +29,36 @@ function MLMCommission({ onBack }) {
     return () => clearInterval(timer);
   }, []);
 
-  function loadCommissionData() {
+  async function loadCommissionData() {
+    const token = getMlmToken();
+
+    if (!token) {
+      setCommissions([]);
+      calculateSummary([]);
+      return;
+    }
+
     try {
-      const saved = localStorage.getItem(
-        "justbrand_mlm_commissions"
-      );
+      const data = await api("/api/mlm/commissions", { token });
 
-      if (!saved) {
-        setCommissions([]);
-        calculateSummary([]);
-        return;
-      }
+      const records = Array.isArray(data?.commissions)
+        ? data.commissions
+        : [];
 
-      const data = JSON.parse(saved);
+      // Map backend records to the item shape this page renders.
+      const mapped = records.map((record) => ({
+        id: record.id,
+        commission: Number(record.amount) || 0,
+        amount: Number(record.amount) || 0,
+        status: record.status,
+        type: record.type,
+        description: record.description,
+        createdAt: record.createdAt,
+        date: record.createdAt,
+      }));
 
-      if (Array.isArray(data)) {
-        setCommissions(data);
-        calculateSummary(data);
-      }
+      setCommissions(mapped);
+      calculateSummary(mapped);
     } catch (error) {
       console.log(
         "Commission loading error:",
@@ -230,7 +246,7 @@ function MLMCommission({ onBack }) {
         </h3>
 
         <p style={styles.emptyText}>
-          Your MLM commission will appear here
+          Your Family commission will appear here
           when eligible shopping or referral
           transactions are generated.
         </p>
@@ -266,7 +282,7 @@ function MLMCommission({ onBack }) {
             </div>
 
             <div style={styles.headerTitle}>
-              MLM Commission
+              Family Commission
             </div>
           </div>
 
@@ -293,7 +309,7 @@ function MLMCommission({ onBack }) {
           <div>
 
             <h1 style={styles.title}>
-              💰 MLM Commission
+              💰 Family Commission
             </h1>
 
             <p style={styles.subtitle}>

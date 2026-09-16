@@ -1,4 +1,8 @@
 import React, { useEffect, useState } from "react";
+import {
+  api,
+  getMlmToken,
+} from "../api";
 
 function MLMWallet({ member, onBack }) {
   const [wallet, setWallet] = useState({
@@ -30,44 +34,62 @@ function MLMWallet({ member, onBack }) {
     loadWallet();
   }, []);
 
-  function loadWallet() {
+  async function loadWallet() {
+    const token = getMlmToken();
+
+    if (!token) {
+      return;
+    }
+
     try {
-      const savedWallet =
-        localStorage.getItem(
-          "justbrand_mlm_wallet"
-        );
+      const data = await api("/api/mlm/me", { token });
 
-      if (savedWallet) {
-        const data = JSON.parse(savedWallet);
+      const backendWallet = data?.wallet || {};
 
-        setWallet({
-          available:
-            Number(data.available) || 0,
+      const nextWallet = {
+        available:
+          Number(backendWallet.balance) || 0,
 
-          pending:
-            Number(data.pending) || 0,
+        pending:
+          Number(backendWallet.pending) || 0,
 
-          totalEarned:
-            Number(data.totalEarned) || 0,
+        totalEarned:
+          Number(backendWallet.totalEarned) || 0,
 
-          withdrawn:
-            Number(data.withdrawn) || 0,
-        });
-      }
+        withdrawn:
+          Number(backendWallet.totalPaid) || 0,
+      };
 
-      const savedTransactions =
-        localStorage.getItem(
-          "justbrand_mlm_transactions"
-        );
+      setWallet(nextWallet);
 
-      if (savedTransactions) {
-        const data =
-          JSON.parse(savedTransactions);
+      localStorage.setItem(
+        "justbrand_mlm_wallet",
+        JSON.stringify(nextWallet)
+      );
 
-        if (Array.isArray(data)) {
-          setTransactions(data);
-        }
-      }
+      const commissionsResponse = await api("/api/mlm/commissions", {
+        token,
+      });
+
+      const records = Array.isArray(commissionsResponse?.commissions)
+        ? commissionsResponse.commissions
+        : [];
+
+      const mapped = records.map((record) => ({
+        id: record.id,
+        type: record.description || record.type || "Commission",
+        amount: Number(record.amount) || 0,
+        status: record.status || "Pending",
+        date: record.createdAt,
+        description: record.description || "",
+      }));
+
+      setTransactions(mapped);
+
+      localStorage.setItem(
+        "justbrand_mlm_transactions",
+        JSON.stringify(mapped)
+      );
     } catch (error) {
       console.log(
         "Wallet loading error:",
@@ -103,7 +125,7 @@ function MLMWallet({ member, onBack }) {
   // WITHDRAW
   // ==========================================
 
-  function handleWithdraw() {
+  async function handleWithdraw() {
     const amount = Number(
       withdrawAmount
     );
@@ -134,53 +156,32 @@ function MLMWallet({ member, onBack }) {
 
     setLoading(true);
 
-    const newWallet = {
-      ...wallet,
+    try {
+      // Withdrawals are payout requests recorded on the backend;
+      // the actual payment is processed by the accounts team and
+      // the authoritative balance lives server-side.
+      await api("/api/mlm/payout-request", {
+        method: "POST",
+        token,
+        body: {
+          amount,
+          method: withdrawMethod,
+        },
+      });
 
-      available:
-        Number(wallet.available) -
-        amount,
+      await loadWallet();
+    } catch (error) {
+      setLoading(false);
+      setWithdrawAmount("");
+      setShowWithdraw(false);
 
-      withdrawn:
-        Number(wallet.withdrawn) +
-        amount,
-    };
+      alert(
+        error?.message ||
+          "Payout request failed. Please try again."
+      );
 
-    const transaction = {
-      id: Date.now(),
-
-      type: "Withdrawal",
-
-      amount: amount,
-
-      status: "Processing",
-
-      method: withdrawMethod,
-
-      date:
-        new Date().toISOString(),
-
-      description:
-        `Withdrawal request via ${withdrawMethod}`,
-    };
-
-    const newTransactions = [
-      transaction,
-      ...transactions,
-    ];
-
-    saveWallet(newWallet);
-
-    setTransactions(
-      newTransactions
-    );
-
-    localStorage.setItem(
-      "justbrand_mlm_transactions",
-      JSON.stringify(
-        newTransactions
-      )
-    );
+      return;
+    }
 
     setWithdrawAmount("");
 
@@ -189,7 +190,7 @@ function MLMWallet({ member, onBack }) {
     setLoading(false);
 
     alert(
-      "Withdrawal request submitted successfully."
+      `Payout request of ₹${amount.toLocaleString("en-IN")} via ${withdrawMethod} has been recorded. JustBrand accounts team will process your payout.`
     );
   }
 
@@ -201,7 +202,7 @@ function MLMWallet({ member, onBack }) {
     member?.name ||
     member?.memberName ||
     member?.fullName ||
-    "MLM Member";
+    "Family Member";
 
   const memberId =
     member?.memberId ||
@@ -233,7 +234,7 @@ function MLMWallet({ member, onBack }) {
             </div>
 
             <div style={styles.headerText}>
-              MLM Wallet
+              Family Wallet
             </div>
 
           </div>
@@ -277,7 +278,7 @@ function MLMWallet({ member, onBack }) {
           <div>
 
             <h1 style={styles.title}>
-              💰 MLM Wallet
+              💰 Family Wallet
             </h1>
 
             <p style={styles.subtitle}>
@@ -522,7 +523,7 @@ function MLMWallet({ member, onBack }) {
               </h3>
 
               <p>
-                Your MLM commission
+                Your Family commission
                 transactions will appear here.
               </p>
 
@@ -574,7 +575,7 @@ function MLMWallet({ member, onBack }) {
             <CommissionBox
               icon="👥"
               title="Team Commission"
-              description="आपकी MLM team की eligible shopping से applicable commission."
+              description="आपकी Family team की eligible shopping से applicable commission."
             />
 
             <CommissionBox
@@ -586,7 +587,7 @@ function MLMWallet({ member, onBack }) {
             <CommissionBox
               icon="🛍️"
               title="Shopping Commission"
-              description="पूरे India में eligible customer shopping से applicable MLM commission."
+              description="पूरे India में eligible customer shopping से applicable Family commission."
             />
 
           </div>

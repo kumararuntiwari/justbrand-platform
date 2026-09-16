@@ -1,10 +1,13 @@
 import React, { useState } from "react";
 
+const API_URL = "https://justbrand-in-144629.hostingersite.com";
+
 function SellerLogin({ onLogin, onRegister }) {
   const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (!loginId.trim()) {
@@ -17,97 +20,55 @@ function SellerLogin({ onLogin, onRegister }) {
       return;
     }
 
-    /*
-      अभी frontend testing के लिए registration के समय
-      seller information localStorage में रखी गई है।
-
-      Final version में login backend authentication
-      से होगा।
-    */
-
-    const savedSeller =
-      localStorage.getItem("justbrand_seller");
-
-    if (!savedSeller) {
-      alert(
-        "Seller account not found. Please register first."
-      );
-      return;
-    }
-
-    let seller;
+    setLoading(true);
 
     try {
-      seller = JSON.parse(savedSeller);
-    } catch {
-      alert("Seller account data is invalid.");
-      return;
+      // Backend authentication — password verified server-side,
+      // JWT token returned for all authenticated seller API calls.
+      const response = await fetch(`${API_URL}/api/sellers/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          loginId: loginId.trim(),
+          password: password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        alert(
+          data.message ||
+            "Seller account not found. Please check your Mobile/Email."
+        );
+        return;
+      }
+
+      const seller = data.seller;
+
+      // Seller identity kept locally for convenience only —
+      // real authentication is the backend token.
+      localStorage.setItem("sellerId", seller.sellerCode);
+      localStorage.setItem("sellerName", seller.name);
+      localStorage.setItem("justbrand_seller_token", data.token);
+      localStorage.setItem(
+        "justbrand_seller_logged_in",
+        "true"
+      );
+
+      if (onLogin) {
+        onLogin(seller);
+      }
+    } catch (error) {
+      console.error("Seller login error:", error);
+      alert(
+        "Backend से connection नहीं हो रहा। Please try again."
+      );
+    } finally {
+      setLoading(false);
     }
-
-    const mobileMatch =
-      String(seller.mobile || "") ===
-      String(loginId).trim();
-
-    const emailMatch =
-      String(seller.email || "")
-        .toLowerCase()
-        .trim() ===
-      String(loginId)
-        .toLowerCase()
-        .trim();
-
-    /*
-      Registration code में अभी password localStorage
-      में intentionally save नहीं किया गया था।
-
-      इसलिए testing के लिए हम login को account existence
-      के आधार पर आगे भेजेंगे।
-    */
-
-    if (mobileMatch || emailMatch) {
-  // Existing seller products से sellerId खोजें
-  const savedProducts =
-    JSON.parse(
-      localStorage.getItem("justbrand_seller_products") || "[]"
-    );
-
-  const existingProduct = savedProducts.find(
-    (product) =>
-      String(product.sellerName || "").toLowerCase().trim() ===
-      String(seller.name || seller.sellerName || "").toLowerCase().trim() &&
-      product.sellerId
-  );
-
-  const sellerId =
-    seller.sellerId ||
-    existingProduct?.sellerId ||
-    `SELLER-${Date.now()}`;
-
-  // Seller identity permanently save करें
-  seller.sellerId = sellerId;
-
-  localStorage.setItem("sellerId", sellerId);
-  localStorage.setItem("sellerName", seller.name || seller.sellerName || "");
-  localStorage.setItem(
-    "justbrand_seller",
-    JSON.stringify(seller)
-  );
-
-  localStorage.setItem(
-    "justbrand_seller_logged_in",
-    "true"
-  );
-
-  if (onLogin) {
-    onLogin(seller);
-  }
-
-  return;
-}
-
-    alert(
-      "Seller account not found. Please check your Mobile/Email."
-    );
   };
 
   return (
@@ -170,9 +131,15 @@ function SellerLogin({ onLogin, onRegister }) {
 
           <button
             type="submit"
-            style={styles.loginButton}
+            disabled={loading}
+            style={{
+              ...styles.loginButton,
+              opacity: loading ? 0.7 : 1,
+            }}
           >
-            🔐 Login to Seller Account
+            {loading
+              ? "Logging in..."
+              : "🔐 Login to Seller Account"}
           </button>
 
         </form>
@@ -208,9 +175,8 @@ function SellerLogin({ onLogin, onRegister }) {
         {/* SECURITY NOTE */}
 
         <div style={styles.note}>
-          🔒 Your seller account will be protected
-          with secure authentication in the final
-          backend version.
+          🔒 Your seller account is protected with
+          secure backend authentication.
         </div>
 
       </div>

@@ -1,4 +1,8 @@
 import React, { useState } from "react";
+import {
+  API_URL,
+  setMlmToken,
+} from "../api";
 
 function MLMRegister({ onBack, onRegistered }) {
   const [form, setForm] = useState({
@@ -11,6 +15,7 @@ function MLMRegister({ onBack, onRegistered }) {
 
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   function handleChange(e) {
     const { name, value } = e.target;
@@ -21,190 +26,9 @@ function MLMRegister({ onBack, onRegistered }) {
     }));
   }
 
-  // ==========================================
-  // GENERATE MEMBER ID
-  // ==========================================
 
-  function generateMemberId() {
-    const number = Math.floor(
-      100000 + Math.random() * 900000
-    );
 
-    return `JB${number}`;
-  }
-
-  // ==========================================
-  // MEMBERS
-  // ==========================================
-
-  function getMembers() {
-    try {
-      const saved = localStorage.getItem(
-        "justbrand_mlm_members"
-      );
-
-      if (!saved) return [];
-
-      const data = JSON.parse(saved);
-
-      return Array.isArray(data) ? data : [];
-    } catch (error) {
-      console.log(
-        "Members loading error:",
-        error
-      );
-
-      return [];
-    }
-  }
-
-  function saveMembers(members) {
-    localStorage.setItem(
-      "justbrand_mlm_members",
-      JSON.stringify(members)
-    );
-  }
-
-  // ==========================================
-  // CURRENT MEMBER
-  // ==========================================
-
-  function getCurrentMember() {
-    try {
-      const saved = localStorage.getItem(
-        "justbrand_mlm_member"
-      );
-
-      if (!saved) return null;
-
-      return JSON.parse(saved);
-    } catch {
-      return null;
-    }
-  }
-
-  // ==========================================
-  // TEAM STORAGE
-  // ==========================================
-
-  function getTeam(key) {
-    try {
-      const saved =
-        localStorage.getItem(key);
-
-      if (!saved) return [];
-
-      const data = JSON.parse(saved);
-
-      return Array.isArray(data)
-        ? data
-        : [];
-    } catch {
-      return [];
-    }
-  }
-
-  function saveTeam(key, team) {
-    localStorage.setItem(
-      key,
-      JSON.stringify(team)
-    );
-  }
-
-  // ==========================================
-  // FIND A / B / C POSITION
-  // ==========================================
-
-  function findPlacement() {
-    const teamA = getTeam(
-      "justbrand_mlm_a_team"
-    );
-
-    const teamB = getTeam(
-      "justbrand_mlm_b_team"
-    );
-
-    const teamC = getTeam(
-      "justbrand_mlm_c_team"
-    );
-
-    if (teamA.length === 0) {
-      return "A";
-    }
-
-    if (teamB.length === 0) {
-      return "B";
-    }
-
-    if (teamC.length === 0) {
-      return "C";
-    }
-
-    // अगर A, B, C तीनों भरे हैं
-    // तो अगला member A में जाएगा
-    return "A";
-  }
-
-  // ==========================================
-  // ADD MEMBER TO A / B / C TEAM
-  // ==========================================
-
-  function addMemberToTeam(
-    newMember,
-    position
-  ) {
-    if (position === "A") {
-      const team =
-        getTeam(
-          "justbrand_mlm_a_team"
-        );
-
-      team.push(newMember);
-
-      saveTeam(
-        "justbrand_mlm_a_team",
-        team
-      );
-
-      return;
-    }
-
-    if (position === "B") {
-      const team =
-        getTeam(
-          "justbrand_mlm_b_team"
-        );
-
-      team.push(newMember);
-
-      saveTeam(
-        "justbrand_mlm_b_team",
-        team
-      );
-
-      return;
-    }
-
-    if (position === "C") {
-      const team =
-        getTeam(
-          "justbrand_mlm_c_team"
-        );
-
-      team.push(newMember);
-
-      saveTeam(
-        "justbrand_mlm_c_team",
-        team
-      );
-    }
-  }
-
-  // ==========================================
-  // REGISTER
-  // ==========================================
-
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
 
     setError("");
@@ -251,140 +75,86 @@ function MLMRegister({ onBack, onRegistered }) {
     }
 
     // ========================================
-    // CHECK EXISTING MEMBER
+    // BACKEND REGISTRATION
     // ========================================
+    // Member ID, A/B/C placement and spillover are decided by the
+    // backend; the password is hashed server-side and never stored
+    // in the browser.
 
-    const members =
-      getMembers();
+    setLoading(true);
 
-    const alreadyExists =
-      members.some(
-        (item) =>
-          String(
-            item.mobile || ""
-          ) === mobile
+    try {
+      const response = await fetch(
+        `${API_URL}/api/mlm/register`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name,
+            mobile,
+            email,
+            password,
+            referralCode,
+          }),
+        }
       );
 
-    if (alreadyExists) {
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        setError(
+          data.message ||
+            "Registration failed. Please try again."
+        );
+        return;
+      }
+
+      const newMember = data.member;
+
+      // Auth token for future MLM API calls.
+      setMlmToken(data.token);
+
+      // Keep the local member cache for instant UI rendering.
+      localStorage.setItem(
+        "justbrand_mlm_member",
+        JSON.stringify(newMember)
+      );
+
+      setMessage(
+        `Registration successful! Member ID: ${newMember.memberId} | Position: ${newMember.position || "ROOT"}`
+      );
+
+      // ========================================
+      // RESET FORM
+      // ========================================
+
+      setForm({
+        name: "",
+        mobile: "",
+        email: "",
+        password: "",
+        referralCode: "",
+      });
+
+      // ========================================
+      // CALLBACK
+      // ========================================
+
+      if (onRegistered) {
+        onRegistered(newMember);
+      }
+    } catch (error) {
+      console.error(
+        "MLM register error:",
+        error
+      );
       setError(
-        "This mobile number is already registered."
+        "Backend से connection नहीं हो रहा। Please try again."
       );
-      return;
-    }
-
-    // ========================================
-    // PARENT
-    // ========================================
-
-    const parent =
-      getCurrentMember();
-
-    // ========================================
-    // MEMBER ID
-    // ========================================
-
-    const memberId =
-      generateMemberId();
-
-    // ========================================
-    // FIND POSITION
-    // ========================================
-
-    const position =
-      findPlacement();
-
-    // ========================================
-    // NEW MEMBER
-    // ========================================
-
-    const newMember = {
-      id: memberId,
-
-      memberId: memberId,
-
-      name: name,
-
-      mobile: mobile,
-
-      email: email,
-
-      password: password,
-
-      referralCode:
-        referralCode ||
-        memberId,
-
-      parentId:
-        parent?.memberId ||
-        parent?.id ||
-        null,
-
-      position: position,
-
-      createdAt:
-        new Date().toISOString(),
-    };
-
-    // ========================================
-    // SAVE TEAM
-    // ========================================
-
-    addMemberToTeam(
-      newMember,
-      position
-    );
-
-    // ========================================
-    // SAVE MEMBERS
-    // ========================================
-
-    members.push(
-      newMember
-    );
-
-    saveMembers(
-      members
-    );
-
-    // ========================================
-    // CURRENT MEMBER
-    // ========================================
-
-    localStorage.setItem(
-      "justbrand_mlm_member",
-      JSON.stringify(
-        newMember
-      )
-    );
-
-    // ========================================
-    // SUCCESS MESSAGE
-    // ========================================
-
-    setMessage(
-      `Registration successful! Member ID: ${memberId} | Position: ${position}`
-    );
-
-    // ========================================
-    // RESET FORM
-    // ========================================
-
-    setForm({
-      name: "",
-      mobile: "",
-      email: "",
-      password: "",
-      referralCode: "",
-    });
-
-    // ========================================
-    // CALLBACK
-    // ========================================
-
-    if (onRegistered) {
-      onRegistered(
-        newMember
-      );
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -409,7 +179,7 @@ function MLMRegister({ onBack, onRegistered }) {
               styles.headerText
             }
           >
-            MLM Registration
+            Family Registration
           </div>
 
         </div>
@@ -417,7 +187,7 @@ function MLMRegister({ onBack, onRegistered }) {
         {/* TITLE */}
 
         <h1 style={styles.title}>
-          📝 Create MLM Account
+          📝 Create Family Account
         </h1>
 
         <p
@@ -425,7 +195,7 @@ function MLMRegister({ onBack, onRegistered }) {
             styles.subtitle
           }
         >
-          JustBrand Family में नया MLM
+          JustBrand Family में नया
           member register करें।
         </p>
 
@@ -699,15 +469,17 @@ function MLMRegister({ onBack, onRegistered }) {
             }
           />
 
-          {/* REGISTER */}
-
-          <button
+          {/* REGISTER */}          <button
             type="submit"
-            style={
-              styles.registerButton
-            }
+            disabled={loading}
+            style={{
+              ...styles.registerButton,
+              opacity: loading ? 0.7 : 1,
+            }}
           >
-            🚀 Register Member
+            {loading
+              ? "Registering..."
+              : "🚀 Register Member"}
           </button>
 
         </form>

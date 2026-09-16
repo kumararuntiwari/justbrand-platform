@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 
+const API_URL = "https://justbrand-in-144629.hostingersite.com";
+
 function SellerRegister({ onRegister, onLogin }) {
   const [form, setForm] = useState({
     sellerName: "",
@@ -11,6 +13,7 @@ function SellerRegister({ onRegister, onLogin }) {
   });
 
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   function handleChange(e) {
     setForm({
@@ -21,7 +24,7 @@ function SellerRegister({ onRegister, onLogin }) {
     setError("");
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
 
     if (
@@ -54,85 +57,53 @@ function SellerRegister({ onRegister, onLogin }) {
       return;
     }
 
-    const sellerData = {
-      id:
-        "SELLER-" +
-        Date.now(),
-
-      sellerName:
-        form.sellerName,
-
-      shopName:
-        form.shopName,
-
-      mobile:
-        form.mobile,
-
-      email:
-        form.email,
-
-      password:
-        form.password,
-
-      createdAt:
-        new Date().toISOString(),
-
-      kycStatus:
-        "Pending",
-    };
-
-    // Save seller account
-    localStorage.setItem(
-      "justbrand_seller",
-      JSON.stringify(sellerData)
-    );
-
-    // ========================================
-    // CREATE KYC DATA FROM REGISTRATION
-    // ========================================
-
-    const existingKYC =
-      localStorage.getItem(
-        "justbrand_seller_kyc"
-      );
-
-    let kycData = {};
+    setLoading(true);
+    setError("");
 
     try {
-      kycData = existingKYC
-        ? JSON.parse(existingKYC)
-        : {};
-    } catch {
-      kycData = {};
-    }
+      // Real backend registration — password is hashed server-side
+      // and the seller account is stored in the JustBrand database.
+      const response = await fetch(
+        `${API_URL}/api/sellers/register`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: form.sellerName,
+            shopName: form.shopName,
+            mobile: form.mobile,
+            email: form.email,
+            password: form.password,
+          }),
+        }
+      );
 
-    const updatedKYC = {
-      ...kycData,
+      const data = await response.json();
 
-      sellerName:
-        form.sellerName,
+      if (!response.ok || !data.success) {
+        setError(
+          data.message ||
+            "Registration failed. Please try again."
+        );
+        return;
+      }
 
-      shopName:
-        form.shopName,
-
-      mobile:
-        form.mobile,
-
-      email:
-        form.email,
-
-      updatedAt:
-        new Date().toISOString(),
-    };
-
-    localStorage.setItem(
-      "justbrand_seller_kyc",
-      JSON.stringify(updatedKYC)
-    );
-
-    // Send seller data to App.jsx
-    if (onRegister) {
-      onRegister(sellerData);
+      // Registered — send user to Login (same flow as before).
+      if (onRegister) {
+        onRegister(null);
+      }
+    } catch (error) {
+      console.error(
+        "Seller register error:",
+        error
+      );
+      setError(
+        "Backend से connection नहीं हो रहा। Please try again."
+      );
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -287,9 +258,15 @@ function SellerRegister({ onRegister, onLogin }) {
 
           <button
             type="submit"
-            style={styles.registerButton}
+            disabled={loading}
+            style={{
+              ...styles.registerButton,
+              opacity: loading ? 0.7 : 1,
+            }}
           >
-            Create Seller Account
+            {loading
+              ? "Creating Account..."
+              : "Create Seller Account"}
           </button>
 
         </form>

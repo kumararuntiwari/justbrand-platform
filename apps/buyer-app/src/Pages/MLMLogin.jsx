@@ -1,4 +1,8 @@
 import React, { useState } from "react";
+import {
+  API_URL,
+  setMlmToken,
+} from "../api";
 
 function MLMLogin({ onLogin, onRegister, onBack }) {
   const [memberId, setMemberId] = useState("");
@@ -10,7 +14,7 @@ function MLMLogin({ onLogin, onRegister, onBack }) {
   // LOGIN
   // ==========================================
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
 
     if (!memberId.trim()) {
@@ -26,99 +30,37 @@ function MLMLogin({ onLogin, onRegister, onBack }) {
     setLoading(true);
 
     try {
-      const savedMembers = localStorage.getItem(
-        "justbrand_mlm_members"
-      );
+      // Backend authentication — credentials verified server-side,
+      // nothing about the password is stored in the browser.
+      const response = await fetch(`${API_URL}/api/mlm/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          memberId: memberId.trim(),
+          password: password,
+        }),
+      });
 
-      let members = [];
+      const data = await response.json();
 
-      if (savedMembers) {
-        try {
-          const parsed = JSON.parse(savedMembers);
-
-          if (Array.isArray(parsed)) {
-            members = parsed;
-          }
-        } catch {
-          members = [];
-        }
-      }
-
-      // ======================================
-      // FIND MEMBER
-      // ======================================
-
-      const enteredId = memberId
-        .trim()
-        .toUpperCase();
-
-      const member = members.find(
-        (item) =>
-          String(item.memberId || "")
-            .toUpperCase() === enteredId
-      );
-
-      if (!member) {
+      if (!response.ok || !data.success) {
         alert(
-          "Member ID not found.\n\nPlease check your Member ID."
+          data.message ||
+            "Member ID not found or incorrect password."
         );
-
-        setLoading(false);
         return;
       }
 
-      // ======================================
-      // PASSWORD CHECK
-      // ======================================
+      const member = data.member;
 
-      if (
-        String(member.password || "") !==
-        String(password)
-      ) {
-        alert("Incorrect password.");
-        setLoading(false);
-        return;
-      }
-
-      // ======================================
-      // STATUS CHECK
-      // ======================================
-
-      if (
-        String(member.status || "")
-          .toLowerCase() === "blocked"
-      ) {
-        alert(
-          "Your Member Account is blocked.\n\nPlease contact JustBrand Admin."
-        );
-
-        setLoading(false);
-        return;
-      }
-
-      // ======================================
-      // SAVE CURRENT MEMBER
-      // ======================================
+      setMlmToken(data.token);
 
       localStorage.setItem(
-        "justbrand_mlm_current_member",
+        "justbrand_mlm_member",
         JSON.stringify(member)
       );
-
-      localStorage.setItem(
-        "justbrand_mlm_logged_in",
-        "true"
-      );
-
-      // ======================================
-      // SUCCESS
-      // ======================================
-
-      alert(
-        `Welcome ${member.memberName || "Member"}!`
-      );
-
-      setLoading(false);
 
       if (onLogin) {
         onLogin(member);
@@ -130,9 +72,9 @@ function MLMLogin({ onLogin, onRegister, onBack }) {
       );
 
       alert(
-        "Login failed. Please try again."
+        "Backend से connection नहीं हो रहा। Please try again."
       );
-
+    } finally {
       setLoading(false);
     }
   }

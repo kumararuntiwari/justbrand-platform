@@ -9,6 +9,9 @@ function Header({
   filteredProducts,
   filteredCategories,
   onProductSelect,
+  onAccount,
+  onWishlist,
+  onOrders,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -66,6 +69,11 @@ function Header({
   const handleLogin = () => {
     closeMenu();
 
+    if (onAccount) {
+      onAccount();
+      return;
+    }
+
     alert("JustBrand Login page coming soon.");
   };
 
@@ -76,6 +84,11 @@ function Header({
   const handleWishlist = () => {
     closeMenu();
 
+    if (onWishlist) {
+      onWishlist();
+      return;
+    }
+
     alert("Wishlist page coming soon.");
   };
 
@@ -85,6 +98,11 @@ function Header({
 
   const handleOrders = () => {
     closeMenu();
+
+    if (onOrders) {
+      onOrders();
+      return;
+    }
 
     alert("Orders page coming soon.");
   };

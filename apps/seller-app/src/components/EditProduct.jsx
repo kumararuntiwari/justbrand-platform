@@ -1,4 +1,7 @@
 import React, { useState } from "react";
+import "../index.css";
+
+const API_URL = "https://justbrand-in-144629.hostingersite.com";
 
 function EditProduct({
   product,
@@ -48,7 +51,7 @@ function EditProduct({
     reader.readAsDataURL(file);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (!form.name.trim()) {
@@ -112,78 +115,59 @@ function EditProduct({
 
     try {
       // =====================================
-      // SELLER PRODUCTS
+      // BACKEND UPDATE (AUTHENTICATED)
       // =====================================
+      // Ownership is verified server-side; edited products go back
+      // to Pending until admin re-approves them.
 
-      const sellerSaved = localStorage.getItem(
-        "justbrand_seller_products"
-      );
+      const token =
+        localStorage.getItem("justbrand_seller_token") || "";
 
-      let sellerProducts = [];
-
-      if (sellerSaved) {
-        sellerProducts = JSON.parse(sellerSaved);
-
-        if (!Array.isArray(sellerProducts)) {
-          sellerProducts = [];
-        }
-      }
-
-      sellerProducts = sellerProducts.map((item) =>
-        item.id === product.id
-          ? updatedProduct
-          : item
-      );
-
-      localStorage.setItem(
-        "justbrand_seller_products",
-        JSON.stringify(sellerProducts)
-      );
-
-      // =====================================
-      // BUYER PRODUCTS
-      // =====================================
-
-      const buyerSaved = localStorage.getItem(
-        "justbrand_products"
-      );
-
-      let buyerProducts = [];
-
-      if (buyerSaved) {
-        buyerProducts = JSON.parse(buyerSaved);
-
-        if (!Array.isArray(buyerProducts)) {
-          buyerProducts = [];
-        }
-      }
-
-      const buyerExists = buyerProducts.some(
-        (item) => item.id === product.id
-      );
-
-      if (buyerExists) {
-        buyerProducts = buyerProducts.map(
-          (item) =>
-            item.id === product.id
-              ? updatedProduct
-              : item
+      if (!token) {
+        alert(
+          "Your session has expired. Please login again."
         );
-      } else {
-        buyerProducts.push(updatedProduct);
+        setSaving(false);
+        return;
       }
 
-      localStorage.setItem(
-        "justbrand_products",
-        JSON.stringify(buyerProducts)
+      const response = await fetch(
+        `${API_URL}/api/sellers/products/${product.id}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            name: updatedProduct.name,
+            category: updatedProduct.category,
+            price: String(updatedProduct.price || "").replace("₹", ""),
+            comparePrice: String(updatedProduct.mrp || "").replace("₹", ""),
+            image: updatedProduct.image,
+            description: updatedProduct.description,
+            shortDetails: updatedProduct.shortDetails,
+          }),
+        }
       );
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok || !data?.success) {
+        alert(
+          data?.message ||
+            "Product update failed. Please try again."
+        );
+        setSaving(false);
+        return;
+      }
 
       alert(
-        "Product updated successfully!"
+        "Product updated and resubmitted for admin approval."
       );
 
       if (onSaved) {
-        onSaved(updatedProduct);
+        onSaved(data.product || updatedProduct);
       }
     } catch (error) {
       console.error(
@@ -192,7 +176,7 @@ function EditProduct({
       );
 
       alert(
-        "Product update failed."
+        "Backend से connection नहीं हो रहा. Product update failed."
       );
     }
 
@@ -220,6 +204,7 @@ function EditProduct({
           gap: "15px",
           flexWrap: "wrap",
         }}
+        className="jb-section-header"
       >
         <div>
           <div

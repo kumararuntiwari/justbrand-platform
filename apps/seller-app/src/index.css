@@ -1,0 +1,148 @@
+/* ============================================================
+   JustBrand Seller Panel — global base + mobile responsive helpers
+   ============================================================
+   Desktop layout is untouched: every visual rule below is either a
+   harmless reset (body margin/box-sizing, identical on all screens)
+   or is scoped inside @media (max-width: 768px).
+   ============================================================ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  background: #f5f5f5;
+  /* Long unbroken strings (emails, addresses) must never push the page wide */
+  overflow-wrap: break-word;
+}
+
+/* ============================================================
+   MOBILE HELPERS (Dashboard shell)
+   Inactive on desktop — no inline style conflicts above 768px.
+   !important is required because the app styles with inline styles,
+   which otherwise always win over classes.
+   ============================================================ */
+
+/* Hamburger button — hidden on desktop */
+.jb-menu-btn {
+  display: none;
+}
+
+/* Drawer backdrop — hidden on desktop */
+.jb-drawer-overlay {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  /* ---------- Hamburger button ---------- */
+  .jb-menu-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    flex-shrink: 0;
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  /* ---------- Drawer backdrop ---------- */
+  .jb-drawer-overlay.show {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 998;
+  }
+
+  /* ---------- Sidebar becomes an off-canvas drawer ---------- */
+  .jb-sidebar {
+    position: fixed !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    width: 84% !important;
+    max-width: 310px !important;
+    z-index: 999 !important;
+    transform: translateX(-110%) !important;
+    transition: transform 0.25s ease !important;
+    overflow-y: auto !important;
+    box-shadow: 0 0 30px rgba(0, 0, 0, 0.25) !important;
+    border-right: 1px solid #eee !important;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  .jb-sidebar.open {
+    transform: translateX(0) !important;
+  }
+
+  /* ---------- Content fills the screen once sidebar is a drawer ---------- */
+  .jb-content {
+    padding: 16px 14px 40px !important;
+  }
+
+  /* ---------- Header fits small screens ---------- */
+  .jb-header {
+    padding: 10px 14px !important;
+    flex-wrap: wrap !important; /* last-resort safety: never overflow */
+  }
+
+  /* No-op decorative bell hidden on phones so the header always fits 320px */
+  .jb-notification-btn {
+    display: none !important;
+  }
+
+  .jb-logo {
+    font-size: 20px !important;
+  }
+
+  /* "Seller Panel" caption hidden on phones — logo stays (branding kept) */
+  .jb-logo-panel-text {
+    display: none !important;
+  }
+
+  .jb-profile-name {
+    max-width: 80px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  /* ---------- Section title + action button rows stack when tight ---------- */
+  .jb-section-header {
+    flex-wrap: wrap !important;
+  }
+
+  /* ---------- Modal detail rows (long addresses etc.) ---------- */
+  .jb-detail-row {
+    flex-wrap: wrap !important;
+  }
+
+  .jb-detail-row > strong {
+    max-width: 100% !important;
+  }
+
+  /* ---------- Large touch-friendly action buttons (KYC action bar) ---------- */
+  .jb-touch-btn {
+    flex: 1 1 150px !important;
+    min-height: 46px !important;
+    min-width: 140px !important;
+  }
+}

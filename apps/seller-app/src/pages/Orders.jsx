@@ -1,4 +1,7 @@
 import React, { useEffect, useState } from "react";
+import "../index.css";
+
+const API_URL = "https://justbrand-in-144629.hostingersite.com";
 
 function Orders({ onBack }) {
   const [orders, setOrders] = useState([]);
@@ -10,31 +13,74 @@ function Orders({ onBack }) {
     useState(null);
 
   // ==========================================
-  // LOAD ORDERS
+  // LOAD ORDERS (BACKEND — OWN PRODUCTS ONLY)
   // ==========================================
 
   useEffect(() => {
     loadOrders();
   }, []);
 
-  function loadOrders() {
+  async function loadOrders() {
+    const token =
+      localStorage.getItem("justbrand_seller_token") || "";
+
+    if (!token) {
+      setOrders([]);
+      return;
+    }
+
     try {
-      const saved =
-        localStorage.getItem(
-          "justbrand_seller_orders"
-        );
-
-      if (saved) {
-        const data = JSON.parse(saved);
-
-        if (Array.isArray(data)) {
-          setOrders(data);
-        } else {
-          setOrders([]);
+      const response = await fetch(
+        `${API_URL}/api/sellers/orders`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         }
-      } else {
-        setOrders([]);
+      );
+
+      if (!response.ok) {
+        throw new Error("Backend orders loading failed.");
       }
+
+      const data = await response.json();
+
+      const backendOrders = Array.isArray(data.orders)
+        ? data.orders
+        : [];
+
+      // Map backend orders to the shape this page renders.
+      const mapped = backendOrders.map((order) => {
+        const firstItem =
+          Array.isArray(order.items) && order.items.length > 0
+            ? order.items[0]
+            : null;
+
+        return {
+          ...order,
+          id: order.id,
+
+          buyerName:
+            order.customerName || "Customer",
+
+          phone:
+            order.phone || "",
+
+          address:
+            order.address || "",
+
+          total: order.totalAmount || 0,
+
+          productName:
+            firstItem?.productName || "Product",
+
+          quantity: firstItem?.quantity || 1,
+
+          items: order.items || [],
+        };
+      });
+
+      setOrders(mapped);
     } catch (error) {
       console.error(
         "Orders loading error:",
@@ -46,76 +92,62 @@ function Orders({ onBack }) {
   }
 
   // ==========================================
-  // UPDATE ORDER STATUS
+  // UPDATE ORDER STATUS (BACKEND)
   // ==========================================
 
-  function updateOrderStatus(
+  async function updateOrderStatus(
     orderId,
     newStatus
   ) {
-    const updatedOrders =
-      orders.map((order) =>
-        order.id === orderId
-          ? {
-              ...order,
-              status: newStatus,
-              updatedAt:
-                new Date().toISOString(),
-            }
-          : order
-      );
+    const token =
+      localStorage.getItem("justbrand_seller_token") || "";
 
-    setOrders(updatedOrders);
-
-    localStorage.setItem(
-      "justbrand_seller_orders",
-      JSON.stringify(updatedOrders)
-    );
-
-    // Also update buyer orders
-    try {
-      const buyerSaved =
-        localStorage.getItem(
-          "justbrand_orders"
-        );
-
-      if (buyerSaved) {
-        const buyerOrders =
-          JSON.parse(buyerSaved);
-
-        if (Array.isArray(buyerOrders)) {
-          const updatedBuyerOrders =
-            buyerOrders.map((order) =>
-              order.id === orderId
-                ? {
-                    ...order,
-                    status: newStatus,
-                    updatedAt:
-                      new Date().toISOString(),
-                  }
-                : order
-            );
-
-          localStorage.setItem(
-            "justbrand_orders",
-            JSON.stringify(
-              updatedBuyerOrders
-            )
-          );
-        }
-      }
-    } catch (error) {
-      console.error(
-        "Buyer order update error:",
-        error
-      );
+    if (!token) {
+      alert("Your session has expired. Please login again.");
+      return;
     }
 
-    setSelectedOrder(null);
+    try {
+      const response = await fetch(
+        `${API_URL}/api/sellers/orders/${orderId}/status`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ status: newStatus }),
+        }
+      );
 
-    alert(
-      `Order status updated to ${newStatus}.`
-    );
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok || !data?.success) {
+        alert(
+          data?.message ||
+            "Order status update failed."
+        );
+        return;
+      }
+
+      // Reload authoritative state from the backend.
+      await loadOrders();
+
+      setSelectedOrder(null);
+
+      alert(
+        `Order status updated to ${newStatus}.`
+      );
+    } catch (error) {
+      console.error(
+        "Order status update error:",
+        error
+      );
+
+      alert(
+        "Backend से connection नहीं हो रहा. Status update failed."
+      );
+    }
   }
 
   // ==========================================
@@ -278,6 +310,7 @@ function Orders({ onBack }) {
           gap: "15px",
           flexWrap: "wrap",
         }}
+        className="jb-section-header"
       >
         <div>
           <div
@@ -1068,8 +1101,7 @@ function OrderDetails({
             <DetailRow
               label="Address"
               value={address}
-            />
-          </DetailSection>
+            />          </DetailSection>
 
           <DetailSection
             title="🚚 Order Status"
@@ -1186,6 +1218,7 @@ function DetailRow({
 }) {
   return (
     <div
+      className="jb-detail-row"
       style={{
         display: "flex",
         justifyContent:

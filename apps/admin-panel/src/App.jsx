@@ -1,5 +1,6 @@
 ﻿import { useEffect, useState } from "react";
 import "./App.css";
+import Business from "./Business";
 
 const API = "https://justbrand-in-144629.hostingersite.com";
 
@@ -889,6 +890,18 @@ function App() {
 
           </section>
         )}
+
+        {/* BUSINESS MANAGEMENT (Sellers / Orders / MLM) */}
+
+        <Business
+          token={token}
+          staff={staff}
+          onMessage={(msg) => {
+            setMessage(msg);
+
+            setTimeout(() => setMessage(""), 4000);
+          }}
+        />
 
         {/* PENDING PRODUCTS */}
 

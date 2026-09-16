@@ -1,25 +1,50 @@
 ﻿
+// dotenv is an existing dependency; loading it makes JWT_SECRET and other
+// production environment variables actually available on the server.
+import "dotenv/config";
+
 import express from "express";
 import cors from "cors";
-import Database from "better-sqlite3";
+import db from "./db.js";
+import businessRouter, {
+  initBusiness,
+} from "./business.js";
 import {
   hashPassword,
   comparePassword,
   createToken,
   requireAuth,
   requireRole,
+  requireType,
 } from "./auth.js";
 
 const app = express();
 
-app.use(cors());
+// CORS: wide-open by default (preserves current multi-domain setup).
+// In production, set CORS_ORIGINS="https://justbrand.in,https://seller.justbrand.in"
+// to restrict origins to the real JustBrand domains.
+const ALLOWED_ORIGINS = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean)
+  : null;
+
+app.use(
+  cors(
+    ALLOWED_ORIGINS
+      ? { origin: ALLOWED_ORIGINS }
+      : {}
+  )
+);
+
 app.use(express.json({ limit: "10mb" }));
 
 // =====================================
 // DATABASE
 // =====================================
-
-const db = new Database("justbrand.db");
+// Shared connection lives in db.js (WAL mode). The staff and
+// products table definitions remain here so the original
+// startup sequence is preserved.
 
 db.pragma("journal_mode = WAL");
 
@@ -727,11 +752,39 @@ app.get(
 // SELLER APP
 // =====================================================
 
-app.post("/api/products", (req, res) => {
+// =====================================================
+// ADD PRODUCT (LEGACY ENDPOINT — NOW AUTHENTICATED)
+// =====================================================
+// Previously anonymous; kept for backward compatibility with the
+// legacy seller bundle. Now requires a seller or staff token so
+// anonymous users cannot inject pending products. For seller tokens
+// the product identity comes from the token itself (body values are
+// ignored), so one seller cannot create products under another
+// seller's name. The current seller app uses POST
+// /api/sellers/products, which has the same behavior.
+
+app.post("/api/products", requireAuth, (req, res) => {
+
+  const isSeller = req.user.type === "seller";
+  const isStaff = Boolean(req.user.role);
+
+  if (!isSeller && !isStaff) {
+    return res.status(403).json({
+      success: false,
+      message: "Only seller or staff accounts can submit products."
+    });
+  }
+
+  const sellerId = isSeller
+    ? req.user.sellerCode
+    : String(req.body.sellerId || "").trim();
+
+  const sellerName = isSeller
+    ? req.user.name
+    : String(req.body.sellerName || "").trim();
+
   try {
     const {
-      sellerId = "",
-      sellerName = "",
       name = "",
       category = "",
       price = "",
@@ -1150,8 +1203,14 @@ app.get(
 );
 
 // =====================================================
-// SERVER START
+// BUSINESS ROUTER (sellers, customers, orders, MLM)
 // =====================================================
+// All new business functionality is additive and mounted here.
+// initBusiness() performs the additive table initialization.
+
+initBusiness();
+
+app.use(businessRouter);
 
 async function startServer() {
   // =====================================

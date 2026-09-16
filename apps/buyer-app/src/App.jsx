@@ -5,6 +5,16 @@ import { useState, useEffect } from 'react';
 import ProductDetails from "./pages2/ProductDetails";
 import Cart from "./pages2/Cart";
 import ComparePrice from "./pages2/ComparePrice";
+import CustomerAuth from "./pages2/CustomerAuth";
+import CustomerAccount from "./pages2/CustomerAccount";
+import CustomerOrders from "./pages2/CustomerOrders";
+import Checkout from "./pages2/Checkout";
+import Wishlist from "./pages2/Wishlist";
+import {
+  getCustomerToken,
+  setCustomerToken,
+  setMlmToken,
+} from "./api";
 
 // ==========================================
 // MLM PAGES
@@ -108,6 +118,48 @@ function App() {
       return null;
     }
   });
+
+  // ==========================================
+  // CUSTOMER (BUYER ACCOUNT)
+  // ==========================================
+
+  const [customer, setCustomer] = useState(() => {
+    try {
+      const saved = localStorage.getItem("justbrand_customer");
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const customerToken = getCustomerToken();
+
+  // ==========================================
+  // BUYER PAGES (account / orders / wishlist /
+  // auth / checkout) — null = normal shopping
+  // ==========================================
+
+  const [buyerPage, setBuyerPage] = useState(null);
+
+  function handleCustomerAuth(authCustomer) {
+    setCustomer(authCustomer);
+
+    localStorage.setItem(
+      "justbrand_customer",
+      JSON.stringify(authCustomer)
+    );
+
+    setBuyerPage("account");
+  }
+
+  function handleCustomerLogout() {
+    setCustomer(null);
+    setCustomerToken("");
+
+    localStorage.removeItem("justbrand_customer");
+
+    setBuyerPage(null);
+  }
 
   // ==========================================
   // LOAD PRODUCTS
@@ -250,6 +302,11 @@ function App() {
             String(image).startsWith("data:image/")
           ) {
             // Base64 image - keep unchanged
+          } else if (
+            image &&
+            /^https?:\/\//i.test(String(image))
+          ) {
+            // Absolute image URL - keep unchanged
           } else {
             image = String(image);
 
@@ -475,6 +532,21 @@ function App() {
     });
   }
 
+  function removeFromWishlist(product) {
+    setWishlist((prevWishlist) => {
+      const updatedWishlist = prevWishlist.filter(
+        (item) => String(item.id) !== String(product.id)
+      );
+
+      localStorage.setItem(
+        "justbrand_wishlist",
+        JSON.stringify(updatedWishlist)
+      );
+
+      return updatedWishlist;
+    });
+  }
+
   // ==========================================
   // COMPARE
   // ==========================================
@@ -655,6 +727,20 @@ function App() {
     filteredCategories,
     onProductSelect:
       setSelectedProduct,
+    onAccount: () =>
+      setBuyerPage(
+        customer && customerToken
+          ? "account"
+          : "auth"
+      ),
+    onWishlist: () =>
+      setBuyerPage("wishlist"),
+    onOrders: () =>
+      setBuyerPage(
+        customer && customerToken
+          ? "orders"
+          : "auth"
+      ),
   };
 
   // ==========================================
@@ -735,6 +821,8 @@ function App() {
           localStorage.removeItem(
             "justbrand_mlm_member"
           );
+
+          setMlmToken("");
 
           setMlmMember(null);
           setMlmPage("login");
@@ -828,6 +916,115 @@ function App() {
   }
 
   // ==========================================
+  // CUSTOMER AUTH (LOGIN / REGISTER)
+  // ==========================================
+
+  if (buyerPage === "auth") {
+    return (
+      <CustomerAuth
+        onAuth={handleCustomerAuth}
+        onBack={() => setBuyerPage(null)}
+      />
+    );
+  }
+
+  // ==========================================
+  // CUSTOMER ACCOUNT
+  // ==========================================
+
+  if (buyerPage === "account") {
+    if (!customer) {
+      return (
+        <CustomerAuth
+          onAuth={handleCustomerAuth}
+          onBack={() => setBuyerPage(null)}
+        />
+      );
+    }
+
+    return (
+      <CustomerAccount
+        customer={customer}
+        onBack={() => setBuyerPage(null)}
+        onOrders={() => setBuyerPage("orders")}
+        onWishlist={() => setBuyerPage("wishlist")}
+        onLogout={handleCustomerLogout}
+      />
+    );
+  }
+
+  // ==========================================
+  // CUSTOMER ORDERS
+  // ==========================================
+
+  if (buyerPage === "orders") {
+    if (!customer || !customerToken) {
+      return (
+        <CustomerAuth
+          onAuth={handleCustomerAuth}
+          onBack={() => setBuyerPage(null)}
+        />
+      );
+    }
+
+    return (
+      <CustomerOrders
+        token={customerToken}
+        onBack={() => setBuyerPage("account")}
+        onNeedLogin={() => setBuyerPage("auth")}
+      />
+    );
+  }
+
+  // ==========================================
+  // WISHLIST
+  // ==========================================
+
+  if (buyerPage === "wishlist") {
+    return (
+      <Wishlist
+        wishlist={wishlist}
+        onBack={() => setBuyerPage(null)}
+        onRemove={removeFromWishlist}
+        onAddToCart={(item) => {
+          addToCart(item);
+          removeFromWishlist(item);
+        }}
+      />
+    );
+  }
+
+  // ==========================================
+  // CHECKOUT
+  // ==========================================
+
+  if (buyerPage === "checkout") {
+    if (!customer || !customerToken) {
+      return (
+        <CustomerAuth
+          onAuth={handleCustomerAuth}
+          onBack={() => setBuyerPage(null)}
+        />
+      );
+    }
+
+    return (
+      <Checkout
+        cart={cart}
+        customer={customer}
+        token={customerToken}
+        onBack={() => setBuyerPage(null)}
+        onOrderPlaced={() => {
+          // Cart is cleared only after a successful
+          // backend order — see Checkout success view.
+          setCart([]);
+          localStorage.removeItem("justbrand_cart");
+        }}
+      />
+    );
+  }
+
+  // ==========================================
   // CART
   // ==========================================
 
@@ -846,6 +1043,15 @@ function App() {
           }
           removeFromCart={removeFromCart}
           updateQuantity={updateQuantity}
+          onCheckout={() => {
+            setShowCart(false);
+
+            setBuyerPage(
+              customer && customerToken
+                ? "checkout"
+                : "auth"
+            );
+          }}
         />
       </>
     );
@@ -938,7 +1144,7 @@ function App() {
                   mlmButtonStyle
                 }
               >
-                👤 My MLM Dashboard
+                👤 My JustBrand Family Dashboard
               </button>
 
               <button
@@ -962,7 +1168,7 @@ function App() {
                   mlmButtonStyle
                 }
               >
-                🔐 MLM Login
+                🔐 JustBrand Family Login
               </button>
 
               <button

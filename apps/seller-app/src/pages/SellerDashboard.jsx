@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import "../index.css";
 
 function SellerDashboard({
   seller,
@@ -25,6 +26,25 @@ function SellerDashboard({
 }) {
   const [products, setProducts] = useState([]);
   const [activeMenu, setActiveMenu] = useState("dashboard");
+
+  // Mobile hamburger drawer state (only visible <= 768px via index.css).
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // Lock body scroll only while the mobile drawer is open.
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    document.body.classList.add("jb-drawer-open");
+
+    const originalOverflow = document.body.style.overflow;
+
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.classList.remove("jb-drawer-open");
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [menuOpen]);
 
   // ==========================================
   // LOAD SELLER PRODUCTS
@@ -69,6 +89,9 @@ function SellerDashboard({
 
   function menuClick(menu) {
     setActiveMenu(menu);
+
+    // Mobile drawer: close the menu after any navigation.
+    setMenuOpen(false);
 
     if (menu === "dashboard") {
       setActiveMenu("dashboard");
@@ -232,15 +255,23 @@ function SellerDashboard({
           HEADER
       ====================================== */}
 
-      <header style={styles.header}>
+      <header style={styles.header} className="jb-header">
 
         <div style={styles.headerLeft}>
 
-          <div style={styles.logo}>
+          <button
+            className="jb-menu-btn"
+            onClick={() => setMenuOpen(true)}
+            aria-label="Open menu"
+          >
+            ☰
+          </button>
+
+          <div style={styles.logo} className="jb-logo">
             JustBrand
           </div>
 
-          <div style={styles.panelText}>
+          <div style={styles.panelText} className="jb-logo-panel-text">
             Seller Panel
           </div>
 
@@ -253,6 +284,7 @@ function SellerDashboard({
               alert("No new notifications.")
             }
             style={styles.notificationButton}
+            className="jb-notification-btn"
           >
             🔔
           </button>
@@ -265,7 +297,7 @@ function SellerDashboard({
 
             <div>
 
-              <div style={styles.profileMiniName}>
+              <div style={styles.profileMiniName} className="jb-profile-name">
                 {sellerName}
               </div>
 
@@ -291,7 +323,10 @@ function SellerDashboard({
             SIDEBAR
         ==================================== */}
 
-        <aside style={styles.sidebar}>
+        <aside
+          style={styles.sidebar}
+          className={`jb-sidebar${menuOpen ? " open" : ""}`}
+        >
 
           <div style={styles.sidebarTitle}>
             SELLER MENU
@@ -485,7 +520,14 @@ function SellerDashboard({
             CONTENT
         ==================================== */}
 
-        <main style={styles.content}>
+        {/* Drawer backdrop (mobile only — see index.css) */}
+
+        <div
+          className={`jb-drawer-overlay${menuOpen ? " show" : ""}`}
+          onClick={() => setMenuOpen(false)}
+        />
+
+        <main style={styles.content} className="jb-content">
 
           {/* ==================================
               WELCOME
@@ -1125,6 +1167,7 @@ const styles = {
     minHeight:
       "calc(100vh - 70px)",
     alignItems: "stretch",
+    position: "relative",
   },
 
   sidebar: {

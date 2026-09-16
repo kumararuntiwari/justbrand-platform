@@ -1,4 +1,4 @@
-function Cart({ cart, onBack }) {
+function Cart({ cart, onBack, onCheckout }) {
   const total = cart.reduce((sum, item) => {
     const price = Number(
       item.price.replace("₹", "").replace(",", "")
@@ -69,6 +69,14 @@ function Cart({ cart, onBack }) {
           <h2>Total: ₹{total}</h2>
 
           <button
+            onClick={
+              onCheckout
+                ? onCheckout
+                : () =>
+                    alert(
+                      "Checkout coming soon."
+                    )
+            }
             style={{
               padding: "12px 25px",
               background: "#ff6b00",

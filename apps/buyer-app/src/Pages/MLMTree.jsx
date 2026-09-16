@@ -1,4 +1,8 @@
 import React, { useEffect, useState } from "react";
+import {
+  api,
+  getMlmToken,
+} from "../api";
 
 function MLMTree({ member, onBack }) {
   const [members, setMembers] = useState([]);
@@ -8,31 +12,60 @@ function MLMTree({ member, onBack }) {
 
     const timer = setInterval(() => {
       loadMembers();
-    }, 1000);
+    }, 15000);
 
     return () => clearInterval(timer);
   }, []);
 
   // ==========================================
-  // LOAD ALL MEMBERS
+  // LOAD TEAM FROM BACKEND
   // ==========================================
+  // The backend returns the member's subtree (nested). We flatten
+  // it into the same list shape this page already renders.
 
-  function loadMembers() {
+  async function loadMembers() {
+    const token = getMlmToken();
+
+    if (!token) {
+      setMembers([]);
+      return;
+    }
+
     try {
-      const saved = localStorage.getItem(
-        "justbrand_mlm_members"
-      );
+      const data = await api("/api/mlm/tree", { token });
 
-      if (!saved) {
+      const rootMember = data?.member;
+
+      if (!rootMember) {
         setMembers([]);
         return;
       }
 
-      const data = JSON.parse(saved);
+      const flat = [];
 
-      setMembers(
-        Array.isArray(data) ? data : []
+      const flatten = (node, parentId) => {
+        flat.push({
+          memberId: node.memberId,
+          name: node.name,
+          position: node.position || null,
+          parentId: parentId || null,
+          createdAt: node.createdAt,
+        });
+
+        (node.children || []).forEach((child) =>
+          flatten(child, node.memberId)
+        );
+      };
+
+      flatten(
+        {
+          ...rootMember,
+          children: data.children || [],
+        },
+        rootMember.parentId
       );
+
+      setMembers(flat);
     } catch (error) {
       console.log(
         "MLM Tree Error:",
@@ -351,7 +384,7 @@ function MLMTree({ member, onBack }) {
           </div>
 
           <h1 style={styles.title}>
-            🌳 My MLM Team
+            🌳 My Family Team
           </h1>
         </div>
 
@@ -361,12 +394,12 @@ function MLMTree({ member, onBack }) {
           </div>
 
           <h2>
-            MLM Member Login Required
+            Family Member Login Required
           </h2>
 
           <p style={styles.emptyMessage}>
             Please login or register for
-            JustBrand MLM.
+            JustBrand Family.
           </p>
 
           <button
@@ -394,11 +427,11 @@ function MLMTree({ member, onBack }) {
         </div>
 
         <h1 style={styles.title}>
-          🌳 My MLM Team
+          🌳 My Family Team
         </h1>
 
         <p style={styles.subtitle}>
-          JustBrand Family MLM Network
+          JustBrand Family Network
         </p>
 
         <div style={styles.currentInfo}>
@@ -592,7 +625,7 @@ function MLMTree({ member, onBack }) {
 
       <div style={styles.legend}>
         <div style={styles.legendTitle}>
-          MLM Position
+          Family Position
         </div>
 
         <div style={styles.legendItems}>

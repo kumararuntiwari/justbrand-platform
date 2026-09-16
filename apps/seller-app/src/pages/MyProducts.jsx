@@ -1,6 +1,7 @@
 
 import React, { useEffect, useState } from "react";
 import EditProduct from "../components/EditProduct";
+import "../index.css";
 
 const API_URL = "https://justbrand-in-144629.hostingersite.com";
 
@@ -46,11 +47,24 @@ function MyProducts({ onBack, onAddProduct }) {
 
     try {
       // ----------------------------------------
-      // 1. LOAD BACKEND PRODUCTS
+      // 1. LOAD OWN PRODUCTS FROM BACKEND
+      // (authenticated — backend filters by seller token)
       // ----------------------------------------
 
+      const token =
+        localStorage.getItem("justbrand_seller_token") || "";
+
+      if (!token) {
+        throw new Error("Not logged in.");
+      }
+
       const response = await fetch(
-        `${API_URL}/api/admin/products`
+        `${API_URL}/api/sellers/products`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
       );
 
       if (!response.ok) {
@@ -261,13 +275,12 @@ function MyProducts({ onBack, onAddProduct }) {
     }
 
     try {
+      // Authenticated delete — backend enforces product ownership.
       const token =
-        localStorage.getItem("token") ||
-        localStorage.getItem("authToken") ||
-        "";
+        localStorage.getItem("justbrand_seller_token") || "";
 
       const response = await fetch(
-        `${API_URL}/api/products/${id}`,
+        `${API_URL}/api/sellers/products/${id}`,
         {
           method: "DELETE",
           headers: token
@@ -455,9 +468,7 @@ function MyProducts({ onBack, onAddProduct }) {
     >
       {/* =====================================
           HEADER
-      ===================================== */}
-
-      <header
+      ===================================== */}      <header
         style={{
           background:
             "linear-gradient(135deg,#ff6b00,#ff1493)",
@@ -469,6 +480,7 @@ function MyProducts({ onBack, onAddProduct }) {
           gap: "15px",
           flexWrap: "wrap",
         }}
+        className="jb-section-header"
       >
         <div>
           <div
@@ -520,9 +532,7 @@ function MyProducts({ onBack, onAddProduct }) {
       >
         {/* ===================================
             TITLE
-        =================================== */}
-
-        <div
+        =================================== */}        <div
           style={{
             background: "white",
             borderRadius: "12px",
@@ -536,6 +546,7 @@ function MyProducts({ onBack, onAddProduct }) {
             boxShadow:
               "0 2px 8px rgba(0,0,0,0.06)",
           }}
+          className="jb-section-header"
         >
           <div>
             <h1

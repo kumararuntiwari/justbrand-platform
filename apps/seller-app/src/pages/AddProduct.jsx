@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import "../index.css";
 
 const API_URL = "https://justbrand-in-144629.hostingersite.com";
 
@@ -72,25 +73,24 @@ export default function AddProduct() {
     setSaving(true);
 
     try {
-      const sellerId =
-        localStorage.getItem("sellerId") ||
-        localStorage.getItem("seller_id") ||
-        `SELLER-${Date.now()}`;
+      // Authenticated product submission — the backend derives the
+      // seller identity from the JWT, so it cannot be spoofed.
+      const token =
+        localStorage.getItem("justbrand_seller_token") || "";
 
-      const sellerName =
-        localStorage.getItem("sellerName") ||
-        localStorage.getItem("seller_name") ||
-        "Seller";
+      if (!token) {
+        alert("Your session has expired. Please login again.");
+        setSaving(false);
+        return;
+      }
 
-      const response = await fetch(`${API_URL}/api/products`, {
+      const response = await fetch(`${API_URL}/api/sellers/products`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          sellerId,
-          sellerName,
-
           name: form.name.trim(),
           category: form.category.trim(),
           price: form.price.trim(),
@@ -102,6 +102,14 @@ export default function AddProduct() {
           shortDetails: form.shortDetails.trim(),
         }),
       });
+
+      if (response.status === 401) {
+        alert("Your session has expired. Please login again.");
+        localStorage.removeItem("justbrand_seller_token");
+        localStorage.removeItem("justbrand_seller_logged_in");
+        setSaving(false);
+        return;
+      }
 
       const data = await response.json();
 
@@ -155,6 +163,7 @@ export default function AddProduct() {
         maxWidth: "800px",
         margin: "30px auto",
         padding: "20px",
+        boxSizing: "border-box",
       }}
     >
       <div

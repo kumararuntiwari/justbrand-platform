@@ -1,4 +1,7 @@
 import React, { useEffect, useState } from "react";
+import "../index.css";
+
+const API_URL = "https://justbrand-in-144629.hostingersite.com";
 
 function SellerKYC({ seller, onBack }) {
   const STORAGE_KEY = "justbrand_seller_kyc";
@@ -209,6 +212,80 @@ function SellerKYC({ seller, onBack }) {
     );
 
     setKycStatus(status);
+
+    // ========================================
+    // SYNC TO BACKEND (real KYC + bank records)
+    // ========================================
+    // The local copy above remains as an offline cache so the
+    // form keeps working if the backend is unreachable; the
+    // authoritative record lives in the JustBrand database.
+
+    const token =
+      localStorage.getItem("justbrand_seller_token") || "";
+
+    if (token) {
+      const kycPayload = {
+        shopName: form.shopName,
+        address: form.businessAddress,
+        city: form.city,
+        state: form.state,
+        pincode: form.pincode,
+        gstNumber: form.gstNumber,
+        panNumber: form.panNumber,
+        aadhaarNumber: form.aadhaarNumber,
+      };
+
+      const bankPayload = {
+        accountName: form.accountHolder,
+        accountNumber: form.accountNumber,
+        ifscCode: form.ifsc,
+        bankName: form.bankName,
+      };
+
+      const syncStatus =
+        status === "Under Review" ? "Pending" : undefined;
+
+      fetch(`${API_URL}/api/sellers/kyc`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(kycPayload),
+      })
+        .then((response) => response.json())
+        .then((result) => {
+          if (result?.success && syncStatus) {
+            // Backend stores approval state; reflect it locally.
+            const backendStatus =
+              result.kyc?.kycStatus || syncStatus;
+
+            setKycStatus(backendStatus);
+
+            localStorage.setItem(
+              STORAGE_KEY,
+              JSON.stringify({
+                ...data,
+                kycStatus: backendStatus,
+              })
+            );
+          }
+        })
+        .catch((error) =>
+          console.error("KYC backend sync error:", error)
+        );
+
+      fetch(`${API_URL}/api/sellers/bank`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(bankPayload),
+      }).catch((error) =>
+        console.error("Bank details sync error:", error)
+      );
+    }
 
     return data;
   }
@@ -1076,6 +1153,7 @@ function SellerKYC({ seller, onBack }) {
               style={
                 styles.cancelButton
               }
+              className="jb-touch-btn"
             >
               ← Back
             </button>
@@ -1088,6 +1166,7 @@ function SellerKYC({ seller, onBack }) {
               style={
                 styles.resetButton
               }
+              className="jb-touch-btn"
             >
               Reset
             </button>
@@ -1097,6 +1176,7 @@ function SellerKYC({ seller, onBack }) {
               style={
                 styles.saveButton
               }
+              className="jb-touch-btn"
             >
               💾 Save KYC Details
             </button>
@@ -1129,6 +1209,7 @@ function SellerKYC({ seller, onBack }) {
                       ? "not-allowed"
                       : "pointer",
                 }}
+                className="jb-touch-btn"
               >
                 {kycStatus ===
                 "Under Review"
@@ -1601,6 +1682,11 @@ const styles = {
     gap: "10px",
     flexWrap: "wrap",
     marginTop: "5px",
+  },
+
+  actionButton: {
+    flex: "1 1 150px",
+    minWidth: "140px",
   },
 
   cancelButton: {

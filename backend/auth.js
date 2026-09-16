@@ -128,6 +128,60 @@ export function requireAuth(
 
 
 // =====================================
+// VERIFY TOKEN
+// =====================================
+// Used where authentication is OPTIONAL but, when a token is present,
+// the identity must be trusted (e.g. legacy product submission endpoint).
+
+export function verifyToken(token) {
+
+  return jwt.verify(
+    token,
+    JWT_SECRET
+  );
+
+}
+
+
+// =====================================
+// REQUIRE ACCOUNT TYPE
+// =====================================
+// Staff tokens carry a `role`; seller/customer/member tokens carry a
+// `type`. This guard keeps account types isolated so, for example,
+// a member token can never access seller or staff endpoints.
+
+export function requireType(type) {
+
+  return (req, res, next) => {
+
+    if (!req.user) {
+
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required."
+      });
+
+    }
+
+
+    if (req.user.type !== type) {
+
+      return res.status(403).json({
+        success: false,
+        message: "You do not have permission to perform this action."
+      });
+
+    }
+
+
+    next();
+
+  };
+
+}
+
+
+// =====================================
 // REQUIRE ROLE
 // =====================================
 
