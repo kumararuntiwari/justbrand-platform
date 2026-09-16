@@ -23,8 +23,7 @@ function MLMDashboard({ member, onLogout }) {
   const [pendingEarnings, setPendingEarnings] = useState(0);
   const [withdrawn, setWithdrawn] = useState(0);
   const [payouts, setPayouts] = useState([]);
-  const [leftTeam, setLeftTeam] = useState([]);
-  const [rightTeam, setRightTeam] = useState([]);
+  const [directTeam, setDirectTeam] = useState([]);
   const [transactions, setTransactions] = useState([]);
 
   // Mobile: collapse the sidebar into a toggleable menu (additive;
@@ -94,20 +93,8 @@ function MLMDashboard({ member, onLogout }) {
         ? data.directTeam
         : [];
 
-      setLeftTeam(
-        directTeam.filter(
-          (item) =>
-            String(item?.position || "").toUpperCase() === "A"
-        )
-      );
-
-      setRightTeam(
-        directTeam.filter((item) => {
-          const position = String(item?.position || "").toUpperCase();
-
-          return position === "B" || position === "C";
-        })
-      );
+      // All 3 direct placements (A, B, C) — max 3 direct members.
+      setDirectTeam(directTeam);
 
       // Commission history -> transaction list shape.
       const commissionsResponse = await api("/api/mlm/commissions", {
@@ -178,9 +165,17 @@ function MLMDashboard({ member, onLogout }) {
     mlmMember?.referral ||
     memberId;
 
-  const leftCount = leftTeam.length;
-  const rightCount = rightTeam.length;
-  const totalTeam = leftCount + rightCount;
+  const positionA = directTeam.filter(
+    (item) => String(item?.position || "").toUpperCase() === "A"
+  );
+  const positionB = directTeam.filter(
+    (item) => String(item?.position || "").toUpperCase() === "B"
+  );
+  const positionC = directTeam.filter(
+    (item) => String(item?.position || "").toUpperCase() === "C"
+  );
+
+  const totalTeam = directTeam.length;
 
   function copyReferralLink() {
     const link =
@@ -464,42 +459,46 @@ function MLMDashboard({ member, onLogout }) {
                 </h2>
 
                 <p style={styles.sectionSubtitle}>
-                  Your left and right team.
+                  Your 3 direct placements (A, B, C).
                 </p>
 
                 <div style={styles.binaryGrid}>
 
                   <TeamCard
-                    side="LEFT"
-                    icon="⬅️"
-                    count={leftCount}
-                    members={leftTeam}
+                    side="A"
+                    icon="1️⃣"
+                    count={positionA.length}
+                    members={positionA}
                   />
 
-                  <div style={styles.treeCenter}>
-
-                    <div style={styles.treeCircle}>
-                      👤
-                    </div>
-
-                    <div style={styles.treeName}>
-                      {memberName}
-                    </div>
-
-                    <div style={styles.treeId}>
-                      {memberId}
-                    </div>
-
-                  </div>
+                  <TeamCard
+                    side="B"
+                    icon="2️⃣"
+                    count={positionB.length}
+                    members={positionB}
+                  />
 
                   <TeamCard
-                    side="RIGHT"
-                    icon="➡️"
-                    count={rightCount}
-                    members={rightTeam}
+                    side="C"
+                    icon="3️⃣"
+                    count={positionC.length}
+                    members={positionC}
                   />
 
                 </div>
+
+                <p
+                  style={{
+                    margin: "12px 0 0",
+                    fontSize: "13px",
+                    color: "#777",
+                    textAlign: "center",
+                  }}
+                >
+                  You can have maximum 3 direct members (A, B, C).
+                  Extra referrals are placed automatically in your
+                  Family team (spillover).
+                </p>
 
               </section>
 
@@ -642,23 +641,30 @@ function MLMDashboard({ member, onLogout }) {
             <PageBox
               icon="🌳"
               title="My Team"
-              subtitle="Manage your binary Family team."
+              subtitle="Manage your 3 direct Family members."
             >
 
               <div style={styles.bigTeamGrid}>
 
                 <TeamCard
-                  side="LEFT"
-                  icon="⬅️"
-                  count={leftCount}
-                  members={leftTeam}
+                  side="A"
+                  icon="1️⃣"
+                  count={positionA.length}
+                  members={positionA}
                 />
 
                 <TeamCard
-                  side="RIGHT"
-                  icon="➡️"
-                  count={rightCount}
-                  members={rightTeam}
+                  side="B"
+                  icon="2️⃣"
+                  count={positionB.length}
+                  members={positionB}
+                />
+
+                <TeamCard
+                  side="C"
+                  icon="3️⃣"
+                  count={positionC.length}
+                  members={positionC}
                 />
 
               </div>
@@ -1323,9 +1329,9 @@ const styles = {
 
   binaryGrid: {
     display: "grid",
-    gridTemplateColumns: "1fr 150px 1fr",
+    gridTemplateColumns: "repeat(3, 1fr)",
     gap: "15px",
-    alignItems: "center",
+    alignItems: "stretch",
     // Stack vertically on phones (JS-derived; 360px widths otherwise clip).
     ...(typeof window !== "undefined" && window.innerWidth <= 620
       ? {

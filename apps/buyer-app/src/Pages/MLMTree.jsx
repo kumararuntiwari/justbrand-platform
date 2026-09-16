@@ -111,12 +111,23 @@ function MLMTree({ member, onBack }) {
     const children =
       getChildren(parentId);
 
+    // Backend stores placements as A / B / C (max 3 direct members).
+    // The tree displays them as LEFT / CENTER / RIGHT columns.
+    const positionMap = {
+      left: "a",
+      center: "b",
+      right: "c",
+    };
+
+    const wanted =
+      positionMap[position] || position;
+
     return (
       children.find(
         (item) =>
           String(
             item?.position || ""
-          ).toLowerCase() === position
+          ).toLowerCase() === wanted
       ) || null
     );
   }

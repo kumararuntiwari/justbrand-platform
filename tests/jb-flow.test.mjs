@@ -372,6 +372,148 @@ async function runFlow() {
   );
   const rootWalletAfter = await req("GET", "/api/mlm/wallet", { token: mRoot.data.token });
   ok("root wallet pending drops to 0 after cancellation", Number(rootWalletAfter.data.wallet?.pending) === 0);
+
+  // ===== 13. CUSTOMER PROFILE (own only) =====
+  console.log("\n— Customer profile management");
+  const profileUpdate = await req("PUT", "/api/customers/me", {
+    token: customer,
+    body: {
+      name: "Flow Customer Updated",
+      email: "updated@x.com",
+      address: "456 New Street, Test Nagar",
+      city: "TestCity",
+      state: "TestState",
+      pincode: "110001",
+    },
+  });
+  ok("customer updates own profile", profileUpdate.status === 200);
+  ok(
+    "profile update persists name and address",
+    profileUpdate.data.customer?.name === "Flow Customer Updated" &&
+      profileUpdate.data.customer?.city === "TestCity"
+  );
+
+  const badPin = await req("PUT", "/api/customers/me", {
+    token: customer,
+    body: { pincode: "12" },
+  });
+  ok("invalid PIN code rejected", badPin.status === 400);
+
+  // Customer A must not be able to reach customer B's orders — a second
+  // customer is registered and both lists stay isolated.
+  const cust2 = await req("POST", "/api/customers/register", {
+    body: {
+      name: "Other Customer",
+      mobile: "9000000009",
+      email: "other@x.com",
+      password: "cust9999",
+    },
+  });
+  const c2Login = await req("POST", "/api/customers/login", {
+    body: { mobile: "9000000009", password: "cust9999" },
+  });
+  const otherOrders = await req("GET", "/api/customer/orders", {
+    token: c2Login.data.token,
+  });
+  ok(
+    "customer isolation: other customer sees no orders",
+    (otherOrders.data.orders || []).every((o) => o.customerId !== cust.data.customer?.id)
+  );
+
+  // ===== 14. MLM PAYOUT HISTORY =====
+  console.log("\n— Payout request history");
+  const payoutHistory = await req("GET", "/api/mlm/payout-requests", {
+    token: mRoot.data.token,
+  });
+  ok("member can read own payout history", payoutHistory.status === 200 && Array.isArray(payoutHistory.data.requests));
+  ok("payout history starts empty for new member", (payoutHistory.data.requests || []).length === 0);
+
+  // ===== 15. SELLER SUMMARY (dashboard stats) =====
+  console.log("\n— Seller dashboard summary");
+  const summary = await req("GET", "/api/sellers/summary", { token: seller });
+  ok("seller summary endpoint responds", summary.status === 200);
+  ok(
+    "summary counts match seller's 2 products",
+    Number(summary.data.summary?.totalProducts) === 2
+  );
+  ok(
+    "summary shows 1 approved / 1 rejected",
+    Number(summary.data.summary?.approvedProducts) === 1 &&
+      Number(summary.data.summary?.rejectedProducts) === 1
+  );
+  ok(
+    "summary shows the delivered/cancelled order",
+    Number(summary.data.summary?.orders) >= 1
+  );
+  ok(
+    "summary includes KYC status",
+    ["Pending", "Approved", "Rejected", "Submitted"].includes(
+      summary.data.summary?.kycStatus
+    )
+  );
+
+  const rivalSummary = await req("GET", "/api/sellers/summary", { token: rival });
+  ok(
+    "cross-seller isolation: rival summary shows 0 products",
+    Number(rivalSummary.data.summary?.totalProducts) === 0 &&
+      Number(rivalSummary.data.summary?.orders) === 0
+  );
+
+  // ===== 16. MAX 3 DIRECT MEMBERS + SPILLOVER =====
+  // Root already has 1 direct (mChild, slot A). Fill B and C, then the
+  // next referred member must spill over instead of becoming a 4th direct.
+  console.log("\n— Max 3 direct members (A/B/C) + spillover");
+  const m3 = await req("POST", "/api/mlm/register", {
+    body: { name: "Direct Three", mobile: "9000000011", password: "member123", referralCode: rootId },
+  });
+  ok("2nd direct member registers (slot B)", m3.status === 201);
+
+  const m4 = await req("POST", "/api/mlm/register", {
+    body: { name: "Direct Four", mobile: "9000000012", password: "member123", referralCode: rootId },
+  });
+  ok("3rd direct member registers (slot C)", m4.status === 201);
+  ok(
+    "3rd direct member IS a direct child of the referrer",
+    m4.data.member?.parentId === rootId
+  );
+
+  const m5 = await req("POST", "/api/mlm/register", {
+    body: { name: "Spill Five", mobile: "9000000013", password: "member123", referralCode: rootId },
+  });
+  ok("4th referred member still registers (no rejection)", m5.status === 201);
+  ok(
+    "4th referred member is NOT a direct child of the referrer (spillover)",
+    m5.data.member?.parentId !== rootId && Boolean(m5.data.member?.parentId)
+  );
+  ok(
+    "spilled member got a valid placement position",
+    ["A", "B", "C"].includes(String(m5.data.member?.position || "").toUpperCase())
+  );
+
+  const meAfter = await req("GET", "/api/mlm/me", { token: mRoot.data.token });
+  const directCount = (meAfter.data.directTeam || []).length;
+  ok("referrer still has exactly 3 direct members", directCount === 3);
+  ok(
+    "direct positions are A, B, C",
+    ["A", "B", "C"].every((p) =>
+      (meAfter.data.directTeam || []).some(
+        (c) => String(c.position || "").toUpperCase() === p
+      )
+    )
+  );
+
+  // Spillover chain stays intact: the spilled member sits inside the
+  // referrer's subtree (root + 3 directs + 1 spill = 5 nodes).
+  const rootTree = await req("GET", "/api/mlm/tree", { token: mRoot.data.token });
+  const countSubtree = (node) =>
+    1 + (node.children || []).reduce((sum, c) => sum + countSubtree(c), 0);
+  const subtreeSize = rootTree.data.member
+    ? countSubtree({ ...rootTree.data.member, children: rootTree.data.children })
+    : 0;
+  ok(
+    "spilled member is inside the referrer's subtree (root + 3 direct + spill = 5)",
+    subtreeSize === 5
+  );
 }
 
 // -----------------------------------------------------
