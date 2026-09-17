@@ -767,6 +767,10 @@ function App() {
           ? "orders"
           : "auth"
       ),
+    onFamily: () =>
+      setMlmPage(
+        mlmMember ? "dashboard" : "login"
+      ),
   };
 
   // ==========================================
@@ -1178,83 +1182,6 @@ function App() {
       />
 
       {/* ======================================
-          MLM MEMBER BUTTON
-      ====================================== */}
-
-      <div
-        style={{
-          width: "100%",
-          background: "#fff",
-          padding: "10px 20px",
-          boxSizing: "border-box",
-          borderBottom:
-            "1px solid #eee",
-        }}
-      >
-        <div
-          style={{
-            maxWidth: "1200px",
-            margin: "0 auto",
-            display: "flex",
-            justifyContent:
-              "flex-end",
-            gap: "10px",
-            flexWrap: "wrap",
-          }}
-        >
-          {mlmMember ? (
-            <>
-              <button
-                onClick={() =>
-                  setMlmPage("dashboard")
-                }
-                style={
-                  mlmButtonStyle
-                }
-              >
-                👤 My JustBrand Family Dashboard
-              </button>
-
-              <button
-                onClick={() =>
-                  setMlmPage("wallet")
-                }
-                style={
-                  mlmWalletButtonStyle
-                }
-              >
-                💰 Commission Wallet
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                onClick={() =>
-                  setMlmPage("login")
-                }
-                style={
-                  mlmButtonStyle
-                }
-              >
-                🔐 JustBrand Family Login
-              </button>
-
-              <button
-                onClick={() =>
-                  setMlmPage("register")
-                }
-                style={
-                  mlmRegisterButtonStyle
-                }
-              >
-                📝 Join JustBrand
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* ======================================
           BANNER
       ====================================== */}
 
@@ -1575,41 +1502,6 @@ function App() {
     </div>
   );
 }
-
-// ==========================================
-// MLM BUTTON STYLES
-// ==========================================
-
-const mlmButtonStyle = {
-  background:
-    "linear-gradient(135deg,#ff6b00,#ff1493)",
-  color: "#fff",
-  border: "none",
-  padding: "10px 16px",
-  borderRadius: "8px",
-  cursor: "pointer",
-  fontWeight: "bold",
-};
-
-const mlmRegisterButtonStyle = {
-  background: "#fff",
-  color: "#ff1493",
-  border: "1px solid #ff1493",
-  padding: "10px 16px",
-  borderRadius: "8px",
-  cursor: "pointer",
-  fontWeight: "bold",
-};
-
-const mlmWalletButtonStyle = {
-  background: "#fff7e8",
-  color: "#ff6b00",
-  border: "1px solid #ffb347",
-  padding: "10px 16px",
-  borderRadius: "8px",
-  cursor: "pointer",
-  fontWeight: "bold",
-};
 
 // ==========================================
 // EXPORT

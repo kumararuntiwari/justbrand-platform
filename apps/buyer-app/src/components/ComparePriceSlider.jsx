@@ -365,7 +365,7 @@ function ComparePriceSlider({
               scrollbarWidth: "none",
               overscrollBehaviorX: "contain",
               overscrollBehaviorY: "none",
-              touchAction: "pan-x",
+              touchAction: "pan-x pan-y",
             }}
           >
             {filteredProducts.map(

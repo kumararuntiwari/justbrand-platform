@@ -12,6 +12,7 @@ function Header({
   onAccount,
   onWishlist,
   onOrders,
+  onFamily,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -78,6 +79,19 @@ function Header({
   };
 
   // ==================================================
+  // JUSTBRAND FAMILY
+  // ==================================================
+
+  const handleFamily = () => {
+    closeMenu();
+
+    if (onFamily) {
+      onFamily();
+      return;
+    }
+  };
+
+  // ==================================================
   // WISHLIST
   // ==================================================
 
@@ -140,132 +154,8 @@ function Header({
               alt="JustBrand"
             />
 
-            <span>JustBrand</span>
+            <span className="jb-logo-name">JustBrand</span>
           </div>
-        </div>
-
-
-        {/* ==================================================
-            SEARCH BAR
-        ================================================== */}
-
-        <div className="jb-search-wrapper">
-
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search Products, Brands and More"
-            className="jb-search-input"
-          />
-
-          <button
-            className="jb-search-btn"
-            onClick={() => {
-              // Search already controlled by App.jsx
-            }}
-            aria-label="Search"
-          >
-            🔍
-          </button>
-
-
-          {/* SEARCH SUGGESTIONS */}
-
-          {search &&
-            (
-              (filteredProducts && filteredProducts.length > 0) ||
-              (filteredCategories && filteredCategories.length > 0)
-            ) && (
-
-              <div className="jb-search-suggestions">
-
-                {/* CATEGORIES */}
-
-                {filteredCategories &&
-                  filteredCategories.length > 0 && (
-
-                    <div className="jb-suggestion-section">
-
-                      <div className="jb-suggestion-title">
-                        Categories
-                      </div>
-
-                      {filteredCategories
-                        .slice(0, 5)
-                        .map((category, index) => (
-
-                          <div
-                            key={`category-${index}`}
-                            className="jb-suggestion-item"
-                            onClick={() =>
-                              handleCategory(category)
-                            }
-                          >
-                            📂 {category}
-                          </div>
-
-                        ))}
-                    </div>
-                  )}
-
-
-                {/* PRODUCTS */}
-
-                {filteredProducts &&
-                  filteredProducts.length > 0 && (
-
-                    <div className="jb-suggestion-section">
-
-                      <div className="jb-suggestion-title">
-                        Products
-                      </div>
-
-                      {filteredProducts
-                        .slice(0, 8)
-                        .map((product, index) => (
-
-                          <div
-                            key={
-                              product.id ||
-                              `product-${index}`
-                            }
-                            className="jb-suggestion-item jb-product-suggestion"
-                            onClick={() =>
-                              handleProductSelect(product)
-                            }
-                          >
-
-                            <img
-                              src={
-                                product.image ||
-                                "/images/product1.png"
-                              }
-                              alt={product.name || "Product"}
-                              onError={(e) => {
-                                e.currentTarget.src =
-                                  "/images/product1.png";
-                              }}
-                            />
-
-                            <div>
-                              <div className="jb-suggestion-product-name">
-                                {product.name}
-                              </div>
-
-                              <div className="jb-suggestion-product-price">
-                                ₹{product.price}
-                              </div>
-                            </div>
-
-                          </div>
-
-                        ))}
-                    </div>
-                  )}
-
-              </div>
-            )}
         </div>
 
 
@@ -408,6 +298,128 @@ function Header({
         </div>
 
 
+        {/* MOBILE SEARCH (lower header) */}
+
+        <div className="jb-search-wrapper jb-nav-search">
+
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search Products, Brands and More"
+            className="jb-search-input"
+          />
+
+          <button
+            className="jb-search-btn"
+            onClick={() => {
+              // Search already controlled by App.jsx
+            }}
+            aria-label="Search"
+          >
+            🔍
+          </button>
+
+
+          {/* SEARCH SUGGESTIONS */}
+
+          {search &&
+            (
+              (filteredProducts && filteredProducts.length > 0) ||
+              (filteredCategories && filteredCategories.length > 0)
+            ) && (
+
+              <div className="jb-search-suggestions">
+
+                {/* CATEGORIES */}
+
+                {filteredCategories &&
+                  filteredCategories.length > 0 && (
+
+                    <div className="jb-suggestion-section">
+
+                      <div className="jb-suggestion-title">
+                        Categories
+                      </div>
+
+                      {filteredCategories
+                        .slice(0, 5)
+                        .map((category, index) => (
+
+                          <div
+                            key={`category-${index}`}
+                            className="jb-suggestion-item"
+                            onClick={() =>
+                              handleCategory(category)
+                            }
+                          >
+                            📂 {category}
+                          </div>
+
+                        ))}
+                    </div>
+                  )}
+
+
+                {/* PRODUCTS */}
+
+                {filteredProducts &&
+                  filteredProducts.length > 0 && (
+
+                    <div className="jb-suggestion-section">
+
+                      <div className="jb-suggestion-title">
+                        Products
+                      </div>
+
+                      {filteredProducts
+                        .slice(0, 8)
+                        .map((product, index) => (
+
+                          <div
+                            key={
+                              product.id ||
+                              `product-${index}`
+                            }
+                            className="jb-suggestion-item jb-product-suggestion"
+                            onClick={() =>
+                              handleProductSelect(product)
+                            }
+                          >
+
+                            <img
+                              src={
+                                product.image ||
+                                "/images/product1.png"
+                              }
+                              alt={product.name || "Product"}
+                              onError={(e) => {
+                                e.currentTarget.src =
+                                  "/images/product1.png";
+                              }}
+                            />
+
+                            <div>
+                              <div className="jb-suggestion-product-name">
+                                {product.name}
+                              </div>
+
+                              <div className="jb-suggestion-product-price">
+                                ₹{product.price}
+                              </div>
+                            </div>
+
+                          </div>
+
+                        ))}
+                    </div>
+                  )}
+
+              </div>
+            )}
+        </div>
+
+
         {/* SELLER NAV BUTTON */}
 
         <button
@@ -514,6 +526,33 @@ function Header({
               🏪
               <span>
                 Sell on JustBrand
+              </span>
+            </button>
+
+
+            {/* ==================================================
+                JUSTBRAND FAMILY
+            ================================================== */}
+
+            <button
+              className="jb-side-item"
+              onClick={handleFamily}
+              type="button"
+            >
+              👨‍👩‍👦
+              <span>
+                JustBrand Family
+              </span>
+            </button>
+
+            <button
+              className="jb-side-item"
+              onClick={handleFamily}
+              type="button"
+            >
+              📝
+              <span>
+                JustBrand Join
               </span>
             </button>
 
@@ -899,6 +938,12 @@ function Header({
         }
 
 
+        /* DESKTOP HEADER SEARCH (top row) */
+        .jb-search-wrapper {
+          display: block;
+        }
+
+
         .jb-header-action,
         .jb-cart-btn {
           border: none;
@@ -1121,6 +1166,12 @@ function Header({
           opacity: 0.92;
 
           transform: translateY(-1px);
+        }
+
+
+        /* MOBILE-ONLY LOWER-NAV SEARCH */
+        .jb-search-wrapper.jb-nav-search {
+          display: none;
         }
 
 
@@ -1401,6 +1452,11 @@ function Header({
           }
 
 
+          .jb-header-right {
+            flex-wrap: nowrap;
+          }
+
+
           .jb-header-left {
             gap: 5px;
           }
@@ -1414,19 +1470,43 @@ function Header({
           }
 
 
-          .jb-logo span {
-            display: none;
+          .jb-logo {
+            gap: 6px;
+
+            justify-self: start;
           }
 
 
           .jb-logo img {
-            width: 39px;
-            height: 39px;
+            width: 34px;
+            height: 34px;
           }
 
 
-          .jb-search-wrapper {
-            width: 100%;
+          .jb-logo span.jb-logo-name {
+            display: inline-block;
+
+            font-size: 15px;
+
+            font-weight: 800;
+
+            line-height: 1.1;
+          }
+
+
+          .jb-header .jb-search-wrapper {
+            display: none;
+          }
+
+
+          .jb-search-wrapper.jb-nav-search {
+            display: block;
+
+            flex: 0 0 100%;
+
+            max-width: 100%;
+
+            margin: 2px 0 4px;
           }
 
 
@@ -1504,7 +1584,20 @@ function Header({
 
 
           .jb-nav-seller {
-            display: none;
+            display: flex;
+
+            align-items: center;
+
+            flex: 0 0 auto;
+
+            margin-left: 0;
+
+            padding:
+              7px 10px;
+
+            font-size: 12px;
+
+            border-radius: 6px;
           }
 
 
