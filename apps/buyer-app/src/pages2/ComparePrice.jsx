@@ -197,9 +197,9 @@ function ComparePrice({
   if (!product) {
     return (
       <div
+        className="jb-page"
         style={{
           minHeight: "100vh",
-          background: "#f5f5f5",
           padding: "20px",
         }}
       >
@@ -293,9 +293,9 @@ console.log("COMPARE IMAGE URL:", productImage);
 
   return (
     <div
+      className="jb-page"
       style={{
         minHeight: "100vh",
-        background: "#f5f5f5",
         padding: "20px",
       }}
     >

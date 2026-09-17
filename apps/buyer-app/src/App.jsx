@@ -1158,13 +1158,14 @@ function App() {
 
   return (
     <div
+      className="jb-page"
       style={{
         width: "100%",
         minHeight: "100vh",
-        background: "#f5f5f5",
         overflowX: "hidden",
       }}
     >
+      <div className="jb-family-chakra" aria-hidden="true" />
       {/* ======================================
           HEADER
       ====================================== */}

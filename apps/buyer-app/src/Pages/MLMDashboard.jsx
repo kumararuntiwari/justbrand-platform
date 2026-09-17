@@ -205,7 +205,8 @@ function MLMDashboard({ member, onLogout }) {
   }
 
   return (
-    <div style={styles.page}>
+    <div className="jb-page" style={styles.page}>
+      <div className="jb-family-chakra" aria-hidden="true" />
 
       <header style={styles.header}>
         <div style={styles.headerLeft}>
@@ -1099,7 +1100,6 @@ function InfoBox({
 const styles = {
   page: {
     minHeight: "100vh",
-    background: "#f5f5f5",
     color: "#222",
     maxWidth: "100%",
     overflowX: "hidden",

@@ -163,7 +163,8 @@ function MLMRegister({ onBack, onRegistered }) {
   // ==========================================
 
   return (
-    <div style={styles.page}>
+    <div className="jb-page" style={styles.page}>
+      <div className="jb-family-chakra" aria-hidden="true" />
       <div style={styles.card}>
 
         {/* HEADER */}
@@ -510,7 +511,6 @@ function MLMRegister({ onBack, onRegistered }) {
 const styles = {
   page: {
     minHeight: "100vh",
-    background: "#f5f5f5",
     padding: "30px 15px",
     boxSizing: "border-box",
   },

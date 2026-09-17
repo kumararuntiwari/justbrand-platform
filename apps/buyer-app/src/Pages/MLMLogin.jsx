@@ -84,7 +84,8 @@ function MLMLogin({ onLogin, onRegister, onBack }) {
   // ==========================================
 
   return (
-    <div style={styles.page}>
+    <div className="jb-page" style={styles.page}>
+      <div className="jb-family-chakra" aria-hidden="true" />
 
       {/* ======================================
           HEADER
@@ -290,7 +291,7 @@ const styles = {
   page: {
     minHeight: "100vh",
     background:
-      "linear-gradient(135deg,#fff7f2,#fff0f7)",
+      "transparent",
     color: "#222",
   },
 

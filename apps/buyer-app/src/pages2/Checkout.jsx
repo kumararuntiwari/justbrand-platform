@@ -9,6 +9,12 @@ function Checkout({
   onOrderPlaced,
 }) {
   const [address, setAddress] = useState("");
+  const [city, setCity] = useState("");
+  const [stateName, setStateName] = useState("");
+  const [pincode, setPincode] = useState("");
+  const [email, setEmail] = useState(
+    customer?.email ? String(customer.email) : ""
+  );
   const [phone, setPhone] = useState(
     customer?.mobile ? String(customer.mobile) : ""
   );
@@ -43,6 +49,21 @@ function Checkout({
       return;
     }
 
+    if (!city.trim()) {
+      alert("Please enter your city.");
+      return;
+    }
+
+    if (!stateName.trim()) {
+      alert("Please enter your state.");
+      return;
+    }
+
+    if (!/^\d{6}$/.test(pincode.trim())) {
+      alert("Please enter a valid 6-digit PIN code.");
+      return;
+    }
+
     setPlacing(true);
 
     try {
@@ -55,6 +76,10 @@ function Checkout({
             quantity: Number(item.quantity) || 1,
           })),
           address: address.trim(),
+          city: city.trim(),
+          state: stateName.trim(),
+          pincode: pincode.trim(),
+          email: email.trim(),
           phone: phone.replace(/\D/g, ""),
           paymentMethod,
         },
@@ -83,7 +108,7 @@ function Checkout({
 
   if (placedOrder) {
     return (
-      <div style={styles.page}>
+      <div className="jb-page" style={styles.page}>
         <header style={styles.header}>
           <div>
             <div style={styles.logo}>JustBrand</div>
@@ -119,6 +144,17 @@ function Checkout({
               <div style={styles.summaryRow}>
                 <span>Payment Method</span>
                 <strong>{placedOrder.paymentMethod}</strong>
+              </div>
+
+              <div style={styles.summaryRow}>
+                <span>Payment Status</span>
+                <strong>
+                  {placedOrder.paymentStatus || "Pending"}
+                  {placedOrder.paymentMethod === "UPI" ||
+                  placedOrder.paymentMethod === "BankTransfer"
+                    ? " — awaiting confirmation"
+                    : ""}
+                </strong>
               </div>
 
               <div style={styles.summaryRow}>
@@ -172,7 +208,7 @@ function Checkout({
   // ==========================================
 
   return (
-    <div style={styles.page}>
+    <div className="jb-page" style={styles.page}>
       <header style={styles.header}>
         <div>
           <div style={styles.logo}>JustBrand</div>
@@ -215,13 +251,71 @@ function Checkout({
 
           {/* ADDRESS */}
           <div style={styles.field}>
-            <label style={styles.label}>Shipping Address</label>
+            <label style={styles.label}>Delivery Address</label>
             <textarea
               rows={3}
               value={address}
               onChange={(e) => setAddress(e.target.value)}
-              placeholder="House no, street, area, city, state, pincode"
+              placeholder="House no, street, area, landmark"
               style={styles.textarea}
+            />
+          </div>
+
+          {/* CITY / STATE / PIN */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+              gap: "10px",
+            }}
+          >
+            <div style={styles.field}>
+              <label style={styles.label}>City</label>
+              <input
+                type="text"
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                placeholder="City"
+                style={styles.input}
+              />
+            </div>
+
+            <div style={styles.field}>
+              <label style={styles.label}>State</label>
+              <input
+                type="text"
+                value={stateName}
+                onChange={(e) => setStateName(e.target.value)}
+                placeholder="State"
+                style={styles.input}
+              />
+            </div>
+
+            <div style={styles.field}>
+              <label style={styles.label}>PIN Code</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={pincode}
+                onChange={(e) =>
+                  setPincode(e.target.value.replace(/\D/g, ""))
+                }
+                placeholder="6-digit PIN"
+                maxLength="6"
+                style={styles.input}
+              />
+            </div>
+          </div>
+
+          {/* CONTACT EMAIL (OPTIONAL) */}
+          <div style={styles.field}>
+            <label style={styles.label}>Email (optional — for order updates)</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              style={styles.input}
             />
           </div>
 
@@ -313,7 +407,7 @@ function Checkout({
 const styles = {
   page: {
     minHeight: "100vh",
-    background: "linear-gradient(135deg,#fff7f2,#fff0f7)",
+    background: "transparent",
     color: "#222",
   },
 

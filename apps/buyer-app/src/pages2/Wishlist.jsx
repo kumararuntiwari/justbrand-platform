@@ -2,7 +2,7 @@ import React from "react";
 
 function Wishlist({ wishlist, onBack, onRemove, onAddToCart }) {
   return (
-    <div style={styles.page}>
+    <div className="jb-page" style={styles.page}>
       <header style={styles.header}>
         <div>
           <div style={styles.logo}>JustBrand</div>
@@ -69,7 +69,7 @@ function Wishlist({ wishlist, onBack, onRemove, onAddToCart }) {
 const styles = {
   page: {
     minHeight: "100vh",
-    background: "linear-gradient(135deg,#fff7f2,#fff0f7)",
+    background: "transparent",
     color: "#222",
   },
 

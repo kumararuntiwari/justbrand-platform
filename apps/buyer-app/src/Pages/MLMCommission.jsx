@@ -259,7 +259,8 @@ function MLMCommission({ onBack }) {
   // ==========================================
 
   return (
-    <div style={styles.page}>
+    <div className="jb-page" style={styles.page}>
+      <div className="jb-family-chakra" aria-hidden="true" />
 
       {/* ======================================
           HEADER
@@ -794,7 +795,6 @@ const styles = {
 
   page: {
     minHeight: "100vh",
-    background: "#f5f5f5",
     color: "#222",
   },
 

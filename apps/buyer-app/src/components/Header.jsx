@@ -642,6 +642,25 @@ function Header({
             0 2px 8px rgba(0,0,0,0.18);
         }
 
+        /* Tiranga identity: subtle tricolor strip under the header */
+        .jb-header::after {
+          content: "";
+          position: absolute;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          height: 3px;
+          background: linear-gradient(
+            90deg,
+            #ff8c1a 0%,
+            #ffa733 30%,
+            #ffffff 50%,
+            #2e9b0e 70%,
+            #128807 100%
+          );
+          pointer-events: none;
+        }
+
 
         /* ==================================================
            LEFT

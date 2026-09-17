@@ -1,3 +1,21 @@
+/* ============================================================
+   JUSTBRAND — TIRANGA THEME (CSS-only, central)
+   - subtle tricolor washes on html (fixed) + Chakra-inspired
+     watermark ring — pure CSS, no images/banners
+   - pages paint transparent so the central theme shows through
+   - .jb-page gets a thin tricolor top strip (3px)
+   ============================================================ */
+
+:root {
+  --jb-saffron: #ff8c1a;
+  --jb-saffron-deep: #e85d04;
+  --jb-green: #128807;
+  --jb-navy: #000080;
+  --jb-page: #f8f7f3;
+  --jb-card: #ffffff;
+}
+
+/* ---------- foundation (template layout rules preserved) ---------- */
 html,
 body,
 #root {
@@ -13,6 +31,26 @@ html {
   overflow-y: auto;
   scroll-behavior: auto;
   overflow-anchor: none;
+
+  /* tricolor wash layer 1 + chakra watermark ring (behind everything) */
+  background:
+    radial-gradient(
+      340px 340px at 88% 4%,
+      rgba(18, 136, 7, 0.04) 0%,
+      rgba(0, 0, 128, 0.025) 55%,
+      transparent 56%,
+      transparent 100%
+    ),
+    linear-gradient(
+      185deg,
+      rgba(255, 140, 26, 0.055) 0%,
+      rgba(255, 140, 26, 0.022) 22%,
+      rgba(255, 255, 255, 0) 40%,
+      rgba(255, 255, 255, 0) 55%,
+      rgba(18, 136, 7, 0.028) 74%,
+      rgba(18, 136, 7, 0.055) 100%
+    );
+  background-attachment: fixed;
 }
 
 body {
@@ -22,6 +60,25 @@ body {
   position: static;
   scroll-behavior: auto;
   overflow-anchor: none;
+
+  /* tricolor wash layer 2 (so per-page sections blend, still very light) */
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 140, 26, 0.028) 0%,
+      rgba(255, 255, 255, 0) 26%,
+      rgba(255, 255, 255, 0) 72%,
+      rgba(18, 136, 7, 0.032) 100%
+    ),
+    linear-gradient(
+      90deg,
+      rgba(255, 140, 26, 0.02) 0%,
+      rgba(255, 255, 255, 0) 14%,
+      rgba(255, 255, 255, 0) 86%,
+      rgba(18, 136, 7, 0.02) 100%
+    );
+  background-attachment: fixed;
+  background-color: #f8f7f3;
 }
 
 #root {
@@ -51,12 +108,14 @@ select {
     overflow-y: auto;
     scroll-behavior: auto;
     overflow-anchor: none;
+    background-attachment: scroll;
   }
 
   body {
     overflow-x: hidden;
     overflow-y: auto;
     position: static;
+    background-attachment: scroll;
   }
 
   #root {
@@ -64,4 +123,85 @@ select {
     min-height: 100vh;
     overflow-x: hidden;
   }
+}
+
+/* ---------- JustBrand Family: chakra watermark (CSS-only, fixed) ---------- */
+.jb-family-chakra {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0.05;
+}
+
+.jb-family-chakra::before {
+  content: "";
+  position: absolute;
+  top: 120px;
+  right: -110px;
+  width: 340px;
+  height: 340px;
+  border-radius: 50%;
+  border: 2px dashed rgba(0, 0, 128, 0.55);
+  box-shadow: inset 0 0 0 9px rgba(0, 0, 128, 0.14);
+  background: radial-gradient(
+    circle,
+    rgba(0, 0, 128, 0.16) 0 8px,
+    transparent 9px
+  );
+}
+
+.jb-family-chakra::after {
+  content: "";
+  position: absolute;
+  bottom: -120px;
+  left: -120px;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  border: 2px dashed rgba(0, 0, 128, 0.5);
+  box-shadow: inset 0 0 0 8px rgba(0, 0, 128, 0.12);
+}
+
+@media (max-width: 640px) {
+  .jb-family-chakra {
+    opacity: 0.04;
+  }
+
+  .jb-family-chakra::before {
+    width: 250px;
+    height: 250px;
+    top: 90px;
+    right: -100px;
+  }
+
+  .jb-family-chakra::after {
+    width: 220px;
+    height: 220px;
+  }
+}
+
+/* ---------- shared page wrapper (all Buyer screens) ---------- */
+.jb-page {
+  position: relative;
+  z-index: 1;
+  background: transparent;
+}
+
+.jb-page::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(
+    90deg,
+    #ff8c1a 0%,
+    #ffa733 30%,
+    #ffffff 50%,
+    #2e9b0e 70%,
+    #128807 100%
+  );
+  pointer-events: none;
 }

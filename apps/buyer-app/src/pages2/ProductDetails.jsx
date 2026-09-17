@@ -36,9 +36,9 @@ function ProductDetails({ product, addToCart, onBack, onBuyNow }) {
 
   return (
     <div
+      className="jb-page"
       style={{
         minHeight: "100vh",
-        background: "#f5f5f5",
         padding: isMobile ? "12px" : "20px",
       }}
     >

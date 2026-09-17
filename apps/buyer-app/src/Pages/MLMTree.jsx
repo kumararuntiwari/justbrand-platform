@@ -388,7 +388,7 @@ function MLMTree({ member, onBack }) {
 
   if (!member || !currentMemberId) {
     return (
-      <div style={styles.page}>
+      <div className="jb-page" style={styles.page}>
         <div style={styles.header}>
           <div style={styles.logo}>
             JustBrand
@@ -429,7 +429,7 @@ function MLMTree({ member, onBack }) {
   // ==========================================
 
   return (
-    <div style={styles.page}>
+    <div className="jb-page" style={styles.page}>
       {/* HEADER */}
 
       <div style={styles.header}>
@@ -668,7 +668,6 @@ const styles = {
   page: {
     width: "100%",
     minHeight: "100vh",
-    background: "#f5f5f5",
     padding: "20px",
     boxSizing: "border-box",
     overflowX: "hidden",

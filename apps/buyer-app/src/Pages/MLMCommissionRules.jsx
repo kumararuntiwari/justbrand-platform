@@ -95,7 +95,8 @@ function MLMCommissionRules() {
   }
 
   return (
-    <div style={styles.page}>
+    <div className="jb-page" style={styles.page}>
+      <div className="jb-family-chakra" aria-hidden="true" />
       <div style={styles.container}>
 
         {/* HEADER */}
@@ -605,7 +606,6 @@ function FlowStep({
 const styles = {
   page: {
     minHeight: "100vh",
-    background: "#f5f5f5",
     padding: "25px",
     boxSizing: "border-box",
   },
