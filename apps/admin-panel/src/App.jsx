@@ -1,6 +1,8 @@
 ﻿import { useEffect, useState } from "react";
 import "./App.css";
 import Business from "./Business";
+import OverviewSection from "./OverviewSection";
+import BuyersSection from "./BuyersSection";
 
 const API = "https://justbrand-in-144629.hostingersite.com";
 
@@ -26,6 +28,12 @@ function App() {
 
   const [products, setProducts] = useState([]);
   const [staffList, setStaffList] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [members, setMembers] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [activeView, setActiveView] = useState("overview");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [businessTabKey, setBusinessTabKey] = useState("sellers");
 
   const [loading, setLoading] = useState(false);
   const [staffLoading, setStaffLoading] = useState(false);
@@ -67,6 +75,10 @@ function App() {
     setStaff(null);
     setProducts([]);
     setStaffList([]);
+    setCustomers([]);
+    setMembers([]);
+    setOrders([]);
+    setActiveView("overview");
     setMessage("");
   };
 
@@ -110,6 +122,79 @@ function App() {
       );
     } finally {
       setLoginLoading(false);
+    }
+  };
+
+  // ==========================================
+  // CUSTOMERS + FAMILY MEMBERS (Buyers/Overview sections)
+  // ==========================================
+
+  const loadCustomers = async () => {
+    if (!token) return;
+
+    try {
+      const response = await fetch(`${API}/api/admin/customers`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.status === 401) {
+        logout();
+        return;
+      }
+
+      const data = await response.json();
+
+      if (data.success) {
+        setCustomers(data.customers || []);
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const loadMembers = async () => {
+    if (!token) return;
+
+    try {
+      const response = await fetch(`${API}/api/admin/mlm/members`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.status === 401) {
+        logout();
+        return;
+      }
+
+      const data = await response.json();
+
+      if (data.success) {
+        setMembers(data.members || []);
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const loadOrders = async () => {
+    if (!token) return;
+
+    try {
+      const response = await fetch(`${API}/api/admin/orders`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.status === 401) {
+        logout();
+        return;
+      }
+
+      const data = await response.json();
+
+      if (data.success) {
+        setOrders(data.orders || []);
+      }
+    } catch (error) {
+      console.error(error);
     }
   };
 
@@ -417,7 +502,21 @@ function App() {
       if (staff.role === "super_admin") {
         loadStaff();
       }
+
+      if (staff.role === "super_admin" || staff.role === "manager") {
+        loadCustomers();
+        loadMembers();
+      }
+
+      if (
+        ["super_admin", "manager", "accountant"].includes(
+          staff.role
+        )
+      ) {
+        loadOrders();
+      }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, staff]);
 
   // ==========================================
@@ -561,15 +660,59 @@ function App() {
     (product) => product.status === "Rejected"
   );
 
+  // Sidebar navigation model. Sections the staff member's role cannot
+  // open are still listed but disabled — permissions stay visible.
+  const canManageStaff = staff?.role === "super_admin";
+  const canUseCustomers = staff?.role === "super_admin" || staff?.role === "manager";
+  const canUseOrders = ["super_admin", "manager", "accountant"].includes(staff?.role);
+  const canUseSellers = staff?.role === "super_admin" || staff?.role === "manager";
+
+  const navItems = [
+    { key: "overview", label: "📊 Overview", enabled: true, crumb: "Overview" },
+    { key: "buyers", label: "🛒 Buyers", enabled: canUseCustomers, crumb: "Buyers" },
+    { key: "sellers", label: "🏪 Sellers", enabled: canUseSellers, crumb: "Sellers · Orders · Family" },
+    { key: "kyc", label: "🪪 KYC", enabled: canUseSellers, crumb: "KYC · Sellers · Orders · Family" },
+    { key: "orders", label: "📦 Orders", enabled: canUseOrders, crumb: "Sellers · Orders · Family" },
+    { key: "family", label: "👨‍👩‍👧 JustBrand Family", enabled: canUseSellers, crumb: "Sellers · Orders · Family" },
+    { key: "tree", label: "🌳 Family Tree", enabled: canUseSellers, crumb: "Family Tree" },
+    { key: "products", label: "🏷️ Products", enabled: canUseSellers, crumb: "Products" },
+    { key: "staff", label: "👥 Staff", enabled: canManageStaff, crumb: "Super Admin · Staff" },
+  ];
+
+  const activeNavItem = navItems.find((item) => item.key === activeView) || navItems[0];
+
+  function openView(key) {
+    const item = navItems.find((n) => n.key === key);
+    if (!item || !item.enabled) return;
+
+    // Business tabs share one component — map admin views to its tabs.
+    if (["sellers", "orders", "family", "kyc", "tree"].includes(key)) {
+      setBusinessTabKey(key);
+    }
+
+    setActiveView(key);
+    setSidebarOpen(false);
+  }
+
   return (
     <div className="admin-app">
 
       {/* HEADER */}
 
       <header className="admin-header">
-        <div>
-          <h1>JustBrand Admin</h1>
-          <p>Marketplace Management Panel</p>
+        <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+          <button
+            type="button"
+            className="sidebar-toggle"
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            aria-label="Toggle navigation"
+          >
+            ☰
+          </button>
+          <div>
+            <h1>JustBrand Admin</h1>
+            <p>Marketplace & Family Operations Console</p>
+          </div>
         </div>
 
         <div
@@ -597,7 +740,23 @@ function App() {
             className="refresh-btn"
             onClick={() => {
               loadProducts();
-              loadStaff();
+
+              if (staff.role === "super_admin") {
+                loadStaff();
+              }
+
+              if (staff.role === "super_admin" || staff.role === "manager") {
+                loadCustomers();
+                loadMembers();
+              }
+
+              if (
+                ["super_admin", "manager", "accountant"].includes(
+                  staff.role
+                )
+              ) {
+                loadOrders();
+              }
             }}
           >
             🔄 Refresh
@@ -612,7 +771,49 @@ function App() {
         </div>
       </header>
 
+      {/* SIDEBAR NAVIGATION */}
+
+      <nav className={`admin-sidebar ${sidebarOpen ? "open" : ""}`}>
+        {navItems.map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            className={
+              activeView === item.key
+                ? "sidebar-item active"
+                : "sidebar-item"
+            }
+            disabled={!item.enabled}
+            title={item.enabled ? item.label : "Not available for your role"}
+            onClick={() => openView(item.key)}
+          >
+            <span>{item.label}</span>
+            {!item.enabled && <small className="sidebar-lock">🔒</small>}
+          </button>
+        ))}
+
+        <div className="sidebar-foot">
+          <small>{staff.role}</small>
+          <small>{customers.length} buyers · {members.length} members</small>
+        </div>
+      </nav>
+
+      {sidebarOpen && (
+        <div
+          className="sidebar-backdrop"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       <main className="admin-content">
+
+        {/* BREADCRUMB */}
+
+        <div className="breadcrumb">
+          <span>JustBrand Admin</span>
+          <span className="breadcrumb-sep">›</span>
+          <span className="breadcrumb-current">{activeNavItem.crumb}</span>
+        </div>
 
         {message && (
           <div className="message">
@@ -620,7 +821,50 @@ function App() {
           </div>
         )}
 
-        {/* STATS */}
+        {/* OVERVIEW (KPIs + charts) */}
+
+        {activeView === "overview" && (
+          <OverviewSection
+            token={{ token, role: staff.role }}
+            onNavigate={(key) => openView(key)}
+          />
+        )}
+
+        {/* BUYERS */}
+
+        {activeView === "buyers" && canUseCustomers && (
+          <BuyersSection
+            customers={customers}
+            orders={orders}
+            members={members}
+          />
+        )}
+
+        {/* BUSINESS (Sellers / Orders / Family / KYC / Tree) */}
+
+        {activeView !== "overview" &&
+          activeView !== "buyers" &&
+          activeView !== "products" &&
+          activeView !== "staff" && (
+            <Business
+              token={token}
+              staff={staff}
+              customers={customers}
+              members={members}
+              products={products}
+              initialTab={businessTabKey}
+              onMessage={(msg) => {
+                setMessage(msg);
+
+                setTimeout(() => setMessage(""), 4000);
+              }}
+            />
+          )}
+
+        {/* STAFF + STATS (Super Admin console view) */}
+
+        {activeView === "staff" && (
+        <>
 
         <div className="stats">
 
@@ -646,9 +890,9 @@ function App() {
 
         </div>
 
-        {/* SUPER ADMIN */}
+        {/* SUPER ADMIN (visible only on Staff view) */}
 
-        {staff.role === "super_admin" && (
+        {activeView === "staff" && staff.role === "super_admin" && (
           <section className="products-section">
 
             <div className="section-title">
@@ -890,20 +1134,13 @@ function App() {
 
           </section>
         )}
+        </>
+        )}
 
-        {/* BUSINESS MANAGEMENT (Sellers / Orders / MLM) */}
+        {/* PRODUCTS (product management view) */}
 
-        <Business
-          token={token}
-          staff={staff}
-          onMessage={(msg) => {
-            setMessage(msg);
-
-            setTimeout(() => setMessage(""), 4000);
-          }}
-        />
-
-        {/* PENDING PRODUCTS */}
+        {activeView === "products" && (
+        <>
 
         <section className="products-section">
 
@@ -1084,8 +1321,13 @@ function App() {
           )}
 
         </section>
+        </>
+        )}
 
         {/* REJECTED */}
+
+        {activeView === "products" && (
+        <>
 
         <section className="products-section">
 
@@ -1136,6 +1378,10 @@ function App() {
           )}
 
         </section>
+        </>
+        )}
+
+        {/* STAFF console close */}
 
       </main>
     </div>
