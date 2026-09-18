@@ -20,7 +20,8 @@ function ProductDetails({ product, addToCart, onBack, onBuyNow }) {
     return null;
   }
 
-  const price = product.price;
+  const sellerPrice = product.price;
+  const price = product.customerPrice ?? sellerPrice;
   const mrp = product.comparePrice || product.oldPrice || product.mrp;
 
   // Discount % derived from the product's own price fields (display only).
@@ -216,6 +217,18 @@ function ProductDetails({ product, addToCart, onBack, onBuyNow }) {
               </span>
             )}
           </div>
+
+          {product.customerPrice !== undefined && (
+            <div style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: "10px", padding: "12px", marginBottom: "16px", fontSize: "13px", color: "#555" }}>
+              <strong>Price includes:</strong> delivery ₹{Number(product.deliveryCharge || 0).toFixed(2)} ·
+              platform ₹{Number(product.platformCharge || 0).toFixed(2)} ·
+              JustBrand Family ₹{Number(product.mlmCommission || 0).toFixed(2)} ·
+              GST {Number(product.gstRate || 0)}%
+              <div style={{ marginTop: "7px", color: "#777" }}>
+                Seller price: ₹{Number(String(sellerPrice || 0).replace(/[^0-9.]/g, "")).toLocaleString("en-IN")}
+              </div>
+            </div>
+          )}
 
           {/* OFFER */}
           <div
