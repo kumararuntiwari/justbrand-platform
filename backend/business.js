@@ -1122,18 +1122,28 @@ businessRouter.put(
       const image = req.body.image !== undefined ? String(req.body.image) : product.image;
       const description = req.body.description !== undefined ? clean(req.body.description) : product.description;
       const shortDetails = req.body.shortDetails !== undefined ? clean(req.body.shortDetails) : product.shortDetails;
+      const hsnCode = req.body.hsnCode !== undefined ? clean(req.body.hsnCode) : (product.hsnCode || "");
+      const gstRate = req.body.gstRate !== undefined ? Math.max(0, Number(req.body.gstRate) || 0) : Number(product.gstRate || 0);
 
       if (!name) {
         return res.status(400).json({ success: false, message: "Product name is required." });
       }
 
-      // Edited products go back to admin approval.
+      const pricing = calculateCustomerPricing(price, gstRate);
+
+      // Edited products go back to admin approval and pricing is recalculated.
       db.prepare(`
         UPDATE products
         SET name = ?, category = ?, price = ?, comparePrice = ?,
-            image = ?, description = ?, shortDetails = ?, status = 'Pending'
+            image = ?, description = ?, shortDetails = ?, status = 'Pending',
+            hsnCode = ?, gstRate = ?, deliveryCharge = ?, platformCharge = ?,
+            mlmCommission = ?, customerPrice = ?, pricingUpdatedAt = ?
         WHERE id = ?
-      `).run(name, category, price, comparePrice, image, description, shortDetails, productId);
+      `).run(
+        name, category, price, comparePrice, image, description, shortDetails,
+        hsnCode, pricing.gstRate, pricing.deliveryCharge, pricing.platformCharge,
+        pricing.mlmCommission, pricing.customerPrice, now(), productId
+      );
 
       const updated = db
         .prepare(`SELECT * FROM products WHERE id = ?`)
