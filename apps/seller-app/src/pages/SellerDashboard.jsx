@@ -13,6 +13,7 @@ function SellerDashboard({
   onProfile,
   onBank,
   onSettings,
+  onReturnPolicy,
 
   // ==========================================
   // MLM
