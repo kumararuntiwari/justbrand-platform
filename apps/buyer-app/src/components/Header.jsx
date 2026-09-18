@@ -164,145 +164,6 @@ function Header({
             RIGHT SECTION
         ================================================== */}
 
-        {/* MOBILE SEARCH (lower header) */}
-
-        <div className="jb-search-wrapper jb-nav-search">
-
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search Products, Brands and More"
-            className="jb-search-input"
-          />
-
-          <button
-            className="jb-search-btn"
-            onClick={() => {
-              // Search already controlled by App.jsx
-            }}
-            aria-label="Search"
-          >
-            🔍
-          </button>
-
-
-          {/* SEARCH SUGGESTIONS */}
-
-          {search &&
-            (
-              (filteredProducts && filteredProducts.length > 0) ||
-              (filteredCategories && filteredCategories.length > 0)
-            ) && (
-
-              <div className="jb-search-suggestions">
-
-                {/* INFORMATION */}
-
-            <div className="jb-side-section-title">
-              Help & Information
-            </div>
-
-            <button className="jb-side-item" onClick={() => onInfoPage && onInfoPage("about")} type="button">
-              ℹ️ <span>About Us</span>
-            </button>
-
-            <button className="jb-side-item" onClick={() => onInfoPage && onInfoPage("contact")} type="button">
-              📞 <span>Contact Us</span>
-            </button>
-
-            <button className="jb-side-item" onClick={() => onInfoPage && onInfoPage("returns")} type="button">
-              ↩️ <span>Return & Refund Policy</span>
-            </button>
-
-
-            {/* CATEGORIES */}
-
-                {filteredCategories &&
-                  filteredCategories.length > 0 && (
-
-                    <div className="jb-suggestion-section">
-
-                      <div className="jb-suggestion-title">
-                        Categories
-                      </div>
-
-                      {filteredCategories
-                        .slice(0, 5)
-                        .map((category, index) => (
-
-                          <div
-                            key={`category-${index}`}
-                            className="jb-suggestion-item"
-                            onClick={() =>
-                              handleCategory(category)
-                            }
-                          >
-                            📂 {category}
-                          </div>
-
-                        ))}
-                    </div>
-                  )}
-
-
-                {/* PRODUCTS */}
-
-                {filteredProducts &&
-                  filteredProducts.length > 0 && (
-
-                    <div className="jb-suggestion-section">
-
-                      <div className="jb-suggestion-title">
-                        Products
-                      </div>
-
-                      {filteredProducts
-                        .slice(0, 8)
-                        .map((product, index) => (
-
-                          <div
-                            key={
-                              product.id ||
-                              `product-${index}`
-                            }
-                            className="jb-suggestion-item jb-product-suggestion"
-                            onClick={() =>
-                              handleProductSelect(product)
-                            }
-                          >
-
-                            <img
-                              src={
-                                product.image ||
-                                "/images/product1.png"
-                              }
-                              alt={product.name || "Product"}
-                              onError={(e) => {
-                                e.currentTarget.src =
-                                  "/images/product1.png";
-                              }}
-                            />
-
-                            <div>
-                              <div className="jb-suggestion-product-name">
-                                {product.name}
-                              </div>
-
-                              <div className="jb-suggestion-product-price">
-                                ₹{product.price}
-                              </div>
-                            </div>
-
-                          </div>
-
-                        ))}
-                    </div>
-                  )}
-
-              </div>
-            )}
-        </div>
 
 
 
@@ -373,6 +234,20 @@ function Header({
 
       </header>
 
+
+      {/* STANDALONE SEARCH — directly below header */}
+      <div className="jb-standalone-search-area">
+        <div className="jb-search-wrapper jb-standalone-search">
+          <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search Products, Brands and More" className="jb-search-input" aria-label="Search products, brands and more" />
+          <button className="jb-search-btn" onClick={() => {}} aria-label="Search" type="button">🔍</button>
+          {search && ((filteredProducts && filteredProducts.length > 0) || (filteredCategories && filteredCategories.length > 0)) && (
+            <div className="jb-search-suggestions">
+              {filteredCategories && filteredCategories.length > 0 && <div className="jb-suggestion-section"><div className="jb-suggestion-title">Categories</div>{filteredCategories.slice(0,5).map((category,index)=><div key={`category-${index}`} className="jb-suggestion-item" onClick={()=>handleCategory(category)}>📂 {category}</div>)}</div>}
+              {filteredProducts && filteredProducts.length > 0 && <div className="jb-suggestion-section"><div className="jb-suggestion-title">Products</div>{filteredProducts.slice(0,8).map((product,index)=><div key={product.id||`product-${index}`} className="jb-suggestion-item jb-product-suggestion" onClick={()=>handleProductSelect(product)}><img src={product.image||"/images/product1.png"} alt={product.name||"Product"} onError={(e)=>{e.currentTarget.src="/images/product1.png";}}/><div><div className="jb-suggestion-product-name">{product.name}</div><div className="jb-suggestion-product-price">₹{product.price}</div></div></div>)}</div>}
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* ==================================================
           SECOND NAVIGATION
@@ -659,7 +534,7 @@ function Header({
 
         .jb-header {
           width: 100%;
-          min-height: 118px;
+          min-height: 70px;
 
           display: flex;
           align-items: center;
@@ -772,163 +647,12 @@ function Header({
         }
 
 
-        /* ==================================================
-           SEARCH
-        ================================================== */
-
-        .jb-search-wrapper {
-          position: relative;
-
-          flex: 1 1 100%;
-          order: 3;
-          width: 100%;
-          max-width: none;
-          margin: 0;
-        }
-
-
-        .jb-search-input {
-          width: 100%;
-
-          height: 48px;
-
-          border: 1px solid rgba(255,255,255,0.35);
-          outline: none;
-
-          border-radius: 12px;
-
-          padding:
-            0 52px 0 16px;
-
-          font-size: 16px;
-
-          color: #222;
-          background: #fff;
-          box-shadow: 0 3px 12px rgba(0,0,0,0.12);
-        }
-
-
-        .jb-search-input::placeholder {
-          color: #777;
-        }
-
-
-        .jb-search-btn {
-          position: absolute;
-
-          right: 4px;
-          top: 4px;
-
-          width: 36px;
-          height: 36px;
-
-          border: none;
-          border-radius: 6px;
-
-          background: #ff7a00;
-
-          color: white;
-
-          cursor: pointer;
-
-          font-size: 18px;
-        }
-
-
-        /* ==================================================
-           SEARCH SUGGESTIONS
-        ================================================== */
-
-        .jb-search-suggestions {
-          position: absolute;
-
-          top: 49px;
-          left: 0;
-          right: 0;
-
-          background: white;
-
-          color: #222;
-
-          border-radius: 8px;
-
-          box-shadow:
-            0 5px 20px rgba(0,0,0,0.20);
-
-          max-height: 430px;
-
-          overflow-y: auto;
-
-          z-index: 2000;
-        }
-
-
-        .jb-suggestion-section {
-          padding: 8px 0;
-        }
-
-
-        .jb-suggestion-title {
-          padding:
-            7px 15px;
-
-          font-size: 12px;
-
-          font-weight: 700;
-
-          color: #777;
-
-          text-transform: uppercase;
-        }
-
-
-        .jb-suggestion-item {
-          display: flex;
-          align-items: center;
-
-          gap: 10px;
-
-          padding:
-            9px 15px;
-
-          cursor: pointer;
-
-          transition:
-            background 0.15s ease;
-        }
-
-
-        .jb-suggestion-item:hover {
-          background: #f5f5f5;
-        }
-
-
-        .jb-product-suggestion img {
-          width: 42px;
-          height: 42px;
-
-          object-fit: contain;
-
-          border-radius: 5px;
-
-          border: 1px solid #eee;
-        }
-
-
-        .jb-suggestion-product-name {
-          font-size: 14px;
-          font-weight: 600;
-        }
-
-
-        .jb-suggestion-product-price {
-          font-size: 13px;
-
-          color: #e85d00;
-
-          margin-top: 2px;
-        }
-
+        /* SEARCH BASE */
+        .jb-search-wrapper { position: relative; width: 100%; }
+        .jb-search-input { width: 100%; height: 48px; border: 1px solid #d9d9d9; outline: none; border-radius: 26px; padding: 0 58px 0 18px; font-size: 15px; color: #222; background: #fff; box-shadow: 0 3px 12px rgba(0,0,0,0.10); }
+        .jb-search-input:focus { border-color: #ff7a00; box-shadow: 0 4px 16px rgba(255,122,0,0.18); }
+        .jb-search-input::placeholder { color: #777; }
+        .jb-search-btn { position: absolute; right: 5px; top: 5px; width: 38px; height: 38px; border: none; border-radius: 50%; background: linear-gradient(135deg,#ff7a00,#ff4d8d); color: white; cursor: pointer; font-size: 18px; }
 
         /* ==================================================
            RIGHT
@@ -1174,22 +898,6 @@ function Header({
         ================================================== */
 
         /* jb-nav-seller removed — Sell entry lives in the drawer. */
-
-
-        /* LOWER-NAV SEARCH — left half of the nav row */
-        .jb-search-wrapper.jb-nav-search {
-          display: block;
-
-          order: 1;
-
-          flex: 1 1 0;
-
-          min-width: 0;
-
-          max-width: 560px;
-
-          margin: 0;
-        }
 
 
         /* ==================================================
@@ -1509,7 +1217,7 @@ function Header({
           }
 
 
-          .jb-search-wrapper.jb-nav-search {
+          .jb-search-wrapper {
             display: block;
           }
 
@@ -1519,23 +1227,10 @@ function Header({
           }
 
 
-          .jb-search-input {
-            height: 39px;
-
-            font-size: 13px;
-
-            padding-left: 10px;
-          }
-
-
-          .jb-search-btn {
-            width: 32px;
-            height: 32px;
-
-            top: 3.5px;
-            right: 3.5px;
-          }
-
+          .jb-standalone-search-area { padding: 8px 9px; }
+          .jb-search-wrapper.jb-standalone-search { max-width: none; }
+          .jb-standalone-search .jb-search-input { height: 44px; font-size: 14px; padding-left: 15px; }
+          .jb-standalone-search .jb-search-btn { width: 36px; height: 36px; top: 4px; right: 4px; }
 
           .jb-header-right {
             gap: 2px;
