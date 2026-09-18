@@ -822,6 +822,8 @@ function App() {
       setMlmPage(
         mlmMember ? "dashboard" : "login"
       ),
+    onInfoPage: (page) =>
+      setBuyerPage(page),
   };
 
   // ==========================================
