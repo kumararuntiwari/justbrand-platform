@@ -350,3 +350,99 @@ body::-webkit-scrollbar-thumb {
 @media(max-width:1100px){.seller-kpi-grid{grid-template-columns:repeat(2,1fr)}.seller-account-grid{grid-template-columns:repeat(2,1fr)}.seller-content-grid{grid-template-columns:1fr}}
 @media(max-width:768px){.seller-pro-header{min-height:66px;padding:8px 12px}.seller-pro-brand{min-width:0}.seller-mobile-menu{display:inline-flex!important}.seller-brand-mark{width:38px;height:38px}.seller-brand-name{font-size:19px}.seller-brand-sub,.seller-header-status{display:none}.seller-profile-copy{display:none}.seller-profile-chip{border:0;padding:0}.seller-avatar{width:37px;height:37px}.seller-pro-sidebar{position:fixed;left:0;top:0;bottom:0;height:100vh;width:84%;max-width:330px;z-index:1001;transform:translateX(-110%);transition:transform .28s ease;box-shadow:15px 0 45px #0003;padding-top:18px}.seller-pro-sidebar.open{transform:translateX(0)}.seller-sidebar-head button{display:block}.seller-pro-main{padding:14px 11px 32px}.seller-hero{padding:23px 20px;min-height:260px;border-radius:19px}.seller-hero h1{font-size:25px}.seller-hero p{font-size:12px;line-height:1.5}.seller-hero-orbit{display:none}.seller-kpi-grid{grid-template-columns:repeat(2,1fr);gap:9px}.seller-kpi-card{padding:13px;border-radius:14px}.seller-kpi-value{font-size:23px}.seller-kpi-label{font-size:10px}.seller-content-grid{grid-template-columns:1fr;gap:11px}.seller-panel{padding:15px;border-radius:16px}.seller-action-grid{grid-template-columns:1fr 1fr;gap:8px}.seller-action-card{padding:11px;min-height:70px}.seller-action-icon{width:31px;height:31px;flex-basis:31px}.seller-action-card small{font-size:9px}.seller-account-grid{grid-template-columns:1fr 1fr}.seller-recent-grid{grid-template-columns:1fr}.seller-kyc-banner{align-items:flex-start;flex-wrap:wrap;padding:16px}.seller-kyc-banner button{width:100%}}
 @media(max-width:430px){.seller-account-grid{grid-template-columns:1fr}.seller-action-grid{grid-template-columns:1fr}.seller-hero-actions{flex-direction:column;align-items:stretch}.seller-primary-cta,.seller-secondary-cta{width:100%}.seller-panel-heading h2{font-size:17px}}
+
+
+/* ============================================================
+   JUSTBRAND SELLER — BUYER APP TIRANGA THEME
+   Visual theme only. Dashboard structure and business logic unchanged.
+   ============================================================ */
+:root{
+  --jb-saffron:#ff8c1a;
+  --jb-saffron-deep:#e85d04;
+  --jb-green:#128807;
+  --jb-navy:#000080;
+  --jb-page:#f8f7f3;
+}
+.seller-pro-page{
+  background:
+    linear-gradient(180deg,rgba(255,140,26,.045),rgba(255,255,255,0) 34%,rgba(18,136,7,.035) 100%),
+    #f8f7f3 !important;
+}
+.seller-pro-header{
+  background:linear-gradient(105deg,#e85d04 0%,#ff8c1a 42%,#ff1493 100%) !important;
+  box-shadow:0 8px 28px rgba(232,93,4,.18) !important;
+}
+.seller-brand-mark{
+  background:linear-gradient(135deg,#e85d04,#ff8c1a 48%,#ff1493) !important;
+}
+.seller-pro-sidebar{
+  background:rgba(255,255,255,.96) !important;
+  border-right-color:rgba(0,0,128,.10) !important;
+}
+.seller-nav-item.active{
+  background:linear-gradient(100deg,rgba(255,140,26,.13),rgba(18,136,7,.07)) !important;
+  color:var(--jb-saffron-deep) !important;
+  box-shadow:inset 3px 0 var(--jb-saffron) !important;
+}
+.seller-nav-item.active .seller-nav-icon{
+  background:linear-gradient(135deg,var(--jb-saffron),var(--jb-green)) !important;
+}
+.seller-hero{
+  background:
+    linear-gradient(115deg,rgba(232,93,4,.97) 0%,rgba(255,140,26,.94) 43%,rgba(18,136,7,.92) 100%) !important;
+  box-shadow:0 20px 45px rgba(0,0,128,.10) !important;
+}
+.seller-eyebrow{color:#fff !important}
+.seller-primary-cta{
+  background:linear-gradient(135deg,#ff8c1a,#ff1493) !important;
+}
+.seller-secondary-cta{
+  background:rgba(0,0,128,.14) !important;
+  border-color:rgba(255,255,255,.38) !important;
+}
+.seller-hero-orbit{
+  border-color:rgba(255,255,255,.42) !important;
+  background:radial-gradient(circle,rgba(255,255,255,.18),rgba(255,255,255,.05) 58%,transparent 60%) !important;
+}
+.seller-hero-orbit div{
+  background:linear-gradient(135deg,#e85d04,#ff8c1a,#128807) !important;
+}
+.seller-kpi-card:hover,
+.seller-action-card:hover{
+  border-color:rgba(255,140,26,.35) !important;
+}
+.seller-kpi-icon{
+  background:rgba(255,140,26,.12) !important;
+  color:var(--jb-saffron-deep) !important;
+}
+.seller-kpi-card.green .seller-kpi-icon{
+  background:rgba(18,136,7,.10) !important;
+  color:var(--jb-green) !important;
+}
+.seller-kpi-card.pink .seller-kpi-icon{
+  background:rgba(255,20,147,.10) !important;
+  color:#d41478 !important;
+}
+.seller-action-card.primary{
+  background:linear-gradient(135deg,rgba(255,140,26,.10),rgba(18,136,7,.06)) !important;
+  border-color:rgba(255,140,26,.28) !important;
+}
+.seller-action-icon{
+  color:var(--jb-saffron-deep) !important;
+}
+.seller-info-icon{
+  background:rgba(255,140,26,.10) !important;
+  color:var(--jb-saffron-deep) !important;
+}
+.seller-recent-copy b{color:var(--jb-saffron-deep) !important}
+.seller-kyc-banner{
+  background:linear-gradient(100deg,rgba(255,140,26,.09),#fff,rgba(18,136,7,.045)) !important;
+  border-color:rgba(255,140,26,.28) !important;
+}
+.seller-kyc-badge{
+  background:rgba(255,140,26,.13) !important;
+  color:var(--jb-saffron-deep) !important;
+}
+.seller-kyc-banner button{
+  background:linear-gradient(135deg,#ff8c1a,#e85d04) !important;
+}
