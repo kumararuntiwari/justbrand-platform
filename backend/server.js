@@ -215,6 +215,31 @@ db.prepare(`
 console.log("Product table ready.");
 
 // =====================================
+// ADDITIVE PRODUCT PRICING FIELDS
+// =====================================
+function ensureProductPricingColumns() {
+  const columns = db.prepare("PRAGMA table_info(products)").all();
+  const existing = new Set(columns.map((column) => column.name));
+  const additions = [
+    ["hsnCode", "TEXT"],
+    ["gstRate", "REAL DEFAULT 0"],
+    ["deliveryCharge", "REAL DEFAULT 0"],
+    ["platformCharge", "REAL DEFAULT 0"],
+    ["mlmCommission", "REAL DEFAULT 0"],
+    ["customerPrice", "REAL DEFAULT 0"],
+    ["pricingUpdatedAt", "TEXT"],
+  ];
+
+  for (const [name, type] of additions) {
+    if (!existing.has(name)) {
+      db.prepare(`ALTER TABLE products ADD COLUMN ${name} ${type}`).run();
+    }
+  }
+}
+
+ensureProductPricingColumns();
+
+// =====================================
 // HELPER
 // =====================================
 
@@ -1072,6 +1097,30 @@ app.put(
   (req, res) => {
     try {
       const id = Number(req.params.id);
+      const existingProduct = db.prepare(`SELECT * FROM products WHERE id = ?`).get(id);
+
+      if (!existingProduct) {
+        return res.status(404).json({ success: false, message: "Product not found." });
+      }
+
+      if (existingProduct.sellerId) {
+        const seller = db.prepare(`
+          SELECT s.id, k.kycStatus
+          FROM sellers s
+          LEFT JOIN seller_kyc k ON k.sellerId = s.id
+          WHERE s.sellerCode = ? OR CAST(s.id AS TEXT) = ?
+          LIMIT 1
+        `).get(String(existingProduct.sellerId), String(existingProduct.sellerId));
+
+        if (!seller || seller.kycStatus !== "Approved") {
+          return res.status(403).json({
+            success: false,
+            code: "SELLER_KYC_REQUIRED",
+            message: "Product cannot be approved until the seller KYC is approved.",
+            kycStatus: seller?.kycStatus || "Pending",
+          });
+        }
+      }
 
       const result = db.prepare(`
         UPDATE products
