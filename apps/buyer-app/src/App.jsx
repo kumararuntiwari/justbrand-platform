@@ -39,6 +39,268 @@ import MLMWallet from "./Pages/MLMWallet";
 
 const BACKEND_URL = "https://justbrand-in-144629.hostingersite.com/api/products";
 
+// Admin-managed site content (logo, banners, About/Contact copy).
+// Same production origin as the products API — never localhost.
+const SITE_CONTENT_URL =
+  "https://justbrand-in-144629.hostingersite.com/api/site/content";
+
+// ==========================================
+// HOME HERO (admin-managed)
+// Admin-configured banners/promo from the site content feed.
+// Fallback safety: with nothing configured the original built-in
+// JustBrand gradient is shown exactly as before.
+// ==========================================
+
+function useIsMobileViewport() {
+  const [isMobile, setIsMobile] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia("(max-width: 768px)").matches
+  );
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 768px)");
+
+    const onChange = (e) => setIsMobile(e.matches);
+
+    mq.addEventListener("change", onChange);
+
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  return isMobile;
+}
+
+function HomeHero({ banners, promo, onCta }) {
+  const isMobile = useIsMobileViewport();
+  const [slide, setSlide] = useState(0);
+
+  const slides = (banners || []).filter((b) => {
+    if (!b || !b.active) return false;
+
+    const img = isMobile ? b.mobileImageUrl || b.imageUrl : b.imageUrl;
+
+    return Boolean(img);
+  });
+
+  useEffect(() => {
+    if (slides.length <= 1) return undefined;
+
+    const timer = setInterval(
+      () => setSlide((p) => (p + 1) % slides.length),
+      5000
+    );
+
+    return () => clearInterval(timer);
+  }, [slides.length]);
+
+  const promoVisible =
+    promo &&
+    promo.sectionVisible !== false &&
+    String(promo.promoHeading || "").trim().length > 0;
+
+  // Admin banner slider — wins over the promo gradient.
+  if (slides.length > 0) {
+    const banner = slides[slide % slides.length];
+    const img = isMobile
+      ? banner.mobileImageUrl || banner.imageUrl
+      : banner.imageUrl;
+
+    return (
+      <div
+        style={{
+          width: "100%",
+          maxWidth: "1200px",
+          margin: "15px auto",
+          padding: "0 10px",
+          boxSizing: "border-box",
+        }}
+      >
+        <div
+          style={{
+            position: "relative",
+            width: "100%",
+            height: "220px",
+            borderRadius: "15px",
+            overflow: "hidden",
+            background: "#f2f2f2",
+          }}
+        >
+          <img
+            src={img}
+            alt={banner.title || "JustBrand banner"}
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              display: "block",
+            }}
+            onError={(e) => {
+              // Broken banner image never breaks the homepage —
+              // hide it and the gradient fallback shows instead.
+              e.currentTarget.style.display = "none";
+            }}
+          />
+
+          {(banner.title || banner.subtitle || banner.ctaText) && (
+            <div
+              style={{
+                position: "absolute",
+                left: 0,
+                right: 0,
+                bottom: 0,
+                padding: "14px 16px",
+                background:
+                  "linear-gradient(180deg, rgba(0,31,84,0) 0%, rgba(0,31,84,0.68) 100%)",
+                color: "#fff",
+                display: "flex",
+                alignItems: "flex-end",
+                justifyContent: "space-between",
+                gap: "10px",
+                flexWrap: "wrap",
+              }}
+            >
+              <div>
+                {banner.title ? (
+                  <strong
+                    style={{
+                      fontSize: "18px",
+                      display: "block",
+                      textShadow: "0 1px 4px rgba(0,0,0,0.4)",
+                    }}
+                  >
+                    {banner.title}
+                  </strong>
+                ) : null}
+                {banner.subtitle ? (
+                  <span style={{ fontSize: "13px", opacity: 0.95 }}>
+                    {banner.subtitle}
+                  </span>
+                ) : null}
+              </div>
+
+              {banner.ctaText ? (
+                <button
+                  type="button"
+                  onClick={() => onCta(banner.ctaLink)}
+                  style={{
+                    background: "linear-gradient(90deg,#ff6b00,#ff1493)",
+                    color: "#fff",
+                    border: "none",
+                    padding: "8px 16px",
+                    borderRadius: "20px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    flexShrink: 0,
+                  }}
+                >
+                  {banner.ctaText}
+                </button>
+              ) : null}
+            </div>
+          )}
+
+          {slides.length > 1 && (
+            <div
+              style={{
+                position: "absolute",
+                bottom: "6px",
+                left: "50%",
+                transform: "translateX(-50%)",
+                display: "flex",
+                gap: "5px",
+              }}
+            >
+              {slides.map((_, i) => (
+                <span
+                  key={i}
+                  style={{
+                    width: i === slide % slides.length ? "16px" : "6px",
+                    height: "6px",
+                    borderRadius: "3px",
+                    background:
+                      i === slide % slides.length
+                        ? "#ff6b00"
+                        : "rgba(255,255,255,0.75)",
+                    transition: "width 0.2s",
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Promo gradient fallback — admin copy when saved, otherwise the
+  // original built-in JustBrand hero (unchanged default behaviour).
+  return (
+    <div
+      style={{
+        width: "100%",
+        maxWidth: "1200px",
+        height: "220px",
+        margin: "15px auto",
+        padding: "0 10px",
+        boxSizing: "border-box",
+      }}
+    >
+      <div
+        style={{
+          width: "100%",
+          height: "100%",
+          background: "linear-gradient(135deg,#ff6b00,#ff1493)",
+          borderRadius: "15px",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#fff",
+          fontSize: "25px",
+          fontWeight: "bold",
+          textAlign: "center",
+          padding: "20px",
+          boxSizing: "border-box",
+          gap: "6px",
+        }}
+      >
+        <span>
+          {promoVisible
+            ? promo.promoHeading
+            : "Shop & Earn with JustBrand"}
+        </span>
+        {promoVisible && promo.promoSubtitle ? (
+          <span style={{ fontSize: "14px", fontWeight: 400, opacity: 0.95 }}>
+            {promo.promoSubtitle}
+          </span>
+        ) : null}
+        {promoVisible && promo.ctaText ? (
+          <button
+            type="button"
+            onClick={() => onCta(promo.ctaLink)}
+            style={{
+              background: "#fff",
+              color: "#ff1493",
+              border: "none",
+              padding: "8px 18px",
+              borderRadius: "20px",
+              fontWeight: 700,
+              cursor: "pointer",
+              marginTop: "4px",
+              fontSize: "14px",
+            }}
+          >
+            {promo.ctaText} →
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 // ==========================================
 // APP
 // ==========================================
@@ -76,6 +338,19 @@ function App() {
 
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // ==========================================
+  // SITE CONTENT (admin-managed)
+  // Logo, homepage banners, About/Contact copy.
+  // null = not loaded yet → Buyer keeps its built-in
+  // defaults everywhere (fallback safety, never blank).
+  // ==========================================
+
+  const [siteContent, setSiteContent] = useState(null);
+
+  // Admin-configured banners/promo — used by HomeHero on the homepage.
+  const adminBanners = (siteContent?.banners || []).filter((b) => b.active);
+  const homepagePromo = siteContent?.homepage || null;
 
   // ==========================================
   // SHOPPING PAGES
@@ -245,6 +520,38 @@ function App() {
 
   useEffect(() => {
     loadProducts();
+  }, []);
+
+  // ==========================================
+  // LOAD SITE CONTENT (admin-managed)
+  // Failure-tolerant: any network/API error simply leaves
+  // siteContent null and the app shows built-in defaults.
+  // ==========================================
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSiteContent() {
+      try {
+        const response = await fetch(SITE_CONTENT_URL);
+
+        if (!response.ok) return;
+
+        const data = await response.json().catch(() => null);
+
+        if (!cancelled && data?.success && data.content) {
+          setSiteContent(data.content);
+        }
+      } catch {
+        // Keep defaults — never break the Buyer app on content errors.
+      }
+    }
+
+    loadSiteContent();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function loadProducts() {
@@ -825,6 +1132,8 @@ function App() {
       ),
     onInfoPage: (page) =>
       setBuyerPage(page),
+    logoUrl: siteContent?.branding?.logoUrl || "",
+    logoAlt: siteContent?.branding?.logoAlt || "JustBrand",
   };
 
   // ==========================================
@@ -1117,6 +1426,11 @@ function App() {
         <Header {...commonHeaderProps} onCart={() => setShowCart(true)} />
         <InfoPages
           kind={buyerPage}
+          content={
+            buyerPage === "about"
+              ? siteContent?.about || null
+              : siteContent?.contact || null
+          }
           onBack={() => setBuyerPage(null)}
         />
       </>
@@ -1293,40 +1607,67 @@ function App() {
       />
 
       {/* ======================================
-          BANNER
+          BANNER (admin-managed with built-in fallback)
       ====================================== */}
 
-      <div
-        style={{
-          width: "100%",
-          maxWidth: "1200px",
-          height: "220px",
-          margin: "15px auto",
-          padding: "0 10px",
-          boxSizing: "border-box",
-        }}
-      >
+      {homepagePromo?.announcement ? (
         <div
+          className="jb-announcement"
           style={{
-            width: "100%",
-            height: "100%",
-            background:
-              "linear-gradient(135deg,#ff6b00,#ff1493)",
-            borderRadius: "15px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "#fff",
-            fontSize: "25px",
-            fontWeight: "bold",
+            margin: "10px auto 0",
+            maxWidth: "1200px",
+            width: "calc(100% - 20px)",
+            background: "linear-gradient(90deg,#fff4ec,#ffeef6)",
+            border: "1px solid #ffd9c2",
+            color: "#1f2d4e",
+            padding: "9px 14px",
+            borderRadius: "10px",
+            fontSize: "13.5px",
+            fontWeight: 600,
             textAlign: "center",
-            padding: "20px",
             boxSizing: "border-box",
           }}
         >
-          Shop & Earn with JustBrand
+          {homepagePromo.announcement}
         </div>
-      </div>
+      ) : null}
+
+      <HomeHero
+        banners={adminBanners}
+        promo={homepagePromo}
+        onCta={(link) => {
+          // In-app paths navigate inside JustBrand; external https
+          // links open safely in a new tab.
+          if (!link) return;
+
+          if (link.startsWith("https://")) {
+            window.open(link, "_blank", "noopener,noreferrer");
+          } else if (link === "/wishlist") {
+            setBuyerPage("wishlist");
+          } else if (link === "/orders") {
+            if (customer && customerToken) {
+              setBuyerPage("orders");
+            } else {
+              setBuyerPage("auth");
+            }
+          } else if (link === "/family") {
+            setMlmPage(mlmMember ? "dashboard" : "login");
+          } else {
+            const match = link.match(/^\/product\/(.+)$/);
+
+            if (match) {
+              const product =
+                filteredProducts.find(
+                  (p) => String(p.id) === match[1]
+                ) || null;
+
+              if (product) {
+                setSelectedProduct(product);
+              }
+            }
+          }
+        }}
+      />
 
       {/* ======================================
           CATEGORY BAR
@@ -1606,17 +1947,62 @@ function App() {
                 }}
               >
                 Show All Products
-              <        <Footer
-          onInfoPage={(page) => setBuyerPage(page)}
-          onFamily={() => setMlmPage(mlmMember ? "dashboard" : "login")}
-          onCart={() => setShowCart(true)}
-          onWishlist={() => setBuyerPage("wishlist")}
-        />
+              </button>
+            </div>
+          )}
 
-   </button>
+        {/* ====================================
+            INFO PAGE LINKS
+        ==================================== */}
+
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "18px",
+            justifyContent: "center",
+            margin: "26px auto 8px",
+            maxWidth: "700px",
+            padding: "0 16px",
+          }}
+        >
+          {[
+            ["contact", "Contact Us"],
+            ["about", "About Us"],
+            ["returns", "Return & Refund Policy"],
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setBuyerPage(key)}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#555",
+                fontSize: "13px",
+                cursor: "pointer",
+                padding: "6px 2px",
+                borderBottom: "1px solid transparent",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.color =
+                  "var(--jb-saffron-deep, #e85d04)")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.color = "#555")
+              }
+            >
+              {label}
+            </button>
           ))}
         </div>
       </div>
+
+      <Footer
+        onInfoPage={(page) => setBuyerPage(page)}
+        onFamily={() => setMlmPage(mlmMember ? "dashboard" : "login")}
+        onCart={() => setShowCart(true)}
+        onWishlist={() => setBuyerPage("wishlist")}
+      />
     </div>
   );
 }
