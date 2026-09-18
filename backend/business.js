@@ -275,6 +275,52 @@ db.prepare(`
   )
 `).run();
 
+// =====================================
+// SELLER PRICING / TAX SETTINGS
+// =====================================
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS pricing_settings (
+    key TEXT PRIMARY KEY,
+    value REAL NOT NULL,
+    updatedAt TEXT
+  )
+`).run();
+
+const DEFAULT_PRICING_RULES = {
+  deliveryFlat: 40,
+  platformPercent: 5,
+  mlmPercent: 3,
+};
+
+function getPricingRules() {
+  const rows = db.prepare(`SELECT key, value FROM pricing_settings`).all();
+  const rules = { ...DEFAULT_PRICING_RULES };
+  for (const row of rows) {
+    if (Object.prototype.hasOwnProperty.call(rules, row.key)) rules[row.key] = Number(row.value);
+  }
+  return rules;
+}
+
+function calculateCustomerPricing(basePrice, gstRate = 0) {
+  const base = Math.max(0, Number(basePrice) || 0);
+  const rules = getPricingRules();
+  const platformCharge = base * rules.platformPercent / 100;
+  const mlmCommission = base * rules.mlmPercent / 100;
+  const deliveryCharge = rules.deliveryFlat;
+  const taxableAmount = base + platformCharge + mlmCommission + deliveryCharge;
+  const gstAmount = taxableAmount * (Math.max(0, Number(gstRate) || 0) / 100);
+  const customerPrice = Math.ceil((taxableAmount + gstAmount) * 100) / 100;
+  return {
+    basePrice: Math.round(base * 100) / 100,
+    gstRate: Math.max(0, Number(gstRate) || 0),
+    gstAmount: Math.round(gstAmount * 100) / 100,
+    deliveryCharge: Math.round(deliveryCharge * 100) / 100,
+    platformCharge: Math.round(platformCharge * 100) / 100,
+    mlmCommission: Math.round(mlmCommission * 100) / 100,
+    customerPrice,
+  };
+}
+
 db.prepare(`
   CREATE TABLE IF NOT EXISTS payout_requests (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -992,63 +1038,65 @@ businessRouter.get(
   }
 );
 
+businessRouter.get(
+  "/api/sellers/pricing-rules",
+  requireAuth,
+  requireType("seller"),
+  (req, res) => res.json({ success: true, rules: getPricingRules() })
+);
+
 businessRouter.post(
   "/api/sellers/products",
   requireAuth,
   requireType("seller"),
   (req, res) => {
     try {
-      const seller = db
-        .prepare(`SELECT * FROM sellers WHERE id = ?`)
-        .get(req.user.sellerId);
+      const seller = db.prepare(`SELECT * FROM sellers WHERE id = ?`).get(req.user.sellerId);
+      const kyc = db.prepare(`SELECT kycStatus FROM seller_kyc WHERE sellerId = ?`).get(seller.id);
+
+      if (!kyc || kyc.kycStatus !== "Approved") {
+        return res.status(403).json({
+          success: false,
+          code: "KYC_REQUIRED",
+          message: "Seller KYC approval is required before submitting products.",
+          kycStatus: kyc?.kycStatus || "Pending",
+        });
+      }
 
       const name = clean(req.body.name);
-
-      if (!name) {
-        return res.status(400).json({ success: false, message: "Product name is required." });
-      }
-
+      const category = clean(req.body.category);
       const price = clean(req.body.price);
+      const hsnCode = clean(req.body.hsnCode);
+      const gstRate = Math.max(0, Number(req.body.gstRate) || 0);
 
-      if (!price || Number(String(price).replace(/[^0-9.]/g, "")) <= 0) {
-        return res.status(400).json({ success: false, message: "A valid price is required." });
-      }
+      if (!name || !category) return res.status(400).json({ success: false, message: "Product name and category are required." });
+      if (!price || Number(String(price).replace(/[^0-9.]/g, "")) <= 0) return res.status(400).json({ success: false, message: "A valid price is required." });
 
+      const pricing = calculateCustomerPricing(price, gstRate);
       const result = db.prepare(`
         INSERT INTO products (
           sellerId, sellerName, name, category, price, comparePrice,
-          image, description, shortDetails, status, createdAt
+          image, description, shortDetails, status, createdAt,
+          hsnCode, gstRate, deliveryCharge, platformCharge, mlmCommission,
+          customerPrice, pricingUpdatedAt
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
-        seller.sellerCode,
-        seller.name,
-        name,
-        clean(req.body.category),
-        price,
-        clean(req.body.comparePrice),
-        String(req.body.image || ""),
-        clean(req.body.description),
-        clean(req.body.shortDetails),
-        now()
+        seller.sellerCode, seller.name, name, category, price,
+        clean(req.body.comparePrice), String(req.body.image || ""),
+        clean(req.body.description), clean(req.body.shortDetails), now(),
+        hsnCode, pricing.gstRate, pricing.deliveryCharge, pricing.platformCharge,
+        pricing.mlmCommission, pricing.customerPrice, now()
       );
 
-      const product = db
-        .prepare(`SELECT * FROM products WHERE id = ?`)
-        .get(result.lastInsertRowid);
-
-      res.status(201).json({
-        success: true,
-        message: "Product submitted for admin approval.",
-        product,
-      });
+      const product = db.prepare(`SELECT * FROM products WHERE id = ?`).get(result.lastInsertRowid);
+      res.status(201).json({ success: true, message: "Product submitted for admin approval.", pricing, product });
     } catch (error) {
       console.error("SELLER ADD PRODUCT ERROR:", error);
       res.status(500).json({ success: false, message: "Failed to add product." });
     }
   }
 );
-
 businessRouter.put(
   "/api/sellers/products/:id",
   requireAuth,
@@ -1479,11 +1527,11 @@ businessRouter.post(
         resolvedItems.push({ product, quantity });
       }
 
-      // Total is computed from backend prices only.
+      // Final customer prices are computed/stored by the backend.
       const totalAmount = resolvedItems.reduce(
         (sum, item) =>
           sum +
-          Number(String(item.product.price || "0").replace(/[^0-9.]/g, "")) *
+          Number(item.product.customerPrice || item.product.price || 0) *
             item.quantity,
         0
       );
