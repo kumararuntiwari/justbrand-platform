@@ -435,6 +435,49 @@ function Header({
             </button>
 
 
+            {/* HELP & INFORMATION */}
+
+            <div className="jb-side-section-title">
+              Help & Information
+            </div>
+
+            <button
+              className="jb-side-item"
+              onClick={() => {
+                closeMenu();
+                onInfoPage?.("about");
+              }}
+              type="button"
+            >
+              ℹ️
+              <span>About Us</span>
+            </button>
+
+            <button
+              className="jb-side-item"
+              onClick={() => {
+                closeMenu();
+                onInfoPage?.("contact");
+              }}
+              type="button"
+            >
+              📞
+              <span>Contact Us</span>
+            </button>
+
+            <button
+              className="jb-side-item"
+              onClick={() => {
+                closeMenu();
+                onInfoPage?.("returns");
+              }}
+              type="button"
+            >
+              ↩️
+              <span>Return & Refund Policy</span>
+            </button>
+
+
             {/* CATEGORIES */}
 
             <div className="jb-side-section-title">
