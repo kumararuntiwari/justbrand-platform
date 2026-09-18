@@ -215,6 +215,31 @@ db.prepare(`
 console.log("Product table ready.");
 
 // =====================================
+// ADDITIVE PRODUCT PRICING FIELDS
+// =====================================
+function ensureProductPricingColumns() {
+  const columns = db.prepare("PRAGMA table_info(products)").all();
+  const existing = new Set(columns.map((column) => column.name));
+  const additions = [
+    ["hsnCode", "TEXT"],
+    ["gstRate", "REAL DEFAULT 0"],
+    ["deliveryCharge", "REAL DEFAULT 0"],
+    ["platformCharge", "REAL DEFAULT 0"],
+    ["mlmCommission", "REAL DEFAULT 0"],
+    ["customerPrice", "REAL DEFAULT 0"],
+    ["pricingUpdatedAt", "TEXT"],
+  ];
+
+  for (const [name, type] of additions) {
+    if (!existing.has(name)) {
+      db.prepare(`ALTER TABLE products ADD COLUMN ${name} ${type}`).run();
+    }
+  }
+}
+
+ensureProductPricingColumns();
+
+// =====================================
 // HELPER
 // =====================================
 
