@@ -464,31 +464,17 @@ function Business({
         </button>
       </div>
 
-      <div
-        style={{
-          display: "flex",
-          gap: "10px",
-          marginBottom: "20px",
-          flexWrap: "wrap",
-        }}
-      >
+      <div className="biz-tabs">
         {tabs.map((item) => (
           <button
             key={item.key}
+            type="button"
+            className={tab === item.key ? "biz-tab active" : "biz-tab"}
             onClick={() => {
               setTab(item.key);
               setSellerPage(1);
               setOrderPage(1);
               setMemberPage(1);
-            }}
-            style={{
-              padding: "9px 18px",
-              borderRadius: "20px",
-              border: "1px solid #eee",
-              cursor: "pointer",
-              fontWeight: "600",
-              background: tab === item.key ? "#ff7a00" : "#fff",
-              color: tab === item.key ? "#fff" : "#444",
             }}
           >
             {item.label}
@@ -496,7 +482,13 @@ function Business({
         ))}
       </div>
 
-      {loading && <div className="empty">Loading...</div>}
+      {loading && (
+        <div className="ov-skeleton-grid">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="ov-skeleton" />
+          ))}
+        </div>
+      )}
 
       {/* ============ SELLERS ============ */}
 
@@ -776,14 +768,7 @@ function Business({
       {tab === "mlm" && !loading && (
         <>
           {/* RULES EDITOR */}
-          <div
-            style={{
-              padding: "20px",
-              border: "1px solid #eee",
-              borderRadius: "14px",
-              marginBottom: "20px",
-            }}
-          >
+          <div className="drawer-card" style={{ marginBottom: "20px", padding: "20px" }}>
             <h3 style={{ marginTop: 0 }}>⚙️ Commission Rules (admin-configurable)</h3>
 
             {rules ? (

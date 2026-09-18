@@ -79,7 +79,11 @@ export default function BuyersSection({ customers, orders, members }) {
       </div>
 
       {rows.length === 0 ? (
-        <div className="empty">No buyers match this search.</div>
+        <div className="empty">
+          {customers.length === 0
+            ? "No buyers registered yet — new buyers will appear here automatically."
+            : "No buyers match this search. Try a different name, mobile or email."}
+        </div>
       ) : (
         <div className="sec-tablewrap">
           <table className="sec-table">

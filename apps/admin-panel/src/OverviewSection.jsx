@@ -217,6 +217,10 @@ export default function OverviewSection({ token, onNavigate }) {
 
   // ---- Real aggregates (no invented numbers) ----
   const stats = useMemo(() => {
+    // Anchor boundaries for the "today" and "this month" KPI cards.
+    const todayStart = dayStart(new Date());
+    const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+
     const inPeriod = (arr) => arr.filter((x) => inRange(x.createdAt, from, to));
     const sum = (arr, f) => arr.reduce((acc, x) => acc + f(x), 0);
 
