@@ -31,9 +31,11 @@ function App() {
   const [customers, setCustomers] = useState([]);
   const [members, setMembers] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [sellers, setSellers] = useState([]);
   const [activeView, setActiveView] = useState("overview");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [businessTabKey, setBusinessTabKey] = useState("sellers");
+  const [showNotifications, setShowNotifications] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [staffLoading, setStaffLoading] = useState(false);
@@ -68,6 +70,13 @@ function App() {
   // ==========================================
 
   const logout = () => {
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm("Sign out of the JustBrand Admin console?")
+    ) {
+      return;
+    }
+
     localStorage.removeItem("justbrand_staff_token");
     localStorage.removeItem("justbrand_staff_user");
 
@@ -78,6 +87,7 @@ function App() {
     setCustomers([]);
     setMembers([]);
     setOrders([]);
+    setSellers([]);
     setActiveView("overview");
     setMessage("");
   };
@@ -192,6 +202,29 @@ function App() {
 
       if (data.success) {
         setOrders(data.orders || []);
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const loadSellers = async () => {
+    if (!token) return;
+
+    try {
+      const response = await fetch(`${API}/api/admin/sellers`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.status === 401) {
+        logout();
+        return;
+      }
+
+      const data = await response.json();
+
+      if (data.success) {
+        setSellers(data.sellers || []);
       }
     } catch (error) {
       console.error(error);
@@ -515,6 +548,10 @@ function App() {
       ) {
         loadOrders();
       }
+
+      if (staff.role === "super_admin" || staff.role === "manager") {
+        loadSellers();
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, staff]);
@@ -528,17 +565,18 @@ function App() {
       <div className="admin-app">
         <div
           style={{
-            minHeight: "100vh",
+            minHeight: "100svh",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             padding: "20px",
             background:
-              "linear-gradient(135deg, #fff4e6, #ffe8f1)",
+              "radial-gradient(1200px 600px at 15% -10%, rgba(255,122,0,0.14), transparent 60%), radial-gradient(1000px 520px at 110% 110%, rgba(255,20,147,0.12), transparent 55%), #f4f5f8",
           }}
         >
           <form
             onSubmit={login}
+            className="login-card"
             style={{
               width: "100%",
               maxWidth: "420px",
@@ -550,9 +588,29 @@ function App() {
             }}
           >
             <div style={{ textAlign: "center" }}>
+              <div
+                style={{
+                  width: "58px",
+                  height: "58px",
+                  margin: "0 auto 14px",
+                  borderRadius: "16px",
+                  background: "linear-gradient(135deg, #ff7a00, #ff3d81)",
+                  color: "#fff",
+                  fontSize: "26px",
+                  fontWeight: 800,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  boxShadow: "0 10px 24px rgba(255,61,129,0.28)",
+                }}
+              >
+                J
+              </div>
               <h1>JustBrand</h1>
               <h2>Admin Login</h2>
-              <p>Staff & Super Admin Management</p>
+              <p style={{ color: "#777", fontSize: "13.5px", marginTop: "6px" }}>
+                Staff & Super Admin Management
+              </p>
             </div>
 
             {loginMessage && (
@@ -660,6 +718,11 @@ function App() {
     (product) => product.status === "Rejected"
   );
 
+  // Counts for the header notifications bell — real pending work only,
+  // taken from the feeds this role already loaded (no extra API calls).
+  const pendingProductsCount = pendingProducts.length;
+  const pendingOrdersCount = orders.filter((o) => o.status === "Pending").length;
+
   // Sidebar navigation model. Sections the staff member's role cannot
   // open are still listed but disabled — permissions stay visible.
   const canManageStaff = staff?.role === "super_admin";
@@ -723,18 +786,103 @@ function App() {
             flexWrap: "wrap",
           }}
         >
-          <div>
-            <strong>{staff.name}</strong>
-
-            <small
-              style={{
-                display: "block",
-                opacity: 0.75,
-              }}
-            >
-              {staff.role}
-            </small>
+          {/* Role-aware identity chip */}
+          <div className="user-chip">
+            <span className="user-avatar">
+              {(staff.name || "?").trim().charAt(0).toUpperCase()}
+            </span>
+            <span className="user-meta">
+              <strong>{staff.name}</strong>
+              <small>{staff.role}</small>
+            </span>
           </div>
+
+          {/* Notifications — real pending work from already-loaded feeds.
+              Counts adapt to the role; staff roles see fewer items. */}
+          {(() => {
+            const kycPendingCount = sellers.filter(
+              (s) => (s.kycStatus || "Pending") === "Pending"
+            ).length;
+            const ordersPendingCount = orders.filter(
+              (o) => o.status === "Pending"
+            ).length;
+            const notifTotal =
+              pendingProductsCount + kycPendingCount + ordersPendingCount;
+
+            const notifItems = [];
+            if (pendingProductsCount > 0)
+              notifItems.push({
+                icon: "🏷️",
+                label: `${pendingProductsCount} product(s) awaiting approval`,
+                target: "products",
+              });
+            if (kycPendingCount > 0)
+              notifItems.push({
+                icon: "🪪",
+                label: `${kycPendingCount} seller KYC(s) pending`,
+                target: "kyc",
+              });
+            if (ordersPendingCount > 0)
+              notifItems.push({
+                icon: "📦",
+                label: `${ordersPendingCount} order(s) pending`,
+                target: "orders",
+              });
+
+            return (
+              <div className="notif-wrap">
+                <button
+                  type="button"
+                  className="notif-btn"
+                  onClick={() => setShowNotifications(!showNotifications)}
+                  aria-label="Notifications"
+                >
+                  🔔
+                  {notifTotal > 0 && (
+                    <span className="notif-badge">
+                      {notifTotal > 99 ? "99+" : notifTotal}
+                    </span>
+                  )}
+                </button>
+
+                {showNotifications && (
+                  <>
+                    <div
+                      className="notif-backdrop"
+                      onClick={() => setShowNotifications(false)}
+                    />
+                    <div className="notif-pop">
+                      <header>Notifications — pending work</header>
+                      {notifItems.length === 0 ? (
+                        <div className="notif-empty">
+                          🎉 Nothing pending — all caught up!
+                        </div>
+                      ) : (
+                        <ul>
+                          {notifItems.map((n) => (
+                            <li
+                              key={n.target}
+                              onClick={() => {
+                                openView(n.target);
+                                setShowNotifications(false);
+                              }}
+                            >
+                              <span className="notif-emoji">{n.icon}</span>
+                              <span className="notif-main">
+                                <strong>{n.label}</strong>
+                                <small>Tap to open the section</small>
+                              </span>
+                              <span aria-hidden="true">›</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })()}
 
           <button
             className="refresh-btn"
@@ -748,6 +896,7 @@ function App() {
               if (staff.role === "super_admin" || staff.role === "manager") {
                 loadCustomers();
                 loadMembers();
+                loadSellers();
               }
 
               if (

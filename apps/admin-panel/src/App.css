@@ -25,11 +25,212 @@ body {
 .admin-header h1 {
   margin: 0;
   font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 
 .admin-header p {
-  margin: 5px 0 0;
-  opacity: 0.9;
+  margin: 2px 0 0;
+  opacity: 0.92;
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.admin-header .brand-block {
+  line-height: 1.15;
+}
+
+/* Notifications popover — counts real pending work items only. */
+.notif-wrap {
+  position: relative;
+}
+
+.notif-btn {
+  position: relative;
+  border: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 17px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.notif-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.notif-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: #ffd23d;
+  color: #5b3a00;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 18px;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+/* Click-away layer behind the notifications popover. */
+.notif-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 65;
+}
+
+.notif-pop {
+  position: absolute;
+  right: 0;
+  top: 48px;
+  width: min(340px, calc(100vw - 32px));
+  background: #fff;
+  color: var(--ink);
+  border-radius: 14px;
+  box-shadow: 0 18px 45px rgba(16, 16, 24, 0.22);
+  z-index: 70;
+  overflow: hidden;
+}
+
+.notif-pop header {
+  padding: 12px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--line);
+  background: #fafafc;
+}
+
+.notif-pop ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.notif-pop li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 16px;
+  border: 0;
+  border-bottom: 1px solid #f4f4f6;
+  background: #fff;
+  text-align: left;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+
+.notif-pop li:hover {
+  background: #fffaf5;
+}
+
+.notif-pop li:last-child {
+  border-bottom: 0;
+}
+
+.notif-emoji {
+  font-size: 16px;
+}
+
+.notif-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.notif-main strong {
+  display: block;
+  font-size: 13.5px;
+}
+
+.notif-main small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.notif-pop .notif-empty {
+  padding: 22px 16px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: default;
+}
+
+.notif-empty:hover {
+  background: #fff;
+}
+
+/* Header identity chip (avatar + role) and log out. */
+.user-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px 6px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.user-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.28);
+  color: #fff;
+  font-weight: 800;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.user-meta {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+  color: #fff;
+}
+
+.user-meta strong {
+  font-size: 13.5px;
+}
+
+.user-meta small {
+  font-size: 11px;
+  opacity: 0.85;
+  text-transform: capitalize;
+}
+
+/* Sidebar polish */
+
+.admin-sidebar {
+  box-shadow: 1px 0 0 rgba(255, 255, 255, 0.05);
+}
+
+.sidebar-item.active {
+  box-shadow: 0 6px 16px rgba(255, 61, 129, 0.35);
+}
+
+.sidebar-item.active::before {
+  content: "";
+  display: inline-block;
+  width: 3px;
+  height: 18px;
+  border-radius: 2px;
+  background: #fff;
+  margin-right: 10px;
 }
 
 .refresh-btn {
@@ -292,6 +493,23 @@ body {
     gap: 15px;
   }
 
+  .header-search {
+    max-width: none;
+    width: 100%;
+  }
+
+  .notif-pop {
+    position: fixed;
+    top: 76px;
+    right: 12px;
+    left: 12px;
+    width: auto;
+  }
+
+  .user-meta {
+    display: none;
+  }
+
   .section-title {
     flex-direction: column;
     align-items: flex-start;
@@ -308,6 +526,16 @@ body {
    Sidebar · Tables · Drawers · Tree · KPIs · Responsive
    (All additive — existing classes untouched.)
    ===================================================== */
+
+/* ---------- BRAND TOKENS (shared with index.css) ---------- */
+
+.admin-app {
+  --jb-orange: #ff7a00;
+  --jb-pink: #ff3d81;
+  --ink: #17171c;
+  --muted: #6b6b74;
+  --line: #e7e7ec;
+}
 
 /* ---------- LAYOUT SHELL ---------- */
 
@@ -999,6 +1227,177 @@ body {
   }
   to {
     background-position: -200% 0;
+  }
+}
+
+/* ---------- ENTERPRISE POLISH LAYER (additive) ---------- */
+
+/* Brand gradient hairline across the top of every page. */
+.admin-app::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #ff7a00, #ff3d81, #138808);
+  z-index: 50;
+  pointer-events: none;
+}
+
+/* Login form — professional inputs (page background is styled in JSX). */
+.login-card {
+  text-align: left;
+}
+
+.login-card label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #6b6b74;
+  margin-bottom: 0;
+}
+
+.login-card input {
+  border: 1px solid #e2e2e8;
+  background: #fafafc;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.login-card input:focus {
+  outline: none;
+  border-color: #ff7a00;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(255, 122, 0, 0.14);
+}
+
+.login-hint {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 13px;
+  color: #9a9aa3;
+}
+
+/* Section headings — consistent eyebrow + title treatment. */
+.section-title h2 {
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.section-title > span {
+  font-size: 12.5px;
+  color: #8a8a93;
+  background: #f4f4f6;
+  padding: 5px 12px;
+  border-radius: 14px;
+}
+
+/* Buttons — unified professional system on existing classes. */
+button.approve,
+button.reject,
+button.refresh-btn {
+  border-radius: 9px;
+  font-weight: 700;
+  font-size: 13px;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+}
+
+button.approve:hover:not(:disabled),
+button.reject:hover:not(:disabled),
+button.refresh-btn:hover:not(:disabled) {
+  filter: brightness(0.96);
+}
+
+button.approve:active:not(:disabled),
+button.reject:active:not(:disabled),
+button.refresh-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+button.approve {
+  box-shadow: 0 2px 6px rgba(22, 163, 74, 0.28);
+}
+
+button.reject {
+  box-shadow: 0 2px 6px rgba(220, 38, 38, 0.22);
+}
+
+/* Header buttons are white-on-gradient; keep hover tint consistent. */
+.admin-header .refresh-btn {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  padding: 10px 16px;
+}
+
+.admin-header .refresh-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  filter: none;
+}
+
+/* Table rows get a subtle hover affordance for click targets. */
+.sec-table tbody tr {
+  transition: background 0.12s ease;
+}
+
+/* Small utility — status dot before badges (optional inline use). */
+.sec-tag {
+  border: 1px solid transparent;
+}
+
+/* Family-tree connector tint uses brand green. */
+.tree-children {
+  border-left-color: #cfe8cf;
+}
+
+/* Drawer close affordance. */
+.drawer-head .refresh-btn {
+  padding: 7px 12px;
+}
+
+/* ---------- BUSINESS SECTION TABS (Sellers/Orders/Family/KYC/Tree) ---------- */
+
+.biz-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.biz-tab {
+  padding: 9px 18px;
+  border-radius: 20px;
+  border: 1px solid #e7e7ec;
+  background: #fff;
+  color: #44444c;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease;
+}
+
+.biz-tab:hover {
+  border-color: #ffcf9e;
+  background: #fff8f2;
+}
+
+.biz-tab.active {
+  background: linear-gradient(135deg, #ff7a00, #ff4f9a);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(255, 61, 129, 0.28);
+}
+
+/* Mobile: brand strip + header spacing fine-tune. */
+@media (max-width: 720px) {
+  .admin-app::before {
+    height: 2px;
+  }
+
+  .biz-tab {
+    padding: 8px 14px;
+    font-size: 12.5px;
   }
 }
 
