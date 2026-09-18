@@ -1222,11 +1222,6 @@ function Header({
           }
 
 
-          .jb-nav-search .jb-search-suggestions {
-            width: 200%;
-          }
-
-
           .jb-standalone-search-area { padding: 8px 9px; }
           .jb-search-wrapper.jb-standalone-search { max-width: none; }
           .jb-standalone-search .jb-search-input { height: 44px; font-size: 14px; padding-left: 15px; }
