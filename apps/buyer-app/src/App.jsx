@@ -4,6 +4,10 @@ import Header from "./components/Header";
 import { useState, useEffect } from 'react';
 import ProductDetails from "./pages2/ProductDetails";
 import Cart from "./pages2/Cart";
+import InfoPages from "./pages2/InfoPages.jsx";
+import {
+  infoPageMeta,
+} from "./pages2/InfoPages.jsx";
 import ComparePrice from "./pages2/ComparePrice";
 import CustomerAuth from "./pages2/CustomerAuth";
 import CustomerAccount from "./pages2/CustomerAccount";
@@ -140,6 +144,53 @@ function App() {
   // ==========================================
 
   const [buyerPage, setBuyerPage] = useState(null);
+
+  // Checkout items snapshot — exactly the cart items the user
+  // selected in Cart and chose to check out with. State (not a
+  // plain variable) so it survives the page switch re-render;
+  // reset after checkout ends or the order completes.
+  const [checkoutItems, setCheckoutItems] = useState([]);
+  // ==============================
+  // CART SELECTION (for checkout)
+  // ==============================
+  const [cartSelected, setCartSelected] = useState(null); // null = all selected
+
+  function toggleCartSelect(id) {
+    setCartSelected((prev) => {
+      const base =
+        prev ||
+        new Set(cart.map((item) => String(item.id)));
+      const next = new Set(base);
+      const key = String(id);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  function toggleCartSelectAll() {
+    setCartSelected((prev) => {
+      const all = new Set(
+        cart.map((item) => String(item.id))
+      );
+      const isAll =
+        prev &&
+        prev.size === all.size &&
+        cart.every((item) =>
+          prev.has(String(item.id))
+        );
+      // If everything is selected -> deselect all; otherwise select all.
+      return isAll ? new Set() : all;
+      void prev;
+    });
+  }
+
+  function clearCart() {
+    setCart([]);
+    setCartSelected(null);
+    localStorage.removeItem("justbrand_cart");
+  }
+
 
   // Product chosen via "Buy Now" — a single-item cart used for the
   // express checkout flow (does not disturb the normal cart).
@@ -1046,6 +1097,30 @@ function App() {
   }
 
   // ==========================================
+  // INFO PAGES (Contact / About / Return & Refund)
+  // ==========================================
+
+  if (
+    buyerPage === "contact" ||
+    buyerPage === "about" ||
+    buyerPage === "returns"
+  ) {
+    const meta = infoPageMeta[buyerPage];
+    if (meta) {
+      document.title = meta.title;
+    }
+    return (
+      <>
+        <Header {...commonHeaderProps} onCart={() => setShowCart(true)} />
+        <InfoPages
+          kind={buyerPage}
+          onBack={() => setBuyerPage(null)}
+        />
+      </>
+    );
+  }
+
+  // ==========================================
   // CHECKOUT
   // ==========================================
 
@@ -1059,20 +1134,31 @@ function App() {
       );
     }
 
+    const itemsForCheckout =
+      buyNowItem
+        ? [buyNowItem]
+        : checkoutItems.length > 0
+        ? checkoutItems
+        : cart;
+
     return (
       <Checkout
-        cart={buyNowItem ? [buyNowItem] : cart}
+        cart={itemsForCheckout}
         customer={customer}
         token={customerToken}
-        onBack={() => setBuyerPage(null)}
+        onBack={() => {
+          setBuyerPage(null);
+          // Returning from checkout without ordering — resume cart mode.
+          setCheckoutItems([]);
+        }}
         onOrderPlaced={() => {
           // Clear whichever cart the order came from.
           if (buyNowItem) {
             setBuyNowItem(null);
           } else {
-            setCart([]);
-            localStorage.removeItem("justbrand_cart");
+            clearCart();
           }
+          setCheckoutItems([]);
         }}
       />
     );
@@ -1092,12 +1178,34 @@ function App() {
 
         <Cart
           cart={cart}
-          onBack={() =>
-            setShowCart(false)
-          }
+          onBack={() => {
+            setShowCart(false);
+            setCartSelected(null);
+          }}
           removeFromCart={removeFromCart}
           updateQuantity={updateQuantity}
+          onSelectProduct={(item) => {
+            const product =
+              filteredProducts.find((p) => p.id === item.id) ||
+              item;
+            setShowCart(false);
+            setCartSelected(null);
+            setSelectedProduct(product);
+          }}
+          selectedIds={cartSelected}
+          onToggleSelect={toggleCartSelect}
+          onToggleSelectAll={toggleCartSelectAll}
+          onClearCart={clearCart}
           onCheckout={() => {
+            // Hand Checkout exactly the selected items only —
+            // unselected products never reach checkout.
+            const sel =
+              cartSelected ||
+              new Set(cart.map((i) => String(i.id)));
+            setCheckoutItems(
+              cart.filter((item) => sel.has(String(item.id)))
+            );
+
             setShowCart(false);
 
             // Normal cart checkout — clear any leftover Buy Now item so
@@ -1498,6 +1606,51 @@ function App() {
               </button>
             </div>
           )}
+
+        {/* ====================================
+            INFO PAGE LINKS
+        ==================================== */}
+
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "18px",
+            justifyContent: "center",
+            margin: "26px auto 8px",
+            maxWidth: "700px",
+            padding: "0 16px",
+          }}
+        >
+          {[
+            ["contact", "Contact Us"],
+            ["about", "About Us"],
+            ["returns", "Return & Refund Policy"],
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setBuyerPage(key)}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#555",
+                fontSize: "13px",
+                cursor: "pointer",
+                padding: "6px 2px",
+                borderBottom: "1px solid transparent",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.color =
+                  "var(--jb-saffron-deep, #e85d04)")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.color = "#555")
+              }
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );

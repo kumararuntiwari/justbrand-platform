@@ -185,19 +185,8 @@ function Header({
               SELL ON JUSTBRAND
           ================================================== */}
 
-          <button
-            className="jb-seller-top"
-            onClick={handleSeller}
-            type="button"
-          >
-            <span className="jb-seller-icon">
-              🏪
-            </span>
-
-            <span>
-              Sell on JustBrand
-            </span>
-          </button>
+          {/* Sell on JustBrand: single entry lives in the side
+             drawer (menu) — no duplicate CTA next to search. */}
 
 
           {/* WISHLIST */}
@@ -420,15 +409,8 @@ function Header({
         </div>
 
 
-        {/* SELLER NAV BUTTON */}
-
-        <button
-          className="jb-nav-seller"
-          onClick={handleSeller}
-          type="button"
-        >
-          🏪 Sell on JustBrand
-        </button>
+        {/* Nav-level Sell CTA removed — the single "Sell on
+            JustBrand" entry is in the side drawer (menu). */}
 
       </nav>
 
@@ -988,46 +970,74 @@ function Header({
            SELLER BUTTON
         ================================================== */
 
-        .jb-seller-top {
-          display: none;
-          align-items: center;
+        /* jb-seller-top removed — single Sell entry is in the drawer. */
 
-          gap: 6px;
+        /* ===== INFO PAGES (Contact / About / Return) ===== */
 
-          padding:
-            9px 12px;
+        .jb-info-card {
+          background: var(--jb-card, #ffffff);
 
-          border: 1px solid
-            rgba(255,255,255,0.45);
+          border-radius: 12px;
 
-          border-radius: 7px;
+          padding: 26px;
 
-          background: white;
+          margin-bottom: 18px;
 
-          color: #e85d00;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.07);
 
-          font-weight: 700;
-
-          cursor: pointer;
-
-          white-space: nowrap;
-
-          transition:
-            all 0.2s ease;
+          border: 1px solid rgba(0,0,0,0.05);
         }
 
+        .jb-info-card h2 {
+          margin: 0 0 12px;
 
-        .jb-seller-top:hover {
-          transform: translateY(-1px);
+          font-size: 20px;
 
-          box-shadow:
-            0 3px 10px
-            rgba(0,0,0,0.18);
+          color: #1a1a1a;
         }
 
+        .jb-info-card p,
+        .jb-info-card li {
+          color: #444;
 
-        .jb-seller-icon {
-          font-size: 18px;
+          line-height: 1.7;
+
+          font-size: 15px;
+        }
+
+        .jb-info-list {
+          margin: 0;
+
+          padding-left: 20px;
+        }
+
+        @media (max-width: 700px) {
+          .jb-info-card {
+            padding: 18px;
+          }
+
+          .jb-info-card h2 {
+            font-size: 18px;
+          }
+        }
+
+        /* ===== TRICOLOR HIGHLIGHT BAR (Tiranga accent) ===== */
+
+        .jb-tricolor-bar {
+          height: 4px;
+
+          width: 72px;
+
+          border-radius: 2px;
+
+          margin: 0 0 14px;
+
+          background: linear-gradient(
+            90deg,
+            var(--jb-saffron, #ff8c1a),
+            #ffffff,
+            var(--jb-green, #128807)
+          );
         }
 
 
@@ -1139,56 +1149,7 @@ function Header({
            NAV SELLER
         ================================================== */
 
-        .jb-nav-seller {
-          order: 3;
-
-          display: flex;
-          align-items: center;
-          justify-content: center;
-
-          gap: 6px;
-
-          flex: 0 0 auto;
-
-          border: 1px solid rgba(255, 255, 255, 0.45);
-
-          background:
-            linear-gradient(
-              90deg,
-              #ff7a00,
-              #ff4d8d
-            );
-
-          color: white;
-
-          font-weight: 700;
-
-          font-size: 14px;
-
-          padding:
-            10px 14px;
-
-          border-radius: 7px;
-
-          cursor: pointer;
-
-          white-space: nowrap;
-
-          margin-left: auto;
-
-          box-shadow:
-            0 1px 4px rgba(0, 0, 0, 0.12);
-
-          transition:
-            all 0.2s ease;
-        }
-
-
-        .jb-nav-seller:hover {
-          opacity: 0.92;
-
-          transform: translateY(-1px);
-        }
+        /* jb-nav-seller removed — Sell entry lives in the drawer. */
 
 
         /* LOWER-NAV SEARCH — left half of the nav row */
@@ -1448,12 +1409,7 @@ function Header({
           }
 
 
-          .jb-nav-seller {
-            padding:
-              9px 11px;
-
-            font-size: 13px;
-          }
+          .jb-nav-seller { display: none; }
 
 
           .jb-nav-left button {
@@ -1618,20 +1574,7 @@ function Header({
           }
 
 
-          .jb-nav-seller {
-            order: 2;
-
-            flex: 1 1 0;
-
-            min-width: 0;
-
-            margin-left: 0;
-
-            padding:
-              9px 8px;
-
-            font-size: 12px;
-          }
+          /* jb-nav-seller rules removed — element is gone. */
 
 
           .jb-side-drawer {
@@ -1664,14 +1607,7 @@ function Header({
           }
 
 
-          .jb-nav-seller {
-            padding:
-              8px;
-
-            font-size: 11px;
-
-            gap: 4px;
-          }
+          /* jb-nav-seller rules removed — element is gone. */
 
 
           .jb-search-btn {

@@ -60,8 +60,22 @@ function ProductCard({
 
   const productName = product?.name || "Product";
   const price = product?.price !== undefined ? product.price : 0;
+  // MRP comes from the backend's comparePrice column (fall back to
+  // any mrp field for older data). Used for the strike-through and
+  // the real discount percentage — no invented numbers.
+  const mrp =
+    product?.mrp !== undefined && product?.mrp !== null
+      ? product.mrp
+      : product?.comparePrice;
+  const priceNum = Number(String(price).replace(/[^0-9.]/g, "")) || 0;
+  const mrpNum = Number(String(mrp).replace(/[^0-9.]/g, "")) || 0;
   const rating = product?.rating || 4.5;
-  const discount = product?.discount !== undefined ? product.discount : 20;
+  const discount =
+    product?.discount !== undefined
+      ? product.discount
+      : mrpNum > priceNum && mrpNum > 0
+      ? Math.round(((mrpNum - priceNum) / mrpNum) * 100)
+      : 0;
   const trustedSeller = product?.trustedSeller !== false;
 
   const formatPrice = (value) => {
@@ -244,16 +258,16 @@ function ProductCard({
             {formatPrice(price)}
           </span>
 
-          {product?.mrp && Number(product.mrp) > Number(String(price).replace("₹", "")) && (
+          {mrpNum > priceNum && (
             <span style={{ fontSize: "13px", color: "#888", textDecoration: "line-through" }}>
-              {formatPrice(product.mrp)}
+              {formatPrice(mrp)}
             </span>
           )}
         </div>
 
         {discount > 0 && (
           <p style={{ margin: "3px 0 7px", color: "#d32f2f", fontSize: "13px", fontWeight: "600" }}>
-            🔥 Great Deal
+            🔥 {discount}% off
           </p>
         )}
 

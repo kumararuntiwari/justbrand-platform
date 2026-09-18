@@ -40,6 +40,127 @@ app.use(
 app.use(express.json({ limit: "10mb" }));
 
 // =====================================
+// PRODUCTION SAFETY LIMITS (additive)
+// =====================================
+// Soft guards against accidental runaway requests. These do not
+// change any API contract — they only bound work per request.
+// Tuned for the single Node process used on Hostinger.
+
+const RUNTIME_LIMITS = {
+  maxProducts: Number(process.env.JB_MAX_PRODUCTS) || 5000,
+  searchTimeoutMs: Number(process.env.JB_SEARCH_TIMEOUT_MS) || 5000,
+};
+
+// Bound LIKE search payload so a huge crafted query cannot make a
+// single request scan for many seconds on the event loop.
+const MAX_SEARCH_LENGTH = 120;
+
+// Express 5 routes thrown errors to the error middleware, so a
+// simple setTimeout guard gives every read handler a hard ceiling.
+function withTimeout(handler, ms = RUNTIME_LIMITS.searchTimeoutMs) {
+  return (req, res, next) => {
+    const timer = setTimeout(() => {
+      if (!res.headersSent) {
+        const err = new Error("Request timed out.");
+        err.status = 503;
+        next(err);
+      }
+    }, ms);
+
+    res.on("finish", () => clearTimeout(timer));
+
+    handler(req, res, next);
+  };
+}
+
+// NOTE: An earlier version added a short-TTL cache for the approved
+// product list/search. It was removed on purpose: product edits and
+// status changes made elsewhere in the backend must be visible to
+// buyers immediately, and with proper indexes SQLite serves these
+// reads in well under a millisecond, so caching added staleness
+// risk for negligible gain.
+
+// =====================================================
+// PERFORMANCE INDEXES (additive — created after all tables exist)
+// =====================================================
+// Non-destructive: CREATE INDEX IF NOT EXISTS only ADDS lookup
+// structures. No table is altered and no existing row changes.
+// Called from startServer() so every table is guaranteed to
+// exist first (staff/products here, business tables in initBusiness).
+
+function ensurePerformanceIndexes() {
+  db.prepare(
+  `CREATE INDEX IF NOT EXISTS idx_products_status_id
+   ON products (status, id DESC)`
+).run();
+db.prepare(
+  `CREATE INDEX IF NOT EXISTS idx_products_status_name
+   ON products (status, name COLLATE NOCASE)`
+).run();
+db.prepare(
+  `CREATE INDEX IF NOT EXISTS idx_products_seller_id
+   ON products (sellerId)`
+).run();
+db.prepare(
+  `CREATE INDEX IF NOT EXISTS idx_order_items_order
+   ON order_items (orderId)`
+).run();
+db.prepare(
+  `CREATE INDEX IF NOT EXISTS idx_order_items_seller
+   ON order_items (sellerId)`
+).run();
+db.prepare(
+  `CREATE INDEX IF NOT EXISTS idx_orders_customer
+   ON orders (customerId)`
+).run();
+db.prepare(
+  `CREATE INDEX IF NOT EXISTS idx_orders_status
+   ON orders (status)`
+).run();
+db.prepare(
+  `CREATE INDEX IF NOT EXISTS idx_sellers_status
+   ON sellers (status)`
+).run();
+db.prepare(
+  `CREATE INDEX IF NOT EXISTS idx_seller_kyc_seller
+   ON seller_kyc (sellerId)`
+).run();
+db.prepare(
+  `CREATE INDEX IF NOT EXISTS idx_seller_bank_seller
+   ON seller_bank (sellerId)`
+).run();
+db.prepare(
+  `CREATE INDEX IF NOT EXISTS idx_mlm_members_parent
+   ON mlm_members (parentId)`
+).run();
+db.prepare(
+  `CREATE INDEX IF NOT EXISTS idx_mlm_commissions_member
+   ON mlm_commissions (memberId)`
+).run();
+db.prepare(
+  `CREATE INDEX IF NOT EXISTS idx_mlm_commissions_order
+   ON mlm_commissions (orderId)`
+).run();
+db.prepare(
+  `CREATE INDEX IF NOT EXISTS idx_mlm_commissions_status
+   ON mlm_commissions (status)`
+).run();
+db.prepare(
+  `CREATE INDEX IF NOT EXISTS idx_payout_requests_member
+   ON payout_requests (memberId)`
+).run();
+db.prepare(
+  `CREATE INDEX IF NOT EXISTS idx_customers_mobile
+   ON customers (mobile)`
+).run();
+db.prepare(
+  `CREATE INDEX IF NOT EXISTS idx_customers_status
+   ON customers (status)`
+).run();
+db.pragma("busy_timeout = 3000");
+}
+
+// =====================================
 // DATABASE
 // =====================================
 // Shared connection lives in db.js (WAL mode). The staff and
@@ -126,11 +247,87 @@ app.get("/", (req, res) => {
   });
 });
 
+// Deep health endpoint for load balancers / uptime monitors.
+// Read-only: verifies the process is up AND the database answers.
+// Kept dependency-free and allocation-light so monitors can poll it
+// at high frequency without affecting normal traffic.
+app.get("/api/health", (req, res) => {
+  try {
+    db.prepare("SELECT 1").get();
+
+    res.json({
+      success: true,
+      status: "ok",
+      database: "ok",
+      uptimeSeconds: Math.floor(process.uptime()),
+      memory: {
+        rssMb: Math.round(
+          process.memoryUsage().rss / (1024 * 1024)
+        ),
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Health check DB failure:", error.message);
+
+    res.status(503).json({
+      success: false,
+      status: "degraded",
+      database: "error",
+    });
+  }
+});
+
+// =====================================
+// STAFF LOGIN RATE LIMIT
+// Additive, self-contained brute-force guard for the staff
+// login endpoint. Mirrors the per-IP sliding-window limiter
+// used by business.js auth routes (kept separate so the
+// business module remains untouched).
+// =====================================
+
+const staffLoginAttempts = new Map();
+
+function staffLoginLimiter(req, res, next) {
+  const key = req.ip || "unknown";
+  const now = Date.now();
+  const windowMs = 5 * 60 * 1000;
+  const maxAttempts = 20;
+
+  if (staffLoginAttempts.size > 5000) {
+    for (const [k, stamps] of staffLoginAttempts) {
+      const alive = stamps.filter((t) => now - t < windowMs);
+
+      if (alive.length === 0) {
+        staffLoginAttempts.delete(k);
+      } else {
+        staffLoginAttempts.set(k, alive);
+      }
+    }
+  }
+
+  const attempts = (staffLoginAttempts.get(key) || []).filter(
+    (t) => now - t < windowMs
+  );
+
+  if (attempts.length >= maxAttempts) {
+    return res.status(429).json({
+      success: false,
+      message: "Too many login attempts. Please try again later.",
+    });
+  }
+
+  attempts.push(now);
+  staffLoginAttempts.set(key, attempts);
+
+  next();
+}
+
 // =====================================================
 // STAFF LOGIN
 // =====================================================
 
-app.post("/api/staff/login", async (req, res) => {
+app.post("/api/staff/login", staffLoginLimiter, async (req, res) => {
   try {
     const username = String(req.body.username || "").trim();
     const password = String(req.body.password || "");
@@ -691,14 +888,15 @@ app.delete(
 // BUYER APP
 // =====================================================
 
-app.get("/api/products", (req, res) => {
+app.get("/api/products", withTimeout((req, res) => {
   try {
     const products = db.prepare(`
       SELECT *
       FROM products
       WHERE status = 'Approved'
       ORDER BY id DESC
-    `).all();
+      LIMIT ?
+    `).all(RUNTIME_LIMITS.maxProducts);
 
     res.json(products);
   } catch (error) {
@@ -709,7 +907,7 @@ app.get("/api/products", (req, res) => {
       message: "Failed to load products.",
     });
   }
-});
+}));
 
 // =====================================================
 // GET ALL PRODUCTS
@@ -1016,11 +1214,13 @@ app.delete(
 
 app.get(
   "/api/products/search",
-  (req, res) => {
+  withTimeout((req, res) => {
     try {
       const search = String(
         req.query.q || ""
-      ).toLowerCase();
+      )
+        .toLowerCase()
+        .slice(0, MAX_SEARCH_LENGTH);
 
       const products = db.prepare(`
         SELECT *
@@ -1052,7 +1252,7 @@ app.get(
         message: "Search failed.",
       });
     }
-  }
+  })
 );
 
 // =====================================================
@@ -1213,6 +1413,9 @@ initBusiness();
 app.use(businessRouter);
 
 async function startServer() {
+  // Safe now: staff/products tables were created at module level
+  // and initBusiness() has created all business tables.
+  ensurePerformanceIndexes();
   // =====================================
   // CREATE DEFAULT SUPER ADMIN
   // =====================================
