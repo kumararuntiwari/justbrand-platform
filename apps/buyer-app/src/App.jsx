@@ -1,6 +1,7 @@
 import ProductCard from "./components/ProductCard";
 import ComparePriceSlider from "./components/ComparePriceSlider";
 import Header from "./components/Header";
+import Footer from "./components/Footer";
 import { useState, useEffect } from 'react';
 import ProductDetails from "./pages2/ProductDetails";
 import Cart from "./pages2/Cart";
@@ -1605,52 +1606,14 @@ function App() {
                 }}
               >
                 Show All Products
-              </button>
-            </div>
-          )}
+              <        <Footer
+          onInfoPage={(page) => setBuyerPage(page)}
+          onFamily={() => setMlmPage(mlmMember ? "dashboard" : "login")}
+          onCart={() => setShowCart(true)}
+          onWishlist={() => setBuyerPage("wishlist")}
+        />
 
-        {/* ====================================
-            INFO PAGE LINKS
-        ==================================== */}
-
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: "18px",
-            justifyContent: "center",
-            margin: "26px auto 8px",
-            maxWidth: "700px",
-            padding: "0 16px",
-          }}
-        >
-          {[
-            ["contact", "Contact Us"],
-            ["about", "About Us"],
-            ["returns", "Return & Refund Policy"],
-          ].map(([key, label]) => (
-            <button
-              key={key}
-              onClick={() => setBuyerPage(key)}
-              style={{
-                background: "none",
-                border: "none",
-                color: "#555",
-                fontSize: "13px",
-                cursor: "pointer",
-                padding: "6px 2px",
-                borderBottom: "1px solid transparent",
-              }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.color =
-                  "var(--jb-saffron-deep, #e85d04)")
-              }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.color = "#555")
-              }
-            >
-              {label}
-            </button>
+   </button>
           ))}
         </div>
       </div>
