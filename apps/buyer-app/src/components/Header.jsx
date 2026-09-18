@@ -938,9 +938,9 @@ function Header({
         }
 
 
-        /* DESKTOP HEADER SEARCH (top row) */
+        /* TOP-ROW SEARCH RETIRED — search now lives in the lower nav row */
         .jb-search-wrapper {
-          display: block;
+          display: none;
         }
 
 
@@ -989,7 +989,7 @@ function Header({
         ================================================== */
 
         .jb-seller-top {
-          display: flex;
+          display: none;
           align-items: center;
 
           gap: 6px;
@@ -1072,7 +1072,7 @@ function Header({
           display: flex;
           align-items: center;
 
-          justify-content: space-between;
+          gap: 14px;
 
           padding:
             0 20px;
@@ -1099,6 +1099,10 @@ function Header({
           gap: 4px;
 
           overflow-x: auto;
+
+          order: 2;
+
+          min-width: 0;
         }
 
 
@@ -1136,7 +1140,17 @@ function Header({
         ================================================== */
 
         .jb-nav-seller {
-          border: none;
+          order: 3;
+
+          display: flex;
+          align-items: center;
+          justify-content: center;
+
+          gap: 6px;
+
+          flex: 0 0 auto;
+
+          border: 1px solid rgba(255, 255, 255, 0.45);
 
           background:
             linear-gradient(
@@ -1149,16 +1163,24 @@ function Header({
 
           font-weight: 700;
 
-          padding:
-            9px 14px;
+          font-size: 14px;
 
-          border-radius: 6px;
+          padding:
+            10px 14px;
+
+          border-radius: 7px;
 
           cursor: pointer;
 
           white-space: nowrap;
 
-          margin-left: 10px;
+          margin-left: auto;
+
+          box-shadow:
+            0 1px 4px rgba(0, 0, 0, 0.12);
+
+          transition:
+            all 0.2s ease;
         }
 
 
@@ -1169,9 +1191,19 @@ function Header({
         }
 
 
-        /* MOBILE-ONLY LOWER-NAV SEARCH */
+        /* LOWER-NAV SEARCH — left half of the nav row */
         .jb-search-wrapper.jb-nav-search {
-          display: none;
+          display: block;
+
+          order: 1;
+
+          flex: 1 1 0;
+
+          min-width: 0;
+
+          max-width: 560px;
+
+          margin: 0;
         }
 
 
@@ -1407,17 +1439,20 @@ function Header({
           }
 
 
-          .jb-seller-top {
-            padding:
-              8px 9px;
+          .jb-nav {
+            gap:
+              10px;
 
-            font-size: 12px;
+            padding:
+              0 10px;
           }
 
 
-          .jb-nav {
+          .jb-nav-seller {
             padding:
-              0 10px;
+              9px 11px;
+
+            font-size: 13px;
           }
 
 
@@ -1494,19 +1529,13 @@ function Header({
           }
 
 
-          .jb-header .jb-search-wrapper {
-            display: none;
+          .jb-search-wrapper.jb-nav-search {
+            display: block;
           }
 
 
-          .jb-search-wrapper.jb-nav-search {
-            display: block;
-
-            flex: 0 0 100%;
-
-            max-width: 100%;
-
-            margin: 2px 0 4px;
+          .jb-nav-search .jb-search-suggestions {
+            width: 200%;
           }
 
 
@@ -1562,13 +1591,19 @@ function Header({
             padding:
               0 5px;
 
-            overflow-x: auto;
+            flex-wrap: wrap;
 
-            justify-content: flex-start;
+            overflow: visible;
+
+            row-gap: 6px;
           }
 
 
           .jb-nav-left {
+            order: 3;
+
+            flex: 0 0 100%;
+
             width: max-content;
 
             gap: 0;
@@ -1584,20 +1619,18 @@ function Header({
 
 
           .jb-nav-seller {
-            display: flex;
+            order: 2;
 
-            align-items: center;
+            flex: 1 1 0;
 
-            flex: 0 0 auto;
+            min-width: 0;
 
             margin-left: 0;
 
             padding:
-              7px 10px;
+              9px 8px;
 
             font-size: 12px;
-
-            border-radius: 6px;
           }
 
 
@@ -1628,6 +1661,16 @@ function Header({
 
           .jb-search-input {
             height: 36px;
+          }
+
+
+          .jb-nav-seller {
+            padding:
+              8px;
+
+            font-size: 11px;
+
+            gap: 4px;
           }
 
 
