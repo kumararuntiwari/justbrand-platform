@@ -89,6 +89,27 @@ function CustomerOrders({ token, onBack, onNeedLogin }) {
     return ["Pending", "Processing"].includes(status);
   }
 
+  // Delivery tracking timeline — rendered only when the backend has
+  // real delivery data for the order (additive fields). No fake states.
+  function trackingSteps(order) {
+    const delivered =
+      order.deliveryStatus === "Delivered" || Boolean(order.deliveryOtpVerifiedAt);
+    const outForDelivery = Boolean(order.outForDeliveryAt) || delivered;
+    const pickedUp = Boolean(order.pickedUpAt) || outForDelivery;
+    const ready = Boolean(order.assignedAt) || pickedUp;
+    const processing =
+      ["Processing", "Shipped", "Delivered"].includes(order.status) || ready;
+
+    return [
+      { label: "Order Confirmed", done: true, at: order.createdAt },
+      { label: "Seller Processing", done: processing, at: null },
+      { label: "Ready for Pickup", done: ready, at: order.assignedAt },
+      { label: "Picked Up", done: pickedUp, at: order.pickedUpAt },
+      { label: "Out for Delivery", done: outForDelivery, at: order.outForDeliveryAt },
+      { label: "Delivered", done: delivered, at: order.deliveredAt },
+    ];
+  }
+
   function orderItems(order) {
     if (Array.isArray(order.items)) {
       return order.items;
@@ -157,6 +178,46 @@ function CustomerOrders({ token, onBack, onNeedLogin }) {
                     </div>
                   ))}
                 </div>
+
+                {order.deliveryStatus ? (
+                  <div style={styles.trackBox}>
+                    <div style={styles.trackTitle}>🚚 Delivery Tracking</div>
+                    {order.deliveryStatus === "Delivery Failed" ? (
+                      <div style={styles.trackFail}>
+                        Delivery attempt failed
+                        {order.deliveryFailureReason
+                          ? ` — ${order.deliveryFailureReason}`
+                          : ""}
+                        . A retry is being arranged.
+                      </div>
+                    ) : null}
+                    {trackingSteps(order).map((step) => (
+                      <div key={step.label} style={styles.trackRow}>
+                        <span
+                          style={{
+                            ...styles.trackDot,
+                            ...(step.done ? styles.trackDotDone : {}),
+                          }}
+                        >
+                          {step.done ? "✓" : ""}
+                        </span>
+                        <span
+                          style={{
+                            ...styles.trackLabel,
+                            ...(step.done ? styles.trackLabelDone : {}),
+                          }}
+                        >
+                          {step.label}
+                        </span>
+                        {step.done && step.at ? (
+                          <span style={styles.trackTime}>
+                            {String(step.at).slice(0, 16).replace("T", " ")}
+                          </span>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
 
                 <div style={styles.orderBottom}>
                   <div>
@@ -278,6 +339,71 @@ const styles = {
     padding: "20px",
     marginBottom: "18px",
     boxShadow: "0 3px 15px rgba(0,0,0,0.07)",
+  },
+
+  trackBox: {
+    background: "#fffaf3",
+    border: "1px solid #ffe6cc",
+    borderRadius: "12px",
+    padding: "14px 16px",
+    margin: "12px 0",
+  },
+
+  trackTitle: {
+    fontWeight: "bold",
+    fontSize: "14px",
+    color: "#c2410c",
+    marginBottom: "8px",
+  },
+
+  trackFail: {
+    background: "#fff0f0",
+    color: "#c00",
+    borderRadius: "8px",
+    padding: "8px 10px",
+    fontSize: "13px",
+    marginBottom: "8px",
+  },
+
+  trackRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    padding: "4px 0",
+  },
+
+  trackDot: {
+    width: "20px",
+    height: "20px",
+    minWidth: "20px",
+    borderRadius: "50%",
+    background: "#eef1f7",
+    color: "#fff",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "12px",
+    fontWeight: "bold",
+  },
+
+  trackDotDone: {
+    background: "linear-gradient(90deg, #ff8c00, #ff1493)",
+  },
+
+  trackLabel: {
+    fontSize: "13px",
+    color: "#999",
+  },
+
+  trackLabelDone: {
+    color: "#333",
+    fontWeight: "600",
+  },
+
+  trackTime: {
+    fontSize: "11px",
+    color: "#aaa",
+    marginLeft: "auto",
   },
 
   orderTop: {

@@ -9,6 +9,7 @@ import {
   FamilyGiftsManager,
 } from "./FamilyManagers";
 import BuyerSettingsPanel from "./BuyerSettingsPanel";
+import DeliveryManager from "./DeliveryManager";
 
 const API = "https://justbrand-in-144629.hostingersite.com";
 
@@ -778,6 +779,12 @@ function App() {
       ],
     },
     {
+      label: "Delivery",
+      items: [
+        { key: "delivery", label: "🛵 Delivery", enabled: canUseOrders, crumb: "Delivery" },
+      ],
+    },
+    {
       label: "Administration",
       items: [
         { key: "staff", label: "👥 Staff", enabled: canManageStaff, crumb: "Staff" },
@@ -1090,11 +1097,26 @@ function App() {
           />
         )}
 
+        {/* DELIVERY MANAGER (Dashboard/Partners/Orders/Assign/Tracking/Settings) */}
+
+        {activeView === "delivery" && canUseOrders && (
+          <DeliveryManager
+            token={token}
+            role={staff.role}
+            onMessage={(msg) => {
+              setMessage(msg);
+
+              setTimeout(() => setMessage(""), 4000);
+            }}
+          />
+        )}
+
         {/* FAMILY COMMISSION/GIFTS/RULES sub-views — Family (mlm) tab
             is the single source of truth; Commission Settings and Rules
             render inside it. Levels/Gifts render dedicated managers. */}
 
         {activeView !== "overview" &&
+          activeView !== "delivery" &&
           activeView !== "buyers" &&
           activeView !== "products" &&
           activeView !== "staff" &&
@@ -1107,6 +1129,7 @@ function App() {
             "cm-homepage",
             "fam-levels",
             "fam-gifts",
+            "delivery",
           ].includes(activeView) && (
             <Business
               token={token}
