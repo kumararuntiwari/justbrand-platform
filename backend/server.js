@@ -240,6 +240,57 @@ function ensureProductPricingColumns() {
 ensureProductPricingColumns();
 
 // =====================================
+// SITE CONTENT TABLES (additive)
+// =====================================
+// Admin-managed Buyer-app content: About/Contact/branding/homepage
+// text live in a key/value table, homepage banners in their own
+// table. Purely additive — no existing table is touched.
+
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS site_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT,
+    updatedAt TEXT
+  )
+`).run();
+
+console.log("Site settings table ready.");
+
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS site_banners (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT,
+    subtitle TEXT,
+    ctaText TEXT,
+    ctaLink TEXT,
+    imageUrl TEXT,
+    mobileImageUrl TEXT,
+    active INTEGER NOT NULL DEFAULT 1,
+    sortOrder INTEGER NOT NULL DEFAULT 0,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT
+  )
+`).run();
+
+console.log("Site banners table ready.");
+
+// JustBrand Family level gifts (admin-configurable).
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS family_gifts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    level INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    eligibility TEXT,
+    active INTEGER NOT NULL DEFAULT 1,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT
+  )
+`).run();
+
+console.log("Family gifts table ready.");
+
+// =====================================
 // HELPER
 // =====================================
 
@@ -271,6 +322,132 @@ app.get("/", (req, res) => {
     message: "JustBrand Backend is running.",
   });
 });
+
+// Deep health endpoint for load balancers / uptime monitors.
+// Read-only: verifies the process is up AND the database answers.
+// Kept dependency-free and allocation-light so monitors can poll it
+// at high frequency without affecting normal traffic.
+// =====================================
+// SITE CONTENT (PUBLIC READ / ADMIN WRITE)
+// =====================================
+// Backs the Admin → Buyer content connection:
+//   About Us / Contact Us text, logo & branding, homepage banners,
+//   homepage promo content. All reads are public so the Buyer app
+//   renders saved content; writes are staff-only.
+
+// Buyer-side settings that must exist even before an admin saves
+// anything — the Buyer app falls back to the current live behaviour
+// when these are absent (never a blank screen).
+const SITE_SETTING_DEFAULTS = {
+  site_about: null,
+  site_contact: null,
+  site_branding: null,
+  site_homepage: null,
+};
+
+function getSiteSetting(key) {
+  const row = db
+    .prepare(`SELECT value FROM site_settings WHERE key = ?`)
+    .get(key);
+
+  if (!row || !row.value) return SITE_SETTING_DEFAULTS[key] ?? null;
+
+  try {
+    return JSON.parse(row.value);
+  } catch {
+    return SITE_SETTING_DEFAULTS[key] ?? null;
+  }
+}
+
+function setSiteSetting(key, value) {
+  db.prepare(`
+    INSERT INTO site_settings (key, value, updatedAt)
+    VALUES (?, ?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updatedAt = excluded.updatedAt
+  `).run(key, JSON.stringify(value), new Date().toISOString());
+}
+
+function publicBanners(rows) {
+  return rows
+    .filter((b) => b.active === 1)
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)
+    .map((b) => ({
+      id: b.id,
+      title: b.title,
+      subtitle: b.subtitle,
+      ctaText: b.ctaText,
+      ctaLink: b.ctaLink,
+      imageUrl: b.imageUrl,
+      mobileImageUrl: b.mobileImageUrl,
+      active: b.active === 1,
+      sortOrder: b.sortOrder,
+    }));
+}
+
+// ---- PUBLIC: Buyer app content feed (one call, cache-friendly) ----
+
+app.get("/api/site/content", (req, res) => {
+  try {
+    const banners = publicBanners(
+      db.prepare(`SELECT * FROM site_banners`).all()
+    );
+
+    res.json({
+      success: true,
+      content: {
+        about: getSiteSetting("site_about"),
+        contact: getSiteSetting("site_contact"),
+        branding: getSiteSetting("site_branding"),
+        homepage: getSiteSetting("site_homepage"),
+        banners,
+      },
+    });
+  } catch (error) {
+    console.error("site content read failed:", error.message);
+
+    // Fallback safety: an empty-but-valid payload so the Buyer app
+    // keeps its built-in defaults instead of a blank screen.
+    res.json({
+      success: true,
+      content: {
+        about: null,
+        contact: null,
+        branding: null,
+        homepage: null,
+        banners: [],
+      },
+    });
+  }
+});
+
+// ---- ADMIN: list ALL settings (including inactive banners) ----
+
+app.get(
+  "/api/admin/site/settings",
+  requireAuth,
+  requireRole("super_admin", "manager"),
+  (req, res) => {
+    try {
+      const banners = db
+        .prepare(`SELECT * FROM site_banners ORDER BY sortOrder ASC, id ASC`)
+        .all()
+        .map((b) => ({ ...b, active: b.active === 1 }));
+
+      res.json({
+        success: true,
+        settings: {
+          about: getSiteSetting("site_about"),
+          contact: getSiteSetting("site_contact"),
+          homepage: getSiteSetting("site_homepage"),
+          branding: getSiteSetting("site_branding"),
+        },
+        banners,
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+);
 
 // Deep health endpoint for load balancers / uptime monitors.
 // Read-only: verifies the process is up AND the database answers.
@@ -351,6 +528,523 @@ function staffLoginLimiter(req, res, next) {
 // =====================================================
 // STAFF LOGIN
 // =====================================================
+
+// ---- ADMIN: save About/Contact/Homepage/Branding content ----
+
+const SITE_SETTING_KEYS = {
+  about: "site_about",
+  contact: "site_contact",
+  homepage: "site_homepage",
+  branding: "site_branding",
+};
+
+app.put(
+  "/api/admin/site/settings/:section",
+  requireAuth,
+  requireRole("super_admin", "manager"),
+  (req, res) => {
+    const key = SITE_SETTING_KEYS[req.params.section];
+
+    if (!key) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Unknown content section." });
+    }
+
+    if (
+      !req.body ||
+      typeof req.body.content !== "object" ||
+      req.body.content === null
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Request body must include a content object.",
+      });
+    }
+
+    try {
+      setSiteSetting(key, req.body.content);
+
+      res.json({
+        success: true,
+        message: "Content saved successfully.",
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+);
+
+// ---- ADMIN: homepage banner CRUD (additive) ----
+
+function validateBannerPayload(body, { partial = false } = {}) {
+  const errors = [];
+  const out = {};
+
+  const str = (v) =>
+    typeof v === "string" ? v.trim() : v === undefined ? undefined : "";
+
+  if (!partial || body.title !== undefined) {
+    const title = str(body.title);
+    if (!title) errors.push("Banner title is required.");
+    else if (title.length > 120) errors.push("Title must be 120 characters or fewer.");
+    else out.title = title;
+  }
+
+  if (body.subtitle !== undefined) {
+    const subtitle = str(body.subtitle);
+    if (subtitle.length > 200) errors.push("Subtitle must be 200 characters or fewer.");
+    else out.subtitle = subtitle;
+  }
+
+  if (body.ctaText !== undefined) {
+    const ctaText = str(body.ctaText);
+    if (ctaText.length > 60) errors.push("CTA text must be 60 characters or fewer.");
+    else out.ctaText = ctaText;
+  }
+
+  if (body.ctaLink !== undefined) {
+    const ctaLink = str(body.ctaLink);
+    if (ctaLink.length > 500) errors.push("CTA link is too long.");
+    else out.ctaLink = ctaLink;
+  }
+
+  // Images must be data URLs or https URLs — never javascript:/http:.
+  const safeImage = (v) => {
+    const s = str(v);
+    if (s === "") return "";
+    if (/^data:image\/(png|jpe?g|webp|gif);base64,/i.test(s)) return s;
+    if (/^https:\/\//i.test(s)) return s;
+    return null; // unsafe
+  };
+
+  if (body.imageUrl !== undefined) {
+    const imageUrl = safeImage(body.imageUrl);
+    if (imageUrl === null) errors.push("Image must be an https URL or an uploaded image.");
+    else out.imageUrl = imageUrl;
+  }
+
+  if (body.mobileImageUrl !== undefined) {
+    const mobileImageUrl = safeImage(body.mobileImageUrl);
+    if (mobileImageUrl === null)
+      errors.push("Mobile image must be an https URL or an uploaded image.");
+    else out.mobileImageUrl = mobileImageUrl;
+  }
+
+  if (body.active !== undefined) {
+    out.active = body.active ? 1 : 0;
+  }
+
+  if (body.sortOrder !== undefined) {
+    const n = Number(body.sortOrder);
+    if (!Number.isFinite(n) || n < 0 || n > 10000)
+      errors.push("Display order must be a number between 0 and 10000.");
+    else out.sortOrder = Math.round(n);
+  }
+
+  return { errors, out };
+}
+
+app.post(
+  "/api/admin/site/banners",
+  requireAuth,
+  requireRole("super_admin", "manager"),
+  (req, res) => {
+    const { errors, out } = validateBannerPayload(req.body || {});
+
+    if (errors.length) {
+      return res.status(400).json({ success: false, message: errors.join(" ") });
+    }
+
+    try {
+      const info = db
+        .prepare(`
+          INSERT INTO site_banners (title, subtitle, ctaText, ctaLink, imageUrl, mobileImageUrl, active, sortOrder, createdAt, updatedAt)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `)
+        .run(
+          out.title,
+          out.subtitle || "",
+          out.ctaText || "",
+          out.ctaLink || "",
+          out.imageUrl || "",
+          out.mobileImageUrl || "",
+          out.active === undefined ? 1 : out.active,
+          out.sortOrder === undefined ? 0 : out.sortOrder,
+          new Date().toISOString(),
+          new Date().toISOString()
+        );
+
+      res.status(201).json({
+        success: true,
+        message: "Banner added successfully.",
+        id: info.lastInsertRowid,
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+);
+
+app.put(
+  "/api/admin/site/banners/:id",
+  requireAuth,
+  requireRole("super_admin", "manager"),
+  (req, res) => {
+    const id = Number(req.params.id);
+
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({ success: false, message: "Invalid banner id." });
+    }
+
+    const existing = db.prepare(`SELECT * FROM site_banners WHERE id = ?`).get(id);
+
+    if (!existing) {
+      return res.status(404).json({ success: false, message: "Banner not found." });
+    }
+
+    const { errors, out } = validateBannerPayload(req.body || {}, { partial: true });
+
+    if (errors.length) {
+      return res.status(400).json({ success: false, message: errors.join(" ") });
+    }
+
+    if (Object.keys(out).length === 0) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Nothing to update." });
+    }
+
+    try {
+      const merged = { ...existing, ...out };
+
+      db.prepare(`
+        UPDATE site_banners
+        SET title = ?, subtitle = ?, ctaText = ?, ctaLink = ?, imageUrl = ?, mobileImageUrl = ?, active = ?, sortOrder = ?, updatedAt = ?
+        WHERE id = ?
+      `).run(
+        merged.title,
+        merged.subtitle,
+        merged.ctaText,
+        merged.ctaLink,
+        merged.imageUrl,
+        merged.mobileImageUrl,
+        merged.active === 1 || merged.active === true ? 1 : 0,
+        merged.sortOrder,
+        new Date().toISOString(),
+        id
+      );
+
+      res.json({ success: true, message: "Banner updated successfully." });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+);
+
+app.delete(
+  "/api/admin/site/banners/:id",
+  requireAuth,
+  requireRole("super_admin", "manager"),
+  (req, res) => {
+    const id = Number(req.params.id);
+
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({ success: false, message: "Invalid banner id." });
+    }
+
+    try {
+      const info = db.prepare(`DELETE FROM site_banners WHERE id = ?`).run(id);
+
+      if (info.changes === 0) {
+        return res.status(404).json({ success: false, message: "Banner not found." });
+      }
+
+      res.json({ success: true, message: "Banner deleted." });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+);
+
+// =====================================
+// JUSTBRAND FAMILY: LEVEL COMMISSION + GIFTS (additive)
+// =====================================
+// Level-wise commission overrides live in mlm_settings (same
+// key/value store the existing rules engine uses) under the key
+// 'level_commissions'. The existing commission calculation in
+// business.js falls back to the flat rules value when a level has
+// no override — behaviour for existing data is unchanged.
+
+const LEVEL_COMMISSIONS_KEY = "level_commissions";
+
+function getLevelCommissions() {
+  const row = db
+    .prepare(`SELECT value FROM mlm_settings WHERE key = ?`)
+    .get(LEVEL_COMMISSIONS_KEY);
+
+  if (!row) return {};
+
+  try {
+    const parsed = JSON.parse(row.value);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+// Public read so the member-facing rules page can show current rates.
+app.get("/api/mlm/level-commissions", (req, res) => {
+  try {
+    res.json({ success: true, levels: getLevelCommissions() });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+app.put(
+  "/api/admin/mlm/level-commissions",
+  requireAuth,
+  requireRole("super_admin"),
+  (req, res) => {
+    const body = req.body || {};
+    const out = {};
+    const errors = [];
+
+    for (const level of [1, 2, 3]) {
+      const key = `level${level}`;
+
+      if (body[key] === undefined) continue;
+
+      const n = Number(body[key]);
+
+      if (!Number.isFinite(n) || n < 0 || n > 100) {
+        errors.push(`Level ${level} commission must be between 0 and 100.`);
+      } else {
+        out[key] = Math.round(n * 100) / 100;
+      }
+    }
+
+    if (errors.length) {
+      return res.status(400).json({ success: false, message: errors.join(" ") });
+    }
+
+    if (Object.keys(out).length === 0) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Provide at least one level value (level1..level3)." });
+    }
+
+    try {
+      const merged = { ...getLevelCommissions(), ...out };
+
+      db.prepare(`
+        INSERT INTO mlm_settings (key, value, updatedAt)
+        VALUES (?, ?, ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updatedAt = excluded.updatedAt
+      `).run(
+        LEVEL_COMMISSIONS_KEY,
+        JSON.stringify(merged),
+        new Date().toISOString()
+      );
+
+      res.json({
+        success: true,
+        message: "Level-wise commissions saved.",
+        levels: merged,
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+);
+
+// ---- Family gifts: admin CRUD + member-visible list ----
+
+app.get("/api/family/gifts", (req, res) => {
+  try {
+    const gifts = db
+      .prepare(`SELECT * FROM family_gifts WHERE active = 1 ORDER BY level ASC, id ASC`)
+      .all();
+
+    res.json({ success: true, gifts });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+app.get(
+  "/api/admin/family/gifts",
+  requireAuth,
+  requireRole("super_admin", "manager"),
+  (req, res) => {
+    try {
+      const gifts = db
+        .prepare(`SELECT * FROM family_gifts ORDER BY level ASC, id ASC`)
+        .all()
+        .map((g) => ({ ...g, active: g.active === 1 }));
+
+      res.json({ success: true, gifts });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+);
+
+function validateGiftPayload(body, { partial = false } = {}) {
+  const errors = [];
+  const out = {};
+
+  if (!partial || body.level !== undefined) {
+    const level = Number(body.level);
+    if (!Number.isInteger(level) || level < 1 || level > 3)
+      errors.push("Level must be 1, 2 or 3.");
+    else out.level = level;
+  }
+
+  if (!partial || body.name !== undefined) {
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    if (!name) errors.push("Gift name is required.");
+    else if (name.length > 120) errors.push("Gift name must be 120 characters or fewer.");
+    else out.name = name;
+  }
+
+  if (body.description !== undefined) {
+    const description =
+      typeof body.description === "string" ? body.description.trim() : "";
+    if (description.length > 500)
+      errors.push("Description must be 500 characters or fewer.");
+    else out.description = description;
+  }
+
+  if (body.eligibility !== undefined) {
+    const eligibility =
+      typeof body.eligibility === "string" ? body.eligibility.trim() : "";
+    if (eligibility.length > 200)
+      errors.push("Eligibility must be 200 characters or fewer.");
+    else out.eligibility = eligibility;
+  }
+
+  if (body.active !== undefined) {
+    out.active = body.active ? 1 : 0;
+  }
+
+  return { errors, out };
+}
+
+app.post(
+  "/api/admin/family/gifts",
+  requireAuth,
+  requireRole("super_admin", "manager"),
+  (req, res) => {
+    const { errors, out } = validateGiftPayload(req.body || {});
+
+    if (errors.length) {
+      return res.status(400).json({ success: false, message: errors.join(" ") });
+    }
+
+    try {
+      const info = db
+        .prepare(`
+          INSERT INTO family_gifts (level, name, description, eligibility, active, createdAt, updatedAt)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `)
+        .run(
+          out.level,
+          out.name,
+          out.description || "",
+          out.eligibility || "",
+          out.active === undefined ? 1 : out.active,
+          new Date().toISOString(),
+          new Date().toISOString()
+        );
+
+      res.status(201).json({
+        success: true,
+        message: "Gift added successfully.",
+        id: info.lastInsertRowid,
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+);
+
+app.put(
+  "/api/admin/family/gifts/:id",
+  requireAuth,
+  requireRole("super_admin", "manager"),
+  (req, res) => {
+    const id = Number(req.params.id);
+
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({ success: false, message: "Invalid gift id." });
+    }
+
+    const existing = db.prepare(`SELECT * FROM family_gifts WHERE id = ?`).get(id);
+
+    if (!existing) {
+      return res.status(404).json({ success: false, message: "Gift not found." });
+    }
+
+    const { errors, out } = validateGiftPayload(req.body || {}, { partial: true });
+
+    if (errors.length) {
+      return res.status(400).json({ success: false, message: errors.join(" ") });
+    }
+
+    if (Object.keys(out).length === 0) {
+      return res.status(400).json({ success: false, message: "Nothing to update." });
+    }
+
+    try {
+      const merged = { ...existing, ...out };
+
+      db.prepare(`
+        UPDATE family_gifts
+        SET level = ?, name = ?, description = ?, eligibility = ?, active = ?, updatedAt = ?
+        WHERE id = ?
+      `).run(
+        merged.level,
+        merged.name,
+        merged.description,
+        merged.eligibility,
+        merged.active === 1 || merged.active === true ? 1 : 0,
+        new Date().toISOString(),
+        id
+      );
+
+      res.json({ success: true, message: "Gift updated successfully." });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+);
+
+app.delete(
+  "/api/admin/family/gifts/:id",
+  requireAuth,
+  requireRole("super_admin", "manager"),
+  (req, res) => {
+    const id = Number(req.params.id);
+
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({ success: false, message: "Invalid gift id." });
+    }
+
+    try {
+      const info = db.prepare(`DELETE FROM family_gifts WHERE id = ?`).run(id);
+
+      if (info.changes === 0) {
+        return res.status(404).json({ success: false, message: "Gift not found." });
+      }
+
+      res.json({ success: true, message: "Gift deleted." });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+);
 
 app.post("/api/staff/login", staffLoginLimiter, async (req, res) => {
   try {

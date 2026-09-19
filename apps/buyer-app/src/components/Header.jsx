@@ -13,9 +13,15 @@ function Header({
   onWishlist,
   onOrders,
   onFamily,
-  onInfoPage,
+  logoUrl,
+  logoAlt = "JustBrand",
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // Logo fallback safety: admin-uploaded logo first, built-in default
+  // JustBrand logo if none is configured — and if a custom logo fails
+  // to load, the <img> onError swaps it back to the default so the
+  // header never shows a broken image.
 
   // ==================================================
   // CLOSE MENU
@@ -151,8 +157,15 @@ function Header({
             }}
           >
             <img
-              src="/images/logo.png"
-              alt="JustBrand"
+              src={logoUrl || "/images/logo.png"}
+              alt={logoAlt}
+              onError={(e) => {
+                const fallback = "/images/logo.png";
+
+                if (!e.currentTarget.src.endsWith(fallback)) {
+                  e.currentTarget.src = fallback;
+                }
+              }}
             />
 
             <span className="jb-logo-name">JustBrand</span>
@@ -163,9 +176,6 @@ function Header({
         {/* ==================================================
             RIGHT SECTION
         ================================================== */}
-
-
-
 
         <div className="jb-header-right">
 
@@ -235,20 +245,6 @@ function Header({
       </header>
 
 
-      {/* STANDALONE SEARCH — directly below header */}
-      <div className="jb-standalone-search-area">
-        <div className="jb-search-wrapper jb-standalone-search">
-          <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search Products, Brands and More" className="jb-search-input" aria-label="Search products, brands and more" />
-          <button className="jb-search-btn" onClick={() => {}} aria-label="Search" type="button">🔍</button>
-          {search && ((filteredProducts && filteredProducts.length > 0) || (filteredCategories && filteredCategories.length > 0)) && (
-            <div className="jb-search-suggestions">
-              {filteredCategories && filteredCategories.length > 0 && <div className="jb-suggestion-section"><div className="jb-suggestion-title">Categories</div>{filteredCategories.slice(0,5).map((category,index)=><div key={`category-${index}`} className="jb-suggestion-item" onClick={()=>handleCategory(category)}>📂 {category}</div>)}</div>}
-              {filteredProducts && filteredProducts.length > 0 && <div className="jb-suggestion-section"><div className="jb-suggestion-title">Products</div>{filteredProducts.slice(0,8).map((product,index)=><div key={product.id||`product-${index}`} className="jb-suggestion-item jb-product-suggestion" onClick={()=>handleProductSelect(product)}><img src={product.image||"/images/product1.png"} alt={product.name||"Product"} onError={(e)=>{e.currentTarget.src="/images/product1.png";}}/><div><div className="jb-suggestion-product-name">{product.name}</div><div className="jb-suggestion-product-price">₹{product.price}</div></div></div>)}</div>}
-            </div>
-          )}
-        </div>
-      </div>
-
       {/* ==================================================
           SECOND NAVIGATION
       ================================================== */}
@@ -305,6 +301,128 @@ function Header({
         </div>
 
 
+        {/* MOBILE SEARCH (lower header) */}
+
+        <div className="jb-search-wrapper jb-nav-search">
+
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search Products, Brands and More"
+            className="jb-search-input"
+          />
+
+          <button
+            className="jb-search-btn"
+            onClick={() => {
+              // Search already controlled by App.jsx
+            }}
+            aria-label="Search"
+          >
+            🔍
+          </button>
+
+
+          {/* SEARCH SUGGESTIONS */}
+
+          {search &&
+            (
+              (filteredProducts && filteredProducts.length > 0) ||
+              (filteredCategories && filteredCategories.length > 0)
+            ) && (
+
+              <div className="jb-search-suggestions">
+
+                {/* CATEGORIES */}
+
+                {filteredCategories &&
+                  filteredCategories.length > 0 && (
+
+                    <div className="jb-suggestion-section">
+
+                      <div className="jb-suggestion-title">
+                        Categories
+                      </div>
+
+                      {filteredCategories
+                        .slice(0, 5)
+                        .map((category, index) => (
+
+                          <div
+                            key={`category-${index}`}
+                            className="jb-suggestion-item"
+                            onClick={() =>
+                              handleCategory(category)
+                            }
+                          >
+                            📂 {category}
+                          </div>
+
+                        ))}
+                    </div>
+                  )}
+
+
+                {/* PRODUCTS */}
+
+                {filteredProducts &&
+                  filteredProducts.length > 0 && (
+
+                    <div className="jb-suggestion-section">
+
+                      <div className="jb-suggestion-title">
+                        Products
+                      </div>
+
+                      {filteredProducts
+                        .slice(0, 8)
+                        .map((product, index) => (
+
+                          <div
+                            key={
+                              product.id ||
+                              `product-${index}`
+                            }
+                            className="jb-suggestion-item jb-product-suggestion"
+                            onClick={() =>
+                              handleProductSelect(product)
+                            }
+                          >
+
+                            <img
+                              src={
+                                product.image ||
+                                "/images/product1.png"
+                              }
+                              alt={product.name || "Product"}
+                              onError={(e) => {
+                                e.currentTarget.src =
+                                  "/images/product1.png";
+                              }}
+                            />
+
+                            <div>
+                              <div className="jb-suggestion-product-name">
+                                {product.name}
+                              </div>
+
+                              <div className="jb-suggestion-product-price">
+                                ₹{product.price}
+                              </div>
+                            </div>
+
+                          </div>
+
+                        ))}
+                    </div>
+                  )}
+
+              </div>
+            )}
+        </div>
+
+
         {/* Nav-level Sell CTA removed — the single "Sell on
             JustBrand" entry is in the side drawer (menu). */}
 
@@ -333,8 +451,15 @@ function Header({
 
               <div className="jb-side-logo">
                 <img
-                  src="/images/logo.png"
-                  alt="JustBrand"
+                  src={logoUrl || "/images/logo.png"}
+                  alt={logoAlt}
+                  onError={(e) => {
+                    const fallback = "/images/logo.png";
+
+                    if (!e.currentTarget.src.endsWith(fallback)) {
+                      e.currentTarget.src = fallback;
+                    }
+                  }}
                 />
 
                 <span>
@@ -432,49 +557,6 @@ function Header({
               <span>
                 JustBrand Join
               </span>
-            </button>
-
-
-            {/* HELP & INFORMATION */}
-
-            <div className="jb-side-section-title">
-              Help & Information
-            </div>
-
-            <button
-              className="jb-side-item"
-              onClick={() => {
-                closeMenu();
-                onInfoPage?.("about");
-              }}
-              type="button"
-            >
-              ℹ️
-              <span>About Us</span>
-            </button>
-
-            <button
-              className="jb-side-item"
-              onClick={() => {
-                closeMenu();
-                onInfoPage?.("contact");
-              }}
-              type="button"
-            >
-              📞
-              <span>Contact Us</span>
-            </button>
-
-            <button
-              className="jb-side-item"
-              onClick={() => {
-                closeMenu();
-                onInfoPage?.("returns");
-              }}
-              type="button"
-            >
-              ↩️
-              <span>Return & Refund Policy</span>
             </button>
 
 
@@ -577,15 +659,14 @@ function Header({
 
         .jb-header {
           width: 100%;
-          min-height: 70px;
+          min-height: 78px;
 
           display: flex;
           align-items: center;
-          flex-wrap: wrap;
 
-          gap: 10px 15px;
+          gap: 15px;
 
-          padding: 12px 20px 14px;
+          padding: 13px 24px;
 
           background: linear-gradient(
             90deg,
@@ -675,27 +756,190 @@ function Header({
 
 
         .jb-logo img {
-          width: 43px;
-          height: 43px;
+          width: 46px;
+          height: 46px;
 
           object-fit: contain;
 
-          border-radius: 8px;
+          border-radius: 10px;
         }
 
 
         .jb-logo span {
-          font-size: 21px;
+          font-size: 22px;
           font-weight: 800;
+
+          letter-spacing: 0.2px;
         }
 
 
-        /* SEARCH BASE */
-        .jb-search-wrapper { position: relative; width: 100%; }
-        .jb-search-input { width: 100%; height: 48px; border: 1px solid #d9d9d9; outline: none; border-radius: 26px; padding: 0 58px 0 18px; font-size: 15px; color: #222; background: #fff; box-shadow: 0 3px 12px rgba(0,0,0,0.10); }
-        .jb-search-input:focus { border-color: #ff7a00; box-shadow: 0 4px 16px rgba(255,122,0,0.18); }
-        .jb-search-input::placeholder { color: #777; }
-        .jb-search-btn { position: absolute; right: 5px; top: 5px; width: 38px; height: 38px; border: none; border-radius: 50%; background: linear-gradient(135deg,#ff7a00,#ff4d8d); color: white; cursor: pointer; font-size: 18px; }
+        /* ==================================================
+           SEARCH
+        ================================================== */
+
+        .jb-search-wrapper {
+          position: relative;
+
+          flex: 1;
+
+          max-width: 850px;
+
+          margin: 0 auto;
+        }
+
+
+        .jb-search-input {
+          width: 100%;
+
+          height: 46px;
+
+          border: 1px solid transparent;
+          outline: none;
+
+          border-radius: 9px;
+
+          padding:
+            0 52px 0 16px;
+
+          font-size: 15.5px;
+
+          color: #222;
+
+          transition:
+            border 0.15s ease,
+            box-shadow 0.15s ease;
+        }
+
+
+        .jb-search-input:focus {
+          border-color: #ff7a00;
+
+          box-shadow:
+            0 0 0 3px rgba(255, 122, 0, 0.25);
+        }
+
+
+        .jb-search-input::placeholder {
+          color: #777;
+        }
+
+
+        .jb-search-btn {
+          position: absolute;
+
+          right: 5px;
+          top: 5px;
+
+          width: 36px;
+          height: 36px;
+
+          border: none;
+          border-radius: 6px;
+
+          background: #ff7a00;
+
+          color: white;
+
+          cursor: pointer;
+
+          font-size: 18px;
+        }
+
+
+        /* ==================================================
+           SEARCH SUGGESTIONS
+        ================================================== */
+
+        .jb-search-suggestions {
+          position: absolute;
+
+          top: 49px;
+          left: 0;
+          right: 0;
+
+          background: white;
+
+          color: #222;
+
+          border-radius: 8px;
+
+          box-shadow:
+            0 5px 20px rgba(0,0,0,0.20);
+
+          max-height: 430px;
+
+          overflow-y: auto;
+
+          z-index: 2000;
+        }
+
+
+        .jb-suggestion-section {
+          padding: 8px 0;
+        }
+
+
+        .jb-suggestion-title {
+          padding:
+            7px 15px;
+
+          font-size: 12px;
+
+          font-weight: 700;
+
+          color: #777;
+
+          text-transform: uppercase;
+        }
+
+
+        .jb-suggestion-item {
+          display: flex;
+          align-items: center;
+
+          gap: 10px;
+
+          padding:
+            9px 15px;
+
+          cursor: pointer;
+
+          transition:
+            background 0.15s ease;
+        }
+
+
+        .jb-suggestion-item:hover {
+          background: #f5f5f5;
+        }
+
+
+        .jb-product-suggestion img {
+          width: 42px;
+          height: 42px;
+
+          object-fit: contain;
+
+          border-radius: 5px;
+
+          border: 1px solid #eee;
+        }
+
+
+        .jb-suggestion-product-name {
+          font-size: 14px;
+          font-weight: 600;
+        }
+
+
+        .jb-suggestion-product-price {
+          font-size: 13px;
+
+          color: #e85d00;
+
+          margin-top: 2px;
+        }
+
 
         /* ==================================================
            RIGHT
@@ -730,17 +974,28 @@ function Header({
           display: flex;
           align-items: center;
 
-          gap: 5px;
+          gap: 6px;
 
-          padding: 8px;
+          padding: 9px 11px;
 
-          border-radius: 7px;
+          border-radius: 8px;
 
           position: relative;
 
           font-size: 14px;
 
           white-space: nowrap;
+
+          transition:
+            background 0.15s ease;
+        }
+
+
+        /* Cart stands out as the primary header action */
+        .jb-header .jb-cart-btn {
+          background: rgba(255,255,255,0.16);
+
+          border: 1px solid rgba(255,255,255,0.30);
         }
 
 
@@ -868,7 +1123,7 @@ function Header({
         .jb-nav {
           width: 100%;
 
-          min-height: 46px;
+          min-height: 52px;
 
           display: flex;
           align-items: center;
@@ -913,7 +1168,7 @@ function Header({
           background: transparent;
 
           padding:
-            10px 12px;
+            11px 13px;
 
           color: #333;
 
@@ -925,7 +1180,11 @@ function Header({
 
           white-space: nowrap;
 
-          border-radius: 5px;
+          border-radius: 7px;
+
+          transition:
+            background 0.15s ease,
+            color 0.15s ease;
         }
 
 
@@ -941,6 +1200,22 @@ function Header({
         ================================================== */
 
         /* jb-nav-seller removed — Sell entry lives in the drawer. */
+
+
+        /* LOWER-NAV SEARCH — left half of the nav row */
+        .jb-search-wrapper.jb-nav-search {
+          display: block;
+
+          order: 1;
+
+          flex: 1 1 0;
+
+          min-width: 0;
+
+          max-width: 560px;
+
+          margin: 0;
+        }
 
 
         /* ==================================================
@@ -1204,17 +1479,17 @@ function Header({
         @media (max-width: 700px) {
 
           .jb-header {
-            min-height: auto;
+            min-height: 66px;
 
             padding:
-              8px;
+              10px 10px;
 
             display: grid;
 
             grid-template-columns:
               auto 1fr auto;
 
-            gap: 7px;
+            gap: 8px;
           }
 
 
@@ -1260,15 +1535,33 @@ function Header({
           }
 
 
-          .jb-search-wrapper {
+          .jb-search-wrapper.jb-nav-search {
             display: block;
           }
 
 
-          .jb-standalone-search-area { padding: 8px 9px; }
-          .jb-search-wrapper.jb-standalone-search { max-width: none; }
-          .jb-standalone-search .jb-search-input { height: 44px; font-size: 14px; padding-left: 15px; }
-          .jb-standalone-search .jb-search-btn { width: 36px; height: 36px; top: 4px; right: 4px; }
+          .jb-nav-search .jb-search-suggestions {
+            width: 200%;
+          }
+
+
+          .jb-search-input {
+            height: 42px;
+
+            font-size: 13.5px;
+
+            padding-left: 10px;
+          }
+
+
+          .jb-search-btn {
+            width: 34px;
+            height: 34px;
+
+            top: 4px;
+            right: 4px;
+          }
+
 
           .jb-header-right {
             gap: 2px;
@@ -1360,7 +1653,7 @@ function Header({
 
 
           .jb-search-input {
-            height: 36px;
+            height: 40px;
           }
 
 

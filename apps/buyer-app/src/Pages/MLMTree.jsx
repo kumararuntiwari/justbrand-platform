@@ -548,7 +548,20 @@ function MLMTree({ member, onBack }) {
           🌳 Direct Team
         </div>
 
-        <div style={styles.directGrid}>
+        <p
+          style={{
+            textAlign: "center",
+            fontSize: "13px",
+            color: "#777",
+            margin: "0 0 14px",
+          }}
+        >
+          Every member can add up to 3 direct members — LEFT, CENTER and
+          RIGHT. New members beyond a full position flow down as spillover
+          support for your team.
+        </p>
+
+        <div style={styles.directGrid} className="jb-tree-direct">
           {/* LEFT */}
 
           <div style={styles.directCard}>

@@ -278,7 +278,7 @@ function MLMDashboard({ member, onLogout }) {
         >
 
           <div style={styles.menuTitle}>
-            MLM MENU
+            JUSTBRAND FAMILY
           </div>
 
           <MenuButton

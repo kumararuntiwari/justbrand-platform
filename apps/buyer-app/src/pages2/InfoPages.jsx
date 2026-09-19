@@ -5,6 +5,9 @@ import React from "react";
 // =====================================================
 // Contact Us / About Us / Return & Refund Policy.
 // Purely informational — no business data is invented here.
+// Content edited by the Admin Panel (site content feed) is
+// rendered when available; otherwise the built-in default
+// copy below is shown (fallback safety — never blank).
 // Any detail not yet confirmed by the company is marked as
 // a clearly-labeled configuration placeholder.
 
@@ -24,7 +27,13 @@ function Section({ title, children }) {
   );
 }
 
-function ContactPage() {
+function hasText(v) {
+  return typeof v === "string" && v.trim().length > 0;
+}
+
+function ContactPage({ content }) {
+  const c = content || {};
+
   return (
     <>
       <Section title="We're Here to Help">
@@ -34,27 +43,39 @@ function ContactPage() {
           happy to help.
         </p>
         <p>
-          <strong>Customer support hours:</strong> Monday–Saturday,
-          10:00 AM – 7:00 PM IST
+          <strong>Customer support hours:</strong>{" "}
+          {hasText(c.supportHours)
+            ? c.supportHours
+            : "Monday–Saturday, 10:00 AM – 7:00 PM IST"}
         </p>
+        {hasText(c.supportInfo) ? <p>{c.supportInfo}</p> : null}
       </Section>
 
       <Section title="Reach Us">
         <ul className="jb-info-list">
           <li>
             <strong>Customer support email:</strong>{" "}
-            {/* CONFIG PLACEHOLDER: set the official support email
-                before production launch. */}
-            <em style={{ color: "#a06a00" }}>
-              [support email — to be configured]
-            </em>
+            {hasText(c.email) ? (
+              c.email
+            ) : (
+              <em style={{ color: "#a06a00" }}>
+                [support email — to be configured]
+              </em>
+            )}
           </li>
           <li>
             <strong>Support phone / WhatsApp:</strong>{" "}
-            {/* CONFIG PLACEHOLDER: set the official support number. */}
-            <em style={{ color: "#a06a00" }}>
-              [support number — to be configured]
-            </em>
+            {hasText(c.phone) || hasText(c.whatsapp) ? (
+              <>
+                {hasText(c.phone) ? c.phone : null}
+                {hasText(c.phone) && hasText(c.whatsapp) ? " · " : null}
+                {hasText(c.whatsapp) ? `WhatsApp: ${c.whatsapp}` : null}
+              </>
+            ) : (
+              <em style={{ color: "#a06a00" }}>
+                [support number — to be configured]
+              </em>
+            )}
           </li>
           <li>
             <strong>Seller enquiries:</strong> use the “Sell on
@@ -62,41 +83,70 @@ function ContactPage() {
           </li>
           <li>
             <strong>Registered office:</strong>{" "}
-            <em style={{ color: "#a06a00" }}>
-              [registered address — to be configured]
-            </em>
+            {hasText(c.address) ? (
+              c.address
+            ) : (
+              <em style={{ color: "#a06a00" }}>
+                [registered address — to be configured]
+              </em>
+            )}
           </li>
         </ul>
       </Section>
 
-      <Section title="Before You Write">
-        <p>
-          For order-related questions, please keep your order number
-          handy — you can find all your orders in the
-          “Orders” section of your account. It helps us resolve your
-          query faster.
-        </p>
-      </Section>
+      {!hasText(c.supportInfo) && (
+        <Section title="Before You Write">
+          <p>
+            For order-related questions, please keep your order number
+            handy — you can find all your orders in the
+            “Orders” section of your account. It helps us resolve your
+            query faster.
+          </p>
+        </Section>
+      )}
     </>
   );
 }
 
-function AboutPage() {
+function AboutPage({ content }) {
+  const c = content || {};
+
   return (
     <>
-      <Section title="About JustBrand">
-        <p>
-          JustBrand is an Indian online marketplace built with a
-          simple promise: genuine products, fair prices, and a
-          shopping experience that feels made for India.
-        </p>
-        <p>
-          From everyday electronics to home essentials, every product
-          listed on JustBrand goes through a review process before it
-          reaches you — so what you see is what trusted sellers
-          actually deliver.
-        </p>
+      <Section title={hasText(c.title) ? c.title : "About JustBrand"}>
+        {hasText(c.intro) ? <p>{c.intro}</p> : (
+          <p>
+            JustBrand is an Indian online marketplace built with a
+            simple promise: genuine products, fair prices, and a
+            shopping experience that feels made for India.
+          </p>
+        )}
+        {hasText(c.businessIntro) ? (
+          <p>{c.businessIntro}</p>
+        ) : (
+          <p>
+            From everyday electronics to home essentials, every product
+            listed on JustBrand goes through a review process before it
+            reaches you — so what you see is what trusted sellers
+            actually deliver.
+          </p>
+        )}
       </Section>
+
+      {hasText(c.mission) || hasText(c.vision) ? (
+        <Section title="Our Mission & Vision">
+          {hasText(c.mission) ? (
+            <p>
+              <strong>Mission:</strong> {c.mission}
+            </p>
+          ) : null}
+          {hasText(c.vision) ? (
+            <p>
+              <strong>Vision:</strong> {c.vision}
+            </p>
+          ) : null}
+        </Section>
+      ) : null}
 
       <Section title="What Makes Us Different">
         <ul className="jb-info-list">
@@ -120,6 +170,12 @@ function AboutPage() {
           </li>
         </ul>
       </Section>
+
+      {hasText(c.additionalInfo) ? (
+        <Section title="More About Us">
+          <p>{c.additionalInfo}</p>
+        </Section>
+      ) : null}
 
       <Section title="JustBrand Family">
         <p>
@@ -230,7 +286,7 @@ function ReturnsPage() {
   );
 }
 
-function InfoPages({ kind, onBack }) {
+function InfoPages({ kind, onBack, content }) {
   return (
     <div
       className="jb-page"
@@ -258,8 +314,8 @@ function InfoPages({ kind, onBack }) {
         ← Back
       </button>
 
-      {kind === "contact" && <ContactPage />}
-      {kind === "about" && <AboutPage />}
+      {kind === "contact" && <ContactPage content={content} />}
+      {kind === "about" && <AboutPage content={content} />}
       {kind === "returns" && <ReturnsPage />}
     </div>
   );

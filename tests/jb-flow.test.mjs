@@ -217,6 +217,15 @@ async function runFlow() {
     pending.every((p) => p.sellerName === "Flow Seller" || p.sellerId)
   );
 
+  // The approve endpoint enforces the seller-KYC gate (SELLER_KYC_REQUIRED),
+  // so approve the flow seller's KYC first — same as the real admin flow.
+  const flowSellerId = reg.data.seller?.id;
+  const kycApprove = await req("PUT", `/api/admin/sellers/${flowSellerId}/kyc`, {
+    token: staff,
+    body: { kycStatus: "Approved" },
+  });
+  ok("admin approves flow seller KYC", kycApprove.status === 200);
+
   const apWeb = await req("PUT", `/api/admin/products/${webId}/approve`, { token: staff });
   ok("admin approves product", apWeb.status === 200);
   const apRej = await req("PUT", `/api/admin/products/${b64Id}/reject`, { token: staff });

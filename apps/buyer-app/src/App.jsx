@@ -1130,8 +1130,6 @@ function App() {
       setMlmPage(
         mlmMember ? "dashboard" : "login"
       ),
-    onInfoPage: (page) =>
-      setBuyerPage(page),
     logoUrl: siteContent?.branding?.logoUrl || "",
     logoAlt: siteContent?.branding?.logoAlt || "JustBrand",
   };
@@ -1835,19 +1833,57 @@ function App() {
         {loading && (
           <div
             style={{
-              background:
-                "white",
-              padding:
-                "40px",
-              textAlign:
-                "center",
-              borderRadius:
-                "12px",
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+              gap: "20px",
             }}
           >
-            <h3>
-              Loading products...
-            </h3>
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div
+                key={i}
+                style={{
+                  background: "white",
+                  borderRadius: "14px",
+                  padding: "12px",
+                  border: "1px solid #eee",
+                }}
+              >
+                <div
+                  style={{
+                    width: "100%",
+                    aspectRatio: "1 / 1",
+                    borderRadius: "12px",
+                    background:
+                      "linear-gradient(90deg,#f0f0f2 25%,#fafafb 50%,#f0f0f2 75%)",
+                    backgroundSize: "200% 100%",
+                    animation: "jb-shimmer 1.1s infinite",
+                    marginBottom: "10px",
+                  }}
+                />
+                <div
+                  style={{
+                    height: "14px",
+                    borderRadius: "7px",
+                    background:
+                      "linear-gradient(90deg,#f0f0f2 25%,#fafafb 50%,#f0f0f2 75%)",
+                    backgroundSize: "200% 100%",
+                    animation: "jb-shimmer 1.1s infinite",
+                    marginBottom: "8px",
+                  }}
+                />
+                <div
+                  style={{
+                    height: "14px",
+                    width: "55%",
+                    borderRadius: "7px",
+                    background:
+                      "linear-gradient(90deg,#f0f0f2 25%,#fafafb 50%,#f0f0f2 75%)",
+                    backgroundSize: "200% 100%",
+                    animation: "jb-shimmer 1.1s infinite",
+                  }}
+                />
+              </div>
+            ))}
           </div>
         )}
 
@@ -1906,20 +1942,40 @@ function App() {
                 background:
                   "white",
                 padding:
-                  "40px",
+                  "48px 24px",
                 borderRadius:
-                  "12px",
+                  "16px",
                 textAlign:
                   "center",
                 marginTop:
                   "20px",
+                border: "1px solid #eee",
               }}
             >
-              <h3>
+              <div
+                style={{
+                  fontSize: "44px",
+                  marginBottom: "10px",
+                }}
+              >
+                🔍
+              </div>
+              <h3
+                style={{
+                  margin: "0 0 6px",
+                  color: "#222",
+                }}
+              >
                 No products found
               </h3>
 
-              <p>
+              <p
+                style={{
+                  color: "#777",
+                  margin: "0 0 18px",
+                  fontSize: "14.5px",
+                }}
+              >
                 Please try another
                 search or category.
               </p>
@@ -1933,17 +1989,21 @@ function App() {
                 }}
                 style={{
                   background:
-                    "#ff6b00",
+                    "linear-gradient(135deg, #ff8a00, #ff1493)",
                   color:
                     "white",
                   border:
                     "none",
                   padding:
-                    "10px 20px",
+                    "11px 22px",
                   borderRadius:
-                    "7px",
+                    "24px",
                   cursor:
                     "pointer",
+                  fontWeight: 700,
+                  fontSize: "14px",
+                  boxShadow:
+                    "0 4px 12px rgba(255,20,147,0.25)",
                 }}
               >
                 Show All Products
@@ -1998,7 +2058,7 @@ function App() {
       </div>
 
       <Footer
-        onInfoPage={(page) => setBuyerPage(page)}
+        onInfoPage={(key) => setBuyerPage(key)}
         onFamily={() => setMlmPage(mlmMember ? "dashboard" : "login")}
         onCart={() => setShowCart(true)}
         onWishlist={() => setBuyerPage("wishlist")}

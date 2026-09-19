@@ -1431,4 +1431,18 @@ button.reject {
   .drawer {
     padding: 16px;
   }
+
+  /* Tables scroll horizontally inside their wrapper; slightly
+     smaller min-width keeps more columns visible on phones. */
+  .sec-table {
+    min-width: 560px;
+  }
+
+  .drawer {
+    width: 100%;
+  }
+
+  .drawer-lg {
+    width: 100%;
+  }
 }
