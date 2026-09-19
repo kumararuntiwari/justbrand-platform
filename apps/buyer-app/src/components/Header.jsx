@@ -13,8 +13,15 @@ function Header({
   onWishlist,
   onOrders,
   onFamily,
+  logoUrl,
+  logoAlt = "JustBrand",
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // Logo fallback safety: admin-uploaded logo first, built-in default
+  // JustBrand logo if none is configured — and if a custom logo fails
+  // to load, the <img> onError swaps it back to the default so the
+  // header never shows a broken image.
 
   // ==================================================
   // CLOSE MENU
@@ -150,8 +157,15 @@ function Header({
             }}
           >
             <img
-              src="/images/logo.png"
-              alt="JustBrand"
+              src={logoUrl || "/images/logo.png"}
+              alt={logoAlt}
+              onError={(e) => {
+                const fallback = "/images/logo.png";
+
+                if (!e.currentTarget.src.endsWith(fallback)) {
+                  e.currentTarget.src = fallback;
+                }
+              }}
             />
 
             <span className="jb-logo-name">JustBrand</span>
@@ -437,8 +451,15 @@ function Header({
 
               <div className="jb-side-logo">
                 <img
-                  src="/images/logo.png"
-                  alt="JustBrand"
+                  src={logoUrl || "/images/logo.png"}
+                  alt={logoAlt}
+                  onError={(e) => {
+                    const fallback = "/images/logo.png";
+
+                    if (!e.currentTarget.src.endsWith(fallback)) {
+                      e.currentTarget.src = fallback;
+                    }
+                  }}
                 />
 
                 <span>
@@ -638,14 +659,14 @@ function Header({
 
         .jb-header {
           width: 100%;
-          min-height: 70px;
+          min-height: 78px;
 
           display: flex;
           align-items: center;
 
           gap: 15px;
 
-          padding: 10px 20px;
+          padding: 13px 24px;
 
           background: linear-gradient(
             90deg,
@@ -735,18 +756,20 @@ function Header({
 
 
         .jb-logo img {
-          width: 43px;
-          height: 43px;
+          width: 46px;
+          height: 46px;
 
           object-fit: contain;
 
-          border-radius: 8px;
+          border-radius: 10px;
         }
 
 
         .jb-logo span {
-          font-size: 21px;
+          font-size: 22px;
           font-weight: 800;
+
+          letter-spacing: 0.2px;
         }
 
 
@@ -768,19 +791,31 @@ function Header({
         .jb-search-input {
           width: 100%;
 
-          height: 44px;
+          height: 46px;
 
-          border: none;
+          border: 1px solid transparent;
           outline: none;
 
-          border-radius: 7px;
+          border-radius: 9px;
 
           padding:
             0 52px 0 16px;
 
-          font-size: 15px;
+          font-size: 15.5px;
 
           color: #222;
+
+          transition:
+            border 0.15s ease,
+            box-shadow 0.15s ease;
+        }
+
+
+        .jb-search-input:focus {
+          border-color: #ff7a00;
+
+          box-shadow:
+            0 0 0 3px rgba(255, 122, 0, 0.25);
         }
 
 
@@ -792,8 +827,8 @@ function Header({
         .jb-search-btn {
           position: absolute;
 
-          right: 4px;
-          top: 4px;
+          right: 5px;
+          top: 5px;
 
           width: 36px;
           height: 36px;
@@ -939,17 +974,28 @@ function Header({
           display: flex;
           align-items: center;
 
-          gap: 5px;
+          gap: 6px;
 
-          padding: 8px;
+          padding: 9px 11px;
 
-          border-radius: 7px;
+          border-radius: 8px;
 
           position: relative;
 
           font-size: 14px;
 
           white-space: nowrap;
+
+          transition:
+            background 0.15s ease;
+        }
+
+
+        /* Cart stands out as the primary header action */
+        .jb-header .jb-cart-btn {
+          background: rgba(255,255,255,0.16);
+
+          border: 1px solid rgba(255,255,255,0.30);
         }
 
 
@@ -1077,7 +1123,7 @@ function Header({
         .jb-nav {
           width: 100%;
 
-          min-height: 46px;
+          min-height: 52px;
 
           display: flex;
           align-items: center;
@@ -1122,7 +1168,7 @@ function Header({
           background: transparent;
 
           padding:
-            10px 12px;
+            11px 13px;
 
           color: #333;
 
@@ -1134,7 +1180,11 @@ function Header({
 
           white-space: nowrap;
 
-          border-radius: 5px;
+          border-radius: 7px;
+
+          transition:
+            background 0.15s ease,
+            color 0.15s ease;
         }
 
 
@@ -1429,17 +1479,17 @@ function Header({
         @media (max-width: 700px) {
 
           .jb-header {
-            min-height: auto;
+            min-height: 66px;
 
             padding:
-              8px;
+              10px 10px;
 
             display: grid;
 
             grid-template-columns:
               auto 1fr auto;
 
-            gap: 7px;
+            gap: 8px;
           }
 
 
@@ -1496,20 +1546,20 @@ function Header({
 
 
           .jb-search-input {
-            height: 39px;
+            height: 42px;
 
-            font-size: 13px;
+            font-size: 13.5px;
 
             padding-left: 10px;
           }
 
 
           .jb-search-btn {
-            width: 32px;
-            height: 32px;
+            width: 34px;
+            height: 34px;
 
-            top: 3.5px;
-            right: 3.5px;
+            top: 4px;
+            right: 4px;
           }
 
 
@@ -1603,7 +1653,7 @@ function Header({
 
 
           .jb-search-input {
-            height: 36px;
+            height: 40px;
           }
 
 

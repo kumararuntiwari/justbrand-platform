@@ -3,6 +3,12 @@ import "./App.css";
 import Business from "./Business";
 import OverviewSection from "./OverviewSection";
 import BuyersSection from "./BuyersSection";
+import ContentManager from "./ContentManager";
+import {
+  LevelCommissionsEditor,
+  FamilyGiftsManager,
+} from "./FamilyManagers";
+import BuyerSettingsPanel from "./BuyerSettingsPanel";
 
 const API = "https://justbrand-in-144629.hostingersite.com";
 
@@ -730,17 +736,56 @@ function App() {
   const canUseOrders = ["super_admin", "manager", "accountant"].includes(staff?.role);
   const canUseSellers = staff?.role === "super_admin" || staff?.role === "manager";
 
-  const navItems = [
-    { key: "overview", label: "📊 Overview", enabled: true, crumb: "Overview" },
-    { key: "buyers", label: "🛒 Buyers", enabled: canUseCustomers, crumb: "Buyers" },
-    { key: "sellers", label: "🏪 Sellers", enabled: canUseSellers, crumb: "Sellers · Orders · Family" },
-    { key: "kyc", label: "🪪 KYC", enabled: canUseSellers, crumb: "KYC · Sellers · Orders · Family" },
-    { key: "orders", label: "📦 Orders", enabled: canUseOrders, crumb: "Sellers · Orders · Family" },
-    { key: "family", label: "👨‍👩‍👧 JustBrand Family", enabled: canUseSellers, crumb: "Sellers · Orders · Family" },
-    { key: "tree", label: "🌳 Family Tree", enabled: canUseSellers, crumb: "Family Tree" },
-    { key: "products", label: "🏷️ Products", enabled: canUseSellers, crumb: "Products" },
-    { key: "staff", label: "👥 Staff", enabled: canManageStaff, crumb: "Super Admin · Staff" },
+  // Grouped sidebar — grouped nav model with the same role gating as
+  // before (items outside a role simply stay disabled/hidden).
+  const navGroups = [
+    {
+      label: "Business",
+      items: [
+        { key: "overview", label: "📊 Overview", enabled: true, crumb: "Overview" },
+        { key: "cm-about", label: "📖 About Us", enabled: canUseSellers, crumb: "Business · About Us" },
+        { key: "cm-contact", label: "📞 Contact Us", enabled: canUseSellers, crumb: "Business · Contact Us" },
+        { key: "cm-branding", label: "🎨 Logo & Branding", enabled: canUseSellers, crumb: "Business · Logo & Branding" },
+      ],
+    },
+    {
+      label: "Buyer Experience",
+      items: [
+        { key: "cm-banners", label: "🖼️ Homepage Banners", enabled: canUseSellers, crumb: "Buyer Experience · Banners" },
+        { key: "cm-homepage", label: "🏠 Homepage Content", enabled: canUseSellers, crumb: "Buyer Experience · Homepage" },
+        { key: "buyer-settings", label: "⚙️ Buyer Settings", enabled: canUseSellers, crumb: "Buyer Experience · Settings" },
+      ],
+    },
+    {
+      label: "Commerce",
+      items: [
+        { key: "products", label: "🏷️ Products", enabled: canUseSellers, crumb: "Products" },
+        { key: "orders", label: "📦 Orders", enabled: canUseOrders, crumb: "Orders" },
+        { key: "sellers", label: "🏪 Sellers", enabled: canUseSellers, crumb: "Sellers" },
+        { key: "buyers", label: "🛒 Buyers", enabled: canUseCustomers, crumb: "Buyers" },
+        { key: "kyc", label: "🪪 KYC", enabled: canUseSellers, crumb: "KYC" },
+      ],
+    },
+    {
+      label: "JustBrand Family",
+      items: [
+        { key: "family", label: "👨‍👩‍👧 Family Overview", enabled: canUseSellers, crumb: "Family · Overview" },
+        { key: "fam-commission", label: "💰 Commission Settings", enabled: canUseSellers, crumb: "Family · Commission Settings" },
+        { key: "fam-levels", label: "📈 Level-wise Commission", enabled: canUseSellers, crumb: "Family · Level Commission" },
+        { key: "fam-gifts", label: "🎁 Level-wise Gifts", enabled: canUseSellers, crumb: "Family · Gifts" },
+        { key: "fam-rules", label: "📐 Family Rules", enabled: canUseSellers, crumb: "Family · Rules" },
+        { key: "tree", label: "🌳 Family Tree", enabled: canUseSellers, crumb: "Family Tree" },
+      ],
+    },
+    {
+      label: "Administration",
+      items: [
+        { key: "staff", label: "👥 Staff", enabled: canManageStaff, crumb: "Staff" },
+      ],
+    },
   ];
+
+  const navItems = navGroups.flatMap((g) => g.items);
 
   const activeNavItem = navItems.find((item) => item.key === activeView) || navItems[0];
 
@@ -749,8 +794,9 @@ function App() {
     if (!item || !item.enabled) return;
 
     // Business tabs share one component — map admin views to its tabs.
-    if (["sellers", "orders", "family", "kyc", "tree"].includes(key)) {
-      setBusinessTabKey(key);
+    // Family sub-views reuse the Family (mlm) tab.
+    if (["sellers", "orders", "family", "kyc", "tree", "fam-commission", "fam-levels", "fam-gifts", "fam-rules"].includes(key)) {
+      setBusinessTabKey(key === "family" || key.startsWith("fam-") ? "mlm" : key);
     }
 
     setActiveView(key);
@@ -991,10 +1037,77 @@ function App() {
 
         {/* BUSINESS (Sellers / Orders / Family / KYC / Tree) */}
 
+        {/* CONTENT MANAGER (About/Contact/Branding/Banners/Homepage) */}
+
+        {["cm-about", "cm-contact", "cm-branding", "cm-banners", "cm-homepage"].includes(
+          activeView
+        ) && (
+          <ContentManager
+            token={token}
+            section={activeView.replace("cm-", "")}
+            isSuper={staff.role === "super_admin"}
+            onMessage={(msg) => {
+              setMessage(msg);
+
+              setTimeout(() => setMessage(""), 4000);
+            }}
+          />
+        )}
+
+        {/* LEVEL-WISE COMMISSION MANAGER */}
+
+        {activeView === "fam-levels" && canUseSellers && (
+          <LevelCommissionsEditor
+            token={token}
+            isSuper={staff.role === "super_admin"}
+            onMessage={(msg) => {
+              setMessage(msg);
+
+              setTimeout(() => setMessage(""), 4000);
+            }}
+          />
+        )}
+
+        {/* LEVEL-WISE GIFTS MANAGER */}
+
+        {activeView === "fam-gifts" && canUseSellers && (
+          <FamilyGiftsManager
+            token={token}
+            onMessage={(msg) => {
+              setMessage(msg);
+
+              setTimeout(() => setMessage(""), 4000);
+            }}
+          />
+        )}
+
+        {/* BUYER SETTINGS (fallback behaviour overview — read-only) */}
+
+        {activeView === "buyer-settings" && (
+          <BuyerSettingsPanel
+            customers={customers}
+            products={products}
+          />
+        )}
+
+        {/* FAMILY COMMISSION/GIFTS/RULES sub-views — Family (mlm) tab
+            is the single source of truth; Commission Settings and Rules
+            render inside it. Levels/Gifts render dedicated managers. */}
+
         {activeView !== "overview" &&
           activeView !== "buyers" &&
           activeView !== "products" &&
-          activeView !== "staff" && (
+          activeView !== "staff" &&
+          activeView !== "buyer-settings" &&
+          ![
+            "cm-about",
+            "cm-contact",
+            "cm-branding",
+            "cm-banners",
+            "cm-homepage",
+            "fam-levels",
+            "fam-gifts",
+          ].includes(activeView) && (
             <Business
               token={token}
               staff={staff}

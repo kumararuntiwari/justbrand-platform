@@ -205,3 +205,20 @@ select {
   );
   pointer-events: none;
 }
+
+/* ---------- shared shimmer (product skeleton loading) ---------- */
+@keyframes jb-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* ---------- Family tree: mobile direct-grid fallback ---------- */
+@media (max-width: 640px) {
+  .jb-tree-direct {
+    grid-template-columns: 1fr !important;
+  }
+}
