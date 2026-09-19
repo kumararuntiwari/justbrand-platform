@@ -779,6 +779,29 @@ function OrderCard({
         </span>
       </div>
 
+      {order.deliveryStatus ? (
+        <div
+          style={{
+            marginTop: "12px",
+            padding: "8px 12px",
+            background: "#fff7ed",
+            borderRadius: "8px",
+            fontSize: "13px",
+            color: "#c2410c",
+            fontWeight: 600,
+          }}
+        >
+          🚚 Delivery: {order.deliveryStatus}
+          {order.deliveryPartnerName
+            ? ` • Partner: ${order.deliveryPartnerName}`
+            : ""}
+          {order.deliveryStatus === "Delivery Failed" &&
+          order.deliveryFailureReason
+            ? ` • ${order.deliveryFailureReason}`
+            : ""}
+        </div>
+      ) : null}
+
       <div
         style={{
           display: "grid",
@@ -1137,6 +1160,10 @@ function OrderDetails({
                   Processing
                 </option>
 
+                <option value="Ready for Pickup">
+                  Ready for Pickup
+                </option>
+
                 <option value="Shipped">
                   Shipped
                 </option>
@@ -1151,6 +1178,66 @@ function OrderDetails({
               </select>
             </div>
           </DetailSection>
+
+          {order.deliveryStatus ? (
+            <DetailSection title="🛵 Delivery">
+              <DetailRow
+                label="Delivery Status"
+                value={order.deliveryStatus}
+              />
+
+              {order.deliveryPartnerName ? (
+                <DetailRow
+                  label="Delivery Partner"
+                  value={order.deliveryPartnerName}
+                />
+              ) : null}
+
+              {order.pickedUpAt ? (
+                <DetailRow
+                  label="Picked Up At"
+                  value={new Date(
+                    order.pickedUpAt
+                  ).toLocaleString("en-IN")}
+                />
+              ) : null}
+
+              {order.outForDeliveryAt ? (
+                <DetailRow
+                  label="Out for Delivery At"
+                  value={new Date(
+                    order.outForDeliveryAt
+                  ).toLocaleString("en-IN")}
+                />
+              ) : null}
+
+              {order.deliveryStatus === "Delivered" &&
+              order.deliveredAt ? (
+                <DetailRow
+                  label="Delivered At"
+                  value={new Date(
+                    order.deliveredAt
+                  ).toLocaleString("en-IN")}
+                />
+              ) : null}
+
+              {order.deliveryFailureReason ? (
+                <DetailRow
+                  label="Last Failure"
+                  value={order.deliveryFailureReason}
+                />
+              ) : null}
+
+              {order.returnedToSellerAt ? (
+                <DetailRow
+                  label="Returned to Seller At"
+                  value={new Date(
+                    order.returnedToSellerAt
+                  ).toLocaleString("en-IN")}
+                />
+              ) : null}
+            </DetailSection>
+          ) : null}
 
           {/* CLOSE */}
 

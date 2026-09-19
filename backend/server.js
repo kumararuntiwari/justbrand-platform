@@ -9,6 +9,9 @@ import db from "./db.js";
 import businessRouter, {
   initBusiness,
 } from "./business.js";
+import deliveryRouter, {
+  initDelivery,
+} from "./delivery.js";
 import {
   hashPassword,
   comparePassword,
@@ -2152,8 +2155,12 @@ app.get(
 // initBusiness() performs the additive table initialization.
 
 initBusiness();
+initDelivery();
 
 app.use(businessRouter);
+// Delivery module (partners, assignment, OTP delivery, earnings) —
+// mounted additively; all of its routes live under distinct paths.
+app.use(deliveryRouter);
 
 async function startServer() {
   // Safe now: staff/products tables were created at module level

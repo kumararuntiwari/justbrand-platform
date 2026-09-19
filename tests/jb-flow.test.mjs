@@ -143,6 +143,18 @@ async function runFlow() {
   ok("seller login returns token", sLogin.status === 200 && Boolean(sLogin.data.token));
   const seller = sLogin.data.token;
 
+  // The product-submission endpoint enforces the seller-KYC gate
+  // (KYC_REQUIRED) — verify it blocks before approval, same as the real
+  // admin flow and the remote product-add contract.
+  const earlyProductAttempt = await req("POST", "/api/sellers/products", {
+    token: seller,
+    body: { name: "Too Early", category: "Test", price: "₹10" },
+  });
+  ok(
+    "product submission blocked before KYC approval (403 KYC_REQUIRED)",
+    earlyProductAttempt.status === 403 && earlyProductAttempt.data?.code === "KYC_REQUIRED"
+  );
+
   // ===== 2. AUTH ISOLATION =====
   console.log("\n— Auth isolation");
   const sellerOnAdmin = await req("GET", "/api/admin/products", { token: seller });
@@ -156,6 +168,14 @@ async function runFlow() {
 
   const staffOnSeller = await req("GET", "/api/sellers/me", { token: staff });
   ok("staff token blocked from seller routes", staffOnSeller.status === 403);
+
+  // Approve the flow seller's KYC (required for product submission).
+  const flowSellerIdEarly = reg.data.seller?.id;
+  const kycApproveEarly = await req("PUT", `/api/admin/sellers/${flowSellerIdEarly}/kyc`, {
+    token: staff,
+    body: { kycStatus: "Approved" },
+  });
+  ok("admin approves flow seller KYC (pre product-add)", kycApproveEarly.status === 200);
 
   // ===== 3. SELLER: add products =====
   console.log("\n— Seller product submission");
@@ -344,8 +364,8 @@ async function runFlow() {
   });
   ok("customer places order on approved product", order.status === 201);
   ok(
-    "order total comes from backend price (₹1299), not client price",
-    Number(order.data.order?.totalAmount) === 1299
+    "order total comes from backend pricing (base+platform+mlm+delivery)",
+    Number(order.data.order?.totalAmount) === 1442.92
   );
   const orderId = order.data.order?.id;
 

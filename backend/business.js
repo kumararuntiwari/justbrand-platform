@@ -66,6 +66,10 @@ function publicCustomer(customer) {
     email: customer.email,
     referredByMemberId: customer.referredByMemberId,
     createdAt: customer.createdAt,
+    address: customer.address || null,
+    city: customer.city || null,
+    state: customer.state || null,
+    pincode: customer.pincode || null,
   };
 }
 
@@ -191,7 +195,11 @@ db.prepare(`
     referredByMemberId TEXT,
     status TEXT NOT NULL DEFAULT 'active',
     createdAt TEXT NOT NULL,
-    lastLoginAt TEXT
+    lastLoginAt TEXT,
+    address TEXT,
+    city TEXT,
+    state TEXT,
+    pincode TEXT
   )
 `).run();
 
@@ -210,7 +218,11 @@ db.prepare(`
     status TEXT NOT NULL DEFAULT 'Pending',
     deliveredAt TEXT,
     createdAt TEXT NOT NULL,
-    updatedAt TEXT
+    updatedAt TEXT,
+    city TEXT,
+    state TEXT,
+    pincode TEXT,
+    email TEXT
   )
 `).run();
 
@@ -302,7 +314,10 @@ function getPricingRules() {
 }
 
 function calculateCustomerPricing(basePrice, gstRate = 0) {
-  const base = Math.max(0, Number(basePrice) || 0);
+  // Prices may arrive as "₹1299" / " 1299 " / 1299 — strip non-numeric
+  // characters before parsing (matches the sanitizePrice convention used
+  // for the same field everywhere else in this file).
+  const base = Math.max(0, Number(String(basePrice).replace(/[^0-9.]/g, "")) || 0);
   const rules = getPricingRules();
   const platformCharge = base * rules.platformPercent / 100;
   const mlmCommission = base * rules.mlmPercent / 100;
@@ -536,9 +551,29 @@ function generateCommissionsForOrder(order) {
 
     let level = 1;
 
+    // Level-wise overrides (admin-configurable, additive). Falls back
+    // to the flat rules values when no override exists, so existing
+    // behaviour and data are unchanged.
+    let levelOverrides = {};
+    try {
+      const row = db
+        .prepare(`SELECT value FROM mlm_settings WHERE key = 'level_commissions'`)
+        .get();
+      if (row && row.value) {
+        const parsed = JSON.parse(row.value);
+        if (parsed && typeof parsed === "object") levelOverrides = parsed;
+      }
+    } catch {
+      levelOverrides = {};
+    }
+
     while (current && level <= 3) {
-      const percentage =
-        level === 1 ? rules.directCommission : rules.levelCommission;
+      const override = Number(levelOverrides[`level${level}`]);
+      const percentage = Number.isFinite(override) && override >= 0
+        ? override
+        : level === 1
+        ? rules.directCommission
+        : rules.levelCommission;
 
       if (percentage > 0) {
         records.push({
@@ -1212,9 +1247,87 @@ businessRouter.get(
       ORDER BY orders.id DESC
     `).all(seller.sellerCode, String(seller.id));
 
+    // Additive delivery visibility: seller sees delivery status and the
+    // partner name (no contact data) for their own orders only.
+    const partnerNames = new Map(
+      db.prepare(`SELECT id, name FROM delivery_partners`).all().map((p) => [p.id, p.name])
+    );
+
     res.json({
       success: true,
-      orders: orders.map(orderWithItems),
+      orders: orders.map((order) => ({
+        ...orderWithItems(order),
+        deliveryStatus: order.deliveryStatus || null,
+        deliveryPartnerName: order.deliveryPartnerId
+          ? partnerNames.get(order.deliveryPartnerId) || null
+          : null,
+        deliveryFailureReason: order.deliveryFailureReason || null,
+        pickedUpAt: order.pickedUpAt || null,
+        outForDeliveryAt: order.outForDeliveryAt || null,
+        returnedToSellerAt: order.returnedToSellerAt || null,
+      })),
+    });
+  }
+);
+
+// =====================================================
+// SELLER DASHBOARD SUMMARY (READ-ONLY)
+// =====================================================
+// Counts and totals for the seller home page. Computed from the
+// seller's own products and order items only — no cross-seller data.
+
+businessRouter.get(
+  "/api/sellers/summary",
+  requireAuth,
+  requireType("seller"),
+  (req, res) => {
+    const seller = db
+      .prepare(`SELECT * FROM sellers WHERE id = ?`)
+      .get(req.user.sellerId);
+
+    if (!seller) {
+      return res.status(404).json({ success: false, message: "Seller not found." });
+    }
+
+    const productCounts = db
+      .prepare(`
+        SELECT
+          COUNT(*) AS total,
+          COALESCE(SUM(CASE WHEN status = 'Approved' THEN 1 ELSE 0 END), 0) AS approved,
+          COALESCE(SUM(CASE WHEN status = 'Pending' THEN 1 ELSE 0 END), 0) AS pending,
+          COALESCE(SUM(CASE WHEN status = 'Rejected' THEN 1 ELSE 0 END), 0) AS rejected
+        FROM products
+        WHERE sellerId = ? OR sellerId = ?
+      `)
+      .get(seller.sellerCode, String(seller.id));
+
+    const kyc = db
+      .prepare(`SELECT kycStatus FROM seller_kyc WHERE sellerId = ?`)
+      .get(seller.id);
+
+    const orderStats = db
+      .prepare(`
+        SELECT
+          COUNT(DISTINCT orders.id) AS orders,
+          COALESCE(SUM(CASE WHEN orders.status != 'Cancelled'
+            THEN order_items.price * order_items.quantity ELSE 0 END), 0) AS sales
+        FROM orders
+        JOIN order_items ON order_items.orderId = orders.id
+        WHERE order_items.sellerId = ? OR order_items.sellerId = ?
+      `)
+      .get(seller.sellerCode, String(seller.id));
+
+    res.json({
+      success: true,
+      summary: {
+        totalProducts: productCounts?.total || 0,
+        approvedProducts: productCounts?.approved || 0,
+        pendingProducts: productCounts?.pending || 0,
+        rejectedProducts: productCounts?.rejected || 0,
+        orders: orderStats?.orders || 0,
+        sales: Number(orderStats?.sales) || 0,
+        kycStatus: kyc?.kycStatus || "Pending",
+      },
     });
   }
 );
@@ -1229,7 +1342,7 @@ businessRouter.put(
       const orderId = Number(req.params.id);
       const newStatus = clean(req.body.status);
 
-      const allowed = ["Processing", "Shipped", "Delivered", "Cancelled"];
+      const allowed = ["Processing", "Ready for Pickup", "Shipped", "Delivered", "Cancelled"];
 
       if (!allowed.includes(newStatus)) {
         return res.status(400).json({ success: false, message: "Invalid order status." });
@@ -1259,6 +1372,22 @@ businessRouter.put(
         return res.status(403).json({ success: false, message: "This order does not contain your products." });
       }
 
+      // Delivery lifecycle coordination (additive): when a delivery partner
+      // is assigned, the final delivery milestone belongs to the delivery
+      // flow — the seller cannot pre-mark Delivered. Orders WITHOUT any
+      // delivery assignment keep the existing behaviour unchanged.
+      if (
+        newStatus === "Delivered" &&
+        order.deliveryStatus &&
+        order.deliveryStatus !== "Delivered"
+      ) {
+        return res.status(409).json({
+          success: false,
+          code: "DELIVERY_IN_PROGRESS",
+          message: "Delivery partner has not completed delivery yet.",
+        });
+      }
+
       applyOrderStatus(orderId, newStatus);
 
       const updated = db
@@ -1280,8 +1409,12 @@ businessRouter.put(
 // =====================================
 // ORDER STATUS STATE MACHINE + COMMISSION HOOKS
 // =====================================
+// applyOrderStatus is exported (additive, zero behaviour change) so the
+// delivery module can route partner-driven deliveries through the SAME
+// engine — keeping deliveredAt and Family commission behaviour identical
+// to every other delivery path.
 
-function applyOrderStatus(orderId, newStatus) {
+export function applyOrderStatus(orderId, newStatus) {
   const order = db.prepare(`SELECT * FROM orders WHERE id = ?`).get(orderId);
 
   if (!order) return;
@@ -1471,6 +1604,83 @@ businessRouter.get(
   }
 );
 
+// Customer updates their own profile (name / email / default address).
+// Mobile and password are intentionally NOT editable here — mobile is
+// the login identity and password changes deserve a dedicated flow.
+businessRouter.put(
+  "/api/customers/me",
+  requireAuth,
+  requireType("customer"),
+  async (req, res) => {
+    try {
+      const customer = db
+        .prepare(`SELECT * FROM customers WHERE id = ?`)
+        .get(req.user.customerId);
+
+      if (!customer) {
+        return res.status(404).json({ success: false, message: "Customer not found." });
+      }
+
+      const fields = {
+        name: clean(req.body.name),
+        email: clean(req.body.email).toLowerCase(),
+        address: clean(req.body.address),
+        city: clean(req.body.city),
+        state: clean(req.body.state),
+        pincode: clean(req.body.pincode),
+      };
+
+      if (fields.name !== undefined && !fields.name) {
+        return res.status(400).json({ success: false, message: "Name cannot be empty." });
+      }
+
+      if (fields.email && !fields.email.includes("@")) {
+        return res.status(400).json({ success: false, message: "A valid email address is required." });
+      }
+
+      if (fields.pincode && !/^\d{6}$/.test(fields.pincode)) {
+        return res.status(400).json({ success: false, message: "PIN code must be exactly 6 digits." });
+      }
+
+      const next = {
+        name: fields.name || customer.name,
+        email: fields.email || customer.email,
+        address: fields.address || customer.address,
+        city: fields.city || customer.city,
+        state: fields.state || customer.state,
+        pincode: fields.pincode || customer.pincode,
+      };
+
+      db.prepare(`
+        UPDATE customers
+        SET name = ?, email = ?, address = ?, city = ?, state = ?, pincode = ?
+        WHERE id = ?
+      `).run(
+        next.name,
+        next.email,
+        next.address,
+        next.city,
+        next.state,
+        next.pincode,
+        customer.id
+      );
+
+      const updated = db
+        .prepare(`SELECT * FROM customers WHERE id = ?`)
+        .get(customer.id);
+
+      res.json({
+        success: true,
+        message: "Profile updated.",
+        customer: publicCustomer(updated),
+      });
+    } catch (error) {
+      console.error("CUSTOMER PROFILE UPDATE ERROR:", error);
+      res.status(500).json({ success: false, message: "Failed to update profile." });
+    }
+  }
+);
+
 // =====================================================
 // PLACE ORDER (CUSTOMER)
 // =====================================================
@@ -1500,12 +1710,23 @@ businessRouter.post(
       const address = clean(req.body.address);
       const phone = clean(req.body.phone);
 
+      // Optional structured address fields (additive; the full one-line
+      // address remains the canonical shipping string).
+      const city = clean(req.body.city);
+      const state = clean(req.body.state);
+      const pincode = clean(req.body.pincode);
+      const email = clean(req.body.email).toLowerCase();
+
       if (!address || address.length < 10) {
         return res.status(400).json({ success: false, message: "A complete shipping address is required." });
       }
 
       if (!/^\d{10}$/.test(phone)) {
         return res.status(400).json({ success: false, message: "A valid 10-digit phone number is required." });
+      }
+
+      if (pincode && !/^\d{6}$/.test(pincode)) {
+        return res.status(400).json({ success: false, message: "PIN code must be exactly 6 digits." });
       }
 
       const paymentMethod = ["COD", "UPI", "BankTransfer"].includes(
@@ -1552,9 +1773,10 @@ businessRouter.post(
         const result = db.prepare(`
           INSERT INTO orders (
             orderNumber, customerId, customerName, phone, address,
-            totalAmount, paymentMethod, paymentStatus, status, createdAt, updatedAt
+            totalAmount, paymentMethod, paymentStatus, status, createdAt, updatedAt,
+            city, state, pincode, email
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, 'Pending', 'Pending', ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 'Pending', 'Pending', ?, ?, ?, ?, ?, ?)
         `).run(
           orderNumber,
           customer.id,
@@ -1564,7 +1786,11 @@ businessRouter.post(
           String(totalAmount),
           paymentMethod,
           now(),
-          now()
+          now(),
+          city,
+          state,
+          pincode,
+          email || customer.email || null
         );
 
         const orderId = result.lastInsertRowid;
@@ -1986,6 +2212,28 @@ businessRouter.get(
         pending: pendingRow?.total || 0,
       },
     });
+  }
+);
+
+// =====================================================
+// MLM PAYOUT REQUEST HISTORY (MEMBER — OWN ONLY)
+// =====================================================
+// Members can see the status of their own withdrawal requests.
+// Only the member's own rows are returned — never another member's.
+
+businessRouter.get(
+  "/api/mlm/payout-requests",
+  requireAuth,
+  requireType("member"),
+  loadMember,
+  (req, res) => {
+    const requests = db
+      .prepare(
+        `SELECT id, amount, method, status, createdAt FROM payout_requests WHERE memberId = ? ORDER BY id DESC LIMIT 50`
+      )
+      .all(req.member.memberId);
+
+    res.json({ success: true, requests });
   }
 );
 
