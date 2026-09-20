@@ -61,3 +61,450 @@ textarea {
   animation: dp-shimmer 1.3s infinite linear;
   border-radius: 10px;
 }
+
+/* ---------------- LOGIN SCREEN (JustBrand Delivery) ---------------- */
+
+.dl-screen {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px 40px;
+  background:
+    radial-gradient(1100px 520px at 82% -10%, rgba(249, 115, 22, 0.16), transparent 60%),
+    radial-gradient(900px 480px at 8% 108%, rgba(16, 185, 129, 0.12), transparent 55%),
+    linear-gradient(135deg, #101a33 0%, #14213d 48%, #1b2b52 100%);
+  overflow: hidden;
+}
+
+/* Subtle Tiranga glow accents — decorative, non-interactive */
+.dl-glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  pointer-events: none;
+}
+
+.dl-glow-orange {
+  width: 420px;
+  height: 420px;
+  top: -140px;
+  right: -120px;
+  background: rgba(249, 115, 22, 0.18);
+}
+
+.dl-glow-green {
+  width: 380px;
+  height: 380px;
+  bottom: -150px;
+  left: -120px;
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.dl-glow-pink {
+  width: 260px;
+  height: 260px;
+  bottom: 12%;
+  right: 6%;
+  background: rgba(236, 72, 153, 0.1);
+}
+
+.dl-content {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 460px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+/* Top branding */
+.dl-brand {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.dl-brand-badge {
+  width: 58px;
+  height: 58px;
+  margin: 0 auto 12px;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.22), rgba(236, 72, 153, 0.22));
+  border: 1px solid rgba(249, 115, 22, 0.35);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+}
+
+.dl-brand-name {
+  margin: 0;
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  background: linear-gradient(90deg, #fb923c, #f472b6);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+.dl-brand-role {
+  margin-top: 2px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: #e2e8f0;
+}
+
+.dl-brand-tag {
+  margin: 10px auto 0;
+  max-width: 340px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: #9aa8c7;
+}
+
+/* Login card */
+.dl-card {
+  position: relative;
+  overflow: hidden;
+  padding: 28px 26px 24px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow:
+    0 24px 60px rgba(8, 15, 35, 0.45),
+    0 4px 16px rgba(8, 15, 35, 0.3);
+  background: #ffffff;
+}
+
+/* Orange→pink accent bar on top edge of card */
+.dl-card-accent {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #f97316, #ec4899);
+}
+
+.dl-card-title {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 800;
+  color: #14213d;
+  letter-spacing: -0.3px;
+}
+
+.dl-card-sub {
+  margin: 6px 0 18px;
+  font-size: 13.5px;
+  color: #6b7490;
+}
+
+/* Inputs — comfortable touch targets */
+.dl-input {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 11px;
+  border: 1.5px solid #d8deec;
+  font-size: 15px;
+  color: #14213d;
+  background: #fbfcfe;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.dl-input::placeholder {
+  color: #a4adc4;
+}
+
+.dl-input:focus {
+  outline: none;
+  border-color: #f97316;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.18);
+}
+
+/* Autofill readability on navy theme */
+.dl-input:-webkit-autofill {
+  -webkit-text-fill-color: #14213d;
+  -webkit-box-shadow: 0 0 0 1000px #fbfcfe inset;
+  transition: background-color 9999s ease-in-out 0s;
+}
+
+.dl-password-wrap {
+  position: relative;
+}
+
+.dl-input-password {
+  padding-right: 46px;
+}
+
+.dl-eye {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+}
+
+.dl-eye:hover {
+  background: #eef1f7;
+}
+
+.dl-eye:focus-visible {
+  outline: 2px solid #f97316;
+  outline-offset: 1px;
+}
+
+/* Error message */
+.dl-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  border-radius: 11px;
+  padding: 11px 13px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+
+/* Submit button */
+.dl-submit {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  font-weight: 800;
+  font-size: 15.5px;
+  letter-spacing: 0.2px;
+  color: #ffffff;
+  background: linear-gradient(90deg, #f97316, #ec4899);
+  box-shadow: 0 8px 20px rgba(236, 72, 153, 0.28);
+  transition: transform 0.12s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+
+.dl-submit:hover:not(:disabled) {
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(236, 72, 153, 0.34);
+}
+
+.dl-submit:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.dl-submit:disabled {
+  opacity: 0.75;
+  cursor: wait;
+}
+
+.dl-submit:focus-visible {
+  outline: 3px solid rgba(249, 115, 22, 0.5);
+  outline-offset: 2px;
+}
+
+.dl-spinner {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #ffffff;
+  animation: dl-spin 0.7s linear infinite;
+}
+
+@keyframes dl-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Forgot password — UI only, no fake recovery flow */
+.dl-forgot-row {
+  text-align: center;
+  margin-top: 14px;
+}
+
+.dl-forgot {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #ea580c;
+  cursor: help;
+  border-bottom: 1px dashed #fdba74;
+  padding-bottom: 1px;
+}
+
+.dl-note {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #8b93a8;
+  text-align: center;
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+/* Logistics feature strip */
+.dl-features {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 22px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(6px);
+}
+
+.dl-feature {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #cbd5e1;
+  letter-spacing: 0.2px;
+}
+
+.dl-feature-icon {
+  font-size: 14px;
+}
+
+.dl-feature-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(203, 213, 225, 0.5);
+}
+
+/* Trust strip */
+.dl-trust {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: #8fa0c4;
+}
+
+.dl-trust-dot {
+  color: rgba(244, 114, 182, 0.8);
+}
+
+.dl-footer-line {
+  margin-top: 18px;
+  text-align: center;
+  font-size: 11.5px;
+  color: #67769c;
+}
+
+/* Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+  .dl-glow,
+  .dl-spinner {
+    animation: none;
+  }
+
+  .dl-submit {
+    transition: none;
+  }
+}
+
+/* Mobile: comfortable spacing, no horizontal scroll, keyboard-friendly */
+@media (max-width: 640px) {
+  .dl-screen {
+    padding: 28px 16px 32px;
+    align-items: flex-start;
+  }
+
+  .dl-content {
+    max-width: 100%;
+  }
+
+  .dl-brand {
+    margin-bottom: 18px;
+  }
+
+  .dl-brand-badge {
+    width: 52px;
+    height: 52px;
+    font-size: 25px;
+  }
+
+  .dl-brand-name {
+    font-size: 30px;
+  }
+
+  .dl-brand-role {
+    font-size: 13px;
+    letter-spacing: 2px;
+  }
+
+  .dl-card {
+    padding: 22px 18px 20px;
+    border-radius: 16px;
+  }
+
+  .dl-card-title {
+    font-size: 19px;
+  }
+
+  .dl-input {
+    font-size: 16px; /* ≥16px prevents iOS zoom-on-focus */
+    padding: 13px 14px;
+  }
+
+  .dl-input-password {
+    padding-right: 46px;
+  }
+
+  .dl-submit {
+    padding: 15px 16px;
+    font-size: 16px;
+  }
+
+  .dl-features {
+    gap: 6px;
+    padding: 10px 12px;
+  }
+
+  .dl-feature {
+    font-size: 11.5px;
+  }
+
+  .dl-trust {
+    gap: 6px;
+    font-size: 10.5px;
+  }
+}

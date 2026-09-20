@@ -9,6 +9,18 @@ import {
   inputStyle,
 } from "./api.jsx";
 
+// Field with tighter label spacing for the login card.
+function LoginField({ label, children }) {
+  return (
+    <label style={{ display: "block", marginBottom: 10 }}>
+      <span style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#37435f", marginBottom: 5 }}>
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}
+
 const TOKEN_KEY = "jb_delivery_token";
 const PARTNER_KEY = "jb_delivery_partner";
 
@@ -116,6 +128,7 @@ export default function App() {
 function LoginScreen({ onLoggedIn }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -131,7 +144,7 @@ function LoginScreen({ onLoggedIn }) {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.success) {
-        setError(data.message || "Login failed.");
+        setError(data.message || "Login failed. Please check your details and try again.");
         return;
       }
       onLoggedIn(data.token, data.partner);
@@ -143,94 +156,127 @@ function LoginScreen({ onLoggedIn }) {
   }
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background:
-          "linear-gradient(135deg, #14213d 0%, #1b2b52 55%, #26355e 100%)",
-        padding: 16,
-      }}
-    >
-      <Card style={{ width: "100%", maxWidth: 420, padding: 28 }}>
-        <div style={{ textAlign: "center", marginBottom: 20 }}>
-          <div
-            style={{
-              fontSize: 30,
-              fontWeight: 800,
-              background: "linear-gradient(90deg, #f97316, #ec4899)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-            }}
-          >
-            JustBrand
+    <div className="dl-screen">
+      {/* Subtle Tiranga glow accents (pure CSS, no images) */}
+      <div className="dl-glow dl-glow-orange" aria-hidden="true" />
+      <div className="dl-glow dl-glow-green" aria-hidden="true" />
+      <div className="dl-glow dl-glow-pink" aria-hidden="true" />
+
+      <div className="dl-content">
+        {/* Top branding */}
+        <header className="dl-brand">
+          <div className="dl-brand-badge" aria-hidden="true">
+            🛵
           </div>
-          <div style={{ color: "#6b7490", fontSize: 14, marginTop: 4 }}>
-            Delivery Partner Panel
+          <h1 className="dl-brand-name">JustBrand</h1>
+          <div className="dl-brand-role">Delivery Partner</div>
+          <p className="dl-brand-tag">Deliver smarter. Serve better. Grow with JustBrand.</p>
+        </header>
+
+        {/* Login card */}
+        <Card className="dl-card">
+          <div className="dl-card-accent" aria-hidden="true" />
+          <h2 className="dl-card-title">Welcome, Delivery Partner</h2>
+          <p className="dl-card-sub">Sign in to manage your pickups and deliveries.</p>
+
+          <form onSubmit={submit}>
+            <LoginField label="Mobile Number / Delivery ID">
+              <input
+                className="dl-input"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                autoCapitalize="none"
+                autoComplete="username"
+                inputMode="text"
+                placeholder="e.g. 98765 43210 or DP-XXXX"
+                required
+              />
+            </LoginField>
+            <LoginField label="Password">
+              <div className="dl-password-wrap">
+                <input
+                  className="dl-input dl-input-password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                  placeholder="Your password"
+                  required
+                />
+                <button
+                  type="button"
+                  className="dl-eye"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  title={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? "🙈" : "👁️"}
+                </button>
+              </div>
+            </LoginField>
+
+            {error ? (
+              <div className="dl-error" role="alert">
+                <span aria-hidden="true">⚠️</span> {error}
+              </div>
+            ) : null}
+
+            <button type="submit" className="dl-submit" disabled={busy}>
+              {busy ? (
+                <>
+                  <span className="dl-spinner" aria-hidden="true" /> Signing in…
+                </>
+              ) : (
+                "Login"
+              )}
+            </button>
+          </form>
+
+          <div className="dl-forgot-row">
+            <span className="dl-forgot" title="Contact the JustBrand admin team to reset your password">
+              Forgot Password?
+            </span>
           </div>
-          <div style={{ fontSize: 12, color: "#9aa3ba", marginTop: 6 }}>
-            🇮🇳 Serving India, one delivery at a time
+          <p className="dl-note">
+            Password resets are handled by the JustBrand admin team. Contact operations support
+            from your registered mobile number.
+          </p>
+        </Card>
+
+        {/* Logistics feature strip — subtle visual language, no images */}
+        <div className="dl-features" aria-label="Delivery capabilities">
+          <div className="dl-feature">
+            <span className="dl-feature-icon" aria-hidden="true">🏪</span>
+            Pickup
+          </div>
+          <div className="dl-feature-dot" aria-hidden="true" />
+          <div className="dl-feature">
+            <span className="dl-feature-icon" aria-hidden="true">📦</span>
+            Delivery
+          </div>
+          <div className="dl-feature-dot" aria-hidden="true" />
+          <div className="dl-feature">
+            <span className="dl-feature-icon" aria-hidden="true">📍</span>
+            Tracking
+          </div>
+          <div className="dl-feature-dot" aria-hidden="true" />
+          <div className="dl-feature">
+            <span className="dl-feature-icon" aria-hidden="true">🔒</span>
+            Secure Delivery
           </div>
         </div>
-        <form onSubmit={submit}>
-          <Field label="Username">
-            <input
-              style={inputStyle}
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              autoCapitalize="none"
-              autoComplete="username"
-              required
-            />
-          </Field>
-          <Field label="Password">
-            <input
-              style={inputStyle}
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              required
-            />
-          </Field>
-          {error ? (
-            <div
-              style={{
-                background: "#fef2f2",
-                color: "#b91c1c",
-                borderRadius: 10,
-                padding: "10px 12px",
-                fontSize: 13,
-                marginBottom: 12,
-              }}
-            >
-              {error}
-            </div>
-          ) : null}
-          <button
-            type="submit"
-            disabled={busy}
-            style={{
-              width: "100%",
-              padding: "12px 14px",
-              borderRadius: 10,
-              border: "none",
-              cursor: busy ? "wait" : "pointer",
-              fontWeight: 700,
-              fontSize: 15,
-              color: "#fff",
-              background: "linear-gradient(90deg, #f97316, #ec4899)",
-            }}
-          >
-            {busy ? "Signing in…" : "Sign In"}
-          </button>
-        </form>
-        <div style={{ textAlign: "center", fontSize: 12, color: "#8b93a8", marginTop: 16 }}>
-          Delivery partner accounts are created by the JustBrand admin team.
+
+        {/* Trust strip */}
+        <div className="dl-trust">
+          <span>Secure Login</span>
+          <span className="dl-trust-dot" aria-hidden="true">•</span>
+          <span>Verified Delivery Partner</span>
+          <span className="dl-trust-dot" aria-hidden="true">•</span>
+          <span>Real-time Order Tracking</span>
         </div>
-      </Card>
+
+        <div className="dl-footer-line">🇮🇳 Made for India • JustBrand Delivery Network</div>
+      </div>
     </div>
   );
 }
