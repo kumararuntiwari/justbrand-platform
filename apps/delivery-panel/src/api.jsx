@@ -34,9 +34,10 @@ export function StatusBadge({ status }) {
   );
 }
 
-export function Card({ children, style }) {
+export function Card({ children, style, className }) {
   return (
     <div
+      className={className || undefined}
       style={{
         background: "#fff",
         border: "1px solid #e8ecf5",
