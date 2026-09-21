@@ -641,6 +641,7 @@ function Dashboard({ token, isMobile, notify, goTo }) {
             <StatCard label="Out for Delivery" value={counts.outForDelivery ?? 0} accent="#8b5cf6" onClick={() => goTo("ofd")} />
             <StatCard label="Delivered Today" value={counts.deliveredToday ?? 0} accent="#10b981" onClick={() => goTo("delivered")} />
             <StatCard label="Failed Delivery" value={counts.failed ?? 0} accent="#ef4444" onClick={() => goTo("failed")} />
+            <StatCard label="Returns" value={counts.returns ?? 0} accent="#94a3b8" sub="Returned to seller" onClick={() => goTo("history")} />
             <StatCard label="Total Earnings" value={rupees(earnings?.totalAmount)} accent="#ec4899" sub={`Pending ${rupees(earnings?.pendingAmount)}`} onClick={() => goTo("history")} />
             <StatCard label="Pending Earnings" value={rupees(earnings?.pendingAmount)} accent="#64748b" sub={`Rate ${rupees(earnings?.perDeliveryRate)} / delivery`} />
           </div>

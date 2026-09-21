@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api";
+import TrackOrder from "./TrackOrder";
 
 function CustomerOrders({ token, onBack, onNeedLogin }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [cancellingId, setCancellingId] = useState(null);
+  const [trackingOrder, setTrackingOrder] = useState(null);
 
   useEffect(() => {
     if (!token) {
@@ -110,6 +112,17 @@ function CustomerOrders({ token, onBack, onNeedLogin }) {
     ];
   }
 
+  // Orders that carry real delivery data can open the tracking screen.
+  // Cancelled orders and orders not yet in the delivery flow cannot.
+  function canTrack(order) {
+    if (["Cancelled", "Refunded"].includes(order.status)) return false;
+    return Boolean(
+      order.deliveryStatus ||
+        order.assignedAt ||
+        ["Processing", "Shipped", "Delivered"].includes(order.status)
+    );
+  }
+
   function orderItems(order) {
     if (Array.isArray(order.items)) {
       return order.items;
@@ -150,8 +163,10 @@ function CustomerOrders({ token, onBack, onNeedLogin }) {
                 Your orders will appear here after you shop.
               </div>
             </div>
-          ) : (
-            orders.map((order) => (
+      ) : trackingOrder ? (
+        <TrackOrder order={trackingOrder} onBack={() => setTrackingOrder(null)} />
+      ) : (
+        orders.map((order) => (
               <div key={order.id} style={styles.orderCard}>
                 <div style={styles.orderTop}>
                   <div>
@@ -231,6 +246,16 @@ function CustomerOrders({ token, onBack, onNeedLogin }) {
 
                   <div style={styles.totalAndCancel}>
                     <div style={styles.total}>₹{order.totalAmount}</div>
+
+                    {canTrack(order) ? (
+                      <button
+                        type="button"
+                        onClick={() => setTrackingOrder(order)}
+                        style={styles.trackButton}
+                      >
+                        🚚 Track Order
+                      </button>
+                    ) : null}
 
                     {canCancel(order.status) && (
                       <button
@@ -485,6 +510,19 @@ const styles = {
     fontWeight: "bold",
     fontSize: "17px",
     color: "#ff1493",
+  },
+
+  trackButton: {
+    border: "none",
+    background: "linear-gradient(90deg,#ff6b00,#ff1493)",
+    color: "#fff",
+    padding: "10px 16px",
+    borderRadius: "10px",
+    cursor: "pointer",
+    fontSize: "13px",
+    fontWeight: "bold",
+    whiteSpace: "nowrap",
+    boxShadow: "0 3px 10px rgba(255,20,147,0.25)",
   },
 
   cancelButton: {

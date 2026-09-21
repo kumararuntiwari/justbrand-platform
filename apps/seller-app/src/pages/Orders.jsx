@@ -996,6 +996,41 @@ function OrderDetails({
   const status =
     order.status || "Pending";
 
+  // Delivery lifecycle coordination (mirrors backend rules):
+  // - Terminal orders show no further actions.
+  // - Once a delivery partner is assigned, delivery milestones belong to
+  //   the delivery flow — the seller's main action is Ready for Pickup.
+  const isTerminal =
+    ["Delivered", "Cancelled", "Returned", "Refunded"].includes(status) ||
+    order.deliveryStatus === "Delivered" ||
+    order.deliveryStatus === "Returned to Seller";
+  const deliveryActive = Boolean(order.deliveryStatus);
+
+  const chipStyle = (done, failed) => ({
+    fontSize: 11,
+    padding: "4px 9px",
+    borderRadius: 999,
+    fontWeight: 600,
+    whiteSpace: "nowrap",
+    background: failed
+      ? "#ef4444"
+      : done
+        ? "linear-gradient(90deg,#ff6b00,#ff1493)"
+        : "#eef1f7",
+    color: failed ? "#fff" : done ? "#fff" : "#8b93a8",
+  });
+
+  const lifecycle = [
+    { label: "Order Received", done: true },
+    { label: "Processing", done: ["Processing", "Ready for Pickup", "Shipped", "Delivered"].includes(status) },
+    { label: "Packed", done: ["Shipped", "Delivered"].includes(status) },
+    { label: "Ready for Pickup", done: Boolean(order.assignedAt) || ["Shipped", "Delivered"].includes(status) },
+    { label: "Pickup Assigned", done: Boolean(order.deliveryStatus) },
+    { label: "Picked Up", done: Boolean(order.pickedUpAt) },
+    { label: "Out for Delivery", done: Boolean(order.outForDeliveryAt) },
+    { label: "Delivered", done: order.deliveryStatus === "Delivered" || status === "Delivered", failed: order.deliveryStatus === "Delivery Failed" },
+  ];
+
   return (
     <div
       style={{
@@ -1134,53 +1169,115 @@ function OrderDetails({
                 marginTop: "10px",
               }}
             >
-              <select
-                value={status}
-                onChange={(e) =>
-                  onUpdateStatus(
-                    order.id,
-                    e.target.value
-                  )
-                }
-                style={{
-                  width: "100%",
-                  padding: "12px",
-                  border:
-                    "1px solid #ccc",
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                  background: "white",
-                }}
-              >
-                <option value="Pending">
-                  Pending
-                </option>
+              {isTerminal ? (
+                <div
+                  style={{
+                    background: "#f1f5f9",
+                    color: "#475569",
+                    borderRadius: "8px",
+                    padding: "11px 12px",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                  }}
+                >
+                  This order is {status}
+                  {order.deliveryStatus
+                    ? ` • Delivery: ${order.deliveryStatus}`
+                    : ""} — no further status changes are needed.
+                </div>
+              ) : (
+                <>
+                  {deliveryActive ? (
+                    <div
+                      style={{
+                        background: "#fff7ed",
+                        color: "#c2410c",
+                        borderRadius: "8px",
+                        padding: "10px 12px",
+                        fontSize: "13px",
+                        marginBottom: "10px",
+                      }}
+                    >
+                      🛵 Delivery partner assigned. After packing, mark the
+                      order <strong>Ready for Pickup</strong> — pickup,
+                      delivery and final status are handled by the delivery
+                      partner.
+                    </div>
+                  ) : null}
+                  <select
+                    value={status}
+                    onChange={(e) =>
+                      onUpdateStatus(
+                        order.id,
+                        e.target.value
+                      )
+                    }
+                    style={{
+                      width: "100%",
+                      padding: "12px",
+                      border:
+                        "1px solid #ccc",
+                      borderRadius: "8px",
+                      fontSize: "14px",
+                      background: "white",
+                    }}
+                  >
+                    <option value="Pending">
+                      Pending
+                    </option>
 
-                <option value="Processing">
-                  Processing
-                </option>
+                    <option value="Processing">
+                      Processing
+                    </option>
 
-                <option value="Ready for Pickup">
-                  Ready for Pickup
-                </option>
+                    <option value="Ready for Pickup">
+                      Ready for Pickup
+                    </option>
 
-                <option value="Shipped">
-                  Shipped
-                </option>
+                    <option value="Shipped">
+                      Shipped
+                    </option>
 
-                <option value="Delivered">
-                  Delivered
-                </option>
-
-                <option value="Cancelled">
-                  Cancelled
-                </option>
-              </select>
+                    <option value="Cancelled">
+                      Cancelled
+                    </option>
+                  </select>
+                </>
+              )}
             </div>
           </DetailSection>
 
           {order.deliveryStatus ? (
-            <DetailSection title="🛵 Delivery">
+            <DetailSection title="🚚 Delivery & Shipment">
+              {/* Delivery lifecycle chips */}
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "6px",
+                  margin: "10px 0 12px",
+                }}
+              >
+                {lifecycle.map((s) => (
+                  <span
+                    key={s.label}
+                    style={chipStyle(s.done, s.failed)}
+                  >
+                    {s.failed && !s.done ? "Delivery Failed" : s.label}
+                  </span>
+                ))}
+                {order.deliveryStatus === "Delivery Failed" ? (
+                  <span style={chipStyle(true, true)}>
+                    Delivery Failed
+                  </span>
+                ) : null}
+                {order.deliveryStatus === "Returned to Seller" ? (
+                  <span style={chipStyle(true, true)}>
+                    Returned to Seller
+                  </span>
+                ) : null}
+              </div>
+
               <DetailRow
                 label="Delivery Status"
                 value={order.deliveryStatus}
@@ -1190,6 +1287,25 @@ function OrderDetails({
                 <DetailRow
                   label="Delivery Partner"
                   value={order.deliveryPartnerName}
+                />
+              ) : (
+                <DetailRow
+                  label="Delivery Partner"
+                  value="Awaiting admin assignment"
+                />
+              )}
+
+              <DetailRow
+                label="Tracking ID"
+                value={`JB-${order.orderNumber || order.id}`}
+              />
+
+              {order.assignedAt ? (
+                <DetailRow
+                  label="Assigned At"
+                  value={new Date(
+                    order.assignedAt
+                  ).toLocaleString("en-IN")}
                 />
               ) : null}
 
@@ -1221,21 +1337,48 @@ function OrderDetails({
                 />
               ) : null}
 
+              {order.deliveryStatus === "Delivery Failed" ? (
+                <DetailRow
+                  label="Expected Next"
+                  value="Retry delivery or return to seller (handled by admin/delivery partner)"
+                />
+              ) : null}
+
               {order.deliveryFailureReason ? (
                 <DetailRow
-                  label="Last Failure"
+                  label="Delivery Failure Reason"
                   value={order.deliveryFailureReason}
                 />
               ) : null}
 
               {order.returnedToSellerAt ? (
                 <DetailRow
-                  label="Returned to Seller At"
-                  value={new Date(
+                  label="Return Status"
+                  value={`Returned to seller at ${new Date(
                     order.returnedToSellerAt
-                  ).toLocaleString("en-IN")}
+                  ).toLocaleString("en-IN")}`}
                 />
-              ) : null}
+              ) : (
+                <DetailRow
+                  label="Return Status"
+                  value="Not returned"
+                />
+              )}
+
+              <div
+                style={{
+                  background: "#f8fafc",
+                  color: "#64748b",
+                  borderRadius: "8px",
+                  padding: "9px 11px",
+                  fontSize: "12px",
+                  marginTop: "10px",
+                }}
+              >
+                Customer OTP and partner contact details stay private to the
+                delivery flow — assignment and reassignment are handled by the
+                JustBrand admin team.
+              </div>
             </DetailSection>
           ) : null}
 
