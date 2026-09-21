@@ -121,6 +121,7 @@ export default function DeliveryManager({ token, role, onMessage }) {
           ["assign", "➕ Assign Delivery"],
           ["tracking", "📍 Tracking"],
           ["settings", "⚙️ Settings"],
+          ...(canSeeFinance ? [["earnings", "💰 Earnings"]] : []),
         ].map(([key, label]) => (
           <button
             key={key}
@@ -147,7 +148,7 @@ export default function DeliveryManager({ token, role, onMessage }) {
       {tab === "assign" && <AssignPanel token={token} canManage={canManage} onMessage={onMessage} />}
       {tab === "tracking" && <Tracking token={token} />}
       {tab === "settings" && <DeliverySettings token={token} canManage={role === "super_admin"} onMessage={onMessage} />}
-      {tab === "settings" && canSeeFinance && <EarningsPanel token={token} />}
+      {tab === "earnings" && canSeeFinance && <EarningsPanel token={token} />}
     </section>
   );
 }

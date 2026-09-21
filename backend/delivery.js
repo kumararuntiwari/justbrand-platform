@@ -1053,6 +1053,7 @@ deliveryRouter.get(
           COALESCE(SUM(CASE WHEN deliveryStatus = 'Picked Up' THEN 1 ELSE 0 END), 0)      AS pickedUp,
           COALESCE(SUM(CASE WHEN deliveryStatus = 'Out for Delivery' THEN 1 ELSE 0 END), 0) AS outForDelivery,
           COALESCE(SUM(CASE WHEN deliveryStatus = 'Delivery Failed' THEN 1 ELSE 0 END), 0) AS failed,
+          COALESCE(SUM(CASE WHEN deliveryStatus = 'Returned to Seller' THEN 1 ELSE 0 END), 0) AS returns,
           COALESCE(SUM(CASE WHEN deliveryStatus = 'Delivered' AND COALESCE(deliveredAt, '') LIKE ? THEN 1 ELSE 0 END), 0) AS deliveredToday,
           COALESCE(SUM(CASE WHEN COALESCE(assignedAt, '') LIKE ? THEN 1 ELSE 0 END), 0) AS assignedToday
         FROM orders
@@ -1079,6 +1080,7 @@ deliveryRouter.get(
         outForDelivery: counts.outForDelivery || 0,
         deliveredToday: counts.deliveredToday || 0,
         failed: counts.failed || 0,
+        returns: counts.returns || 0,
       },
       recentOrders: recent.map((order) => deliveryOrderShape(order)),
     });

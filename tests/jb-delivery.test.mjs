@@ -296,6 +296,67 @@ async function runFlow() {
   });
   ok("assign to unknown partner rejected", assignBlocked.status === 404);
 
+  // ===== SECURITY: delivery OTP hash never reaches customer/seller APIs =====
+  console.log("\n— OTP hash security (customer/seller responses)");
+  const custOrdersSec = await req("GET", "/api/customer/orders", { token: customer });
+  ok("customer orders fetch works", custOrdersSec.status === 200);
+  ok(
+    "customer orders response has NO deliveryOtpHash",
+    !(custOrdersSec.data.orders || []).some((o) => "deliveryOtpHash" in o)
+  );
+  ok(
+    "customer sees deliveryStatus after assignment",
+    (custOrdersSec.data.orders || []).some((o) => o.id === oid1 && o.deliveryStatus === "Assigned")
+  );
+  ok(
+    "customer sees delivery partner NAME (name-only)",
+    (custOrdersSec.data.orders || []).some(
+      (o) => o.id === oid1 && o.deliveryPartnerName === "Ravi Kumar"
+    ) &&
+      !(custOrdersSec.data.orders || []).some(
+        (o) => o.id === oid1 && Boolean(o.partnerMobile || o.partnerPhone)
+      )
+  );
+
+  const sellerOrdersSec = await req("GET", "/api/sellers/orders", { token: seller });
+  ok("seller orders fetch works", sellerOrdersSec.status === 200);
+  ok(
+    "seller orders response has NO deliveryOtpHash",
+    !(sellerOrdersSec.data.orders || []).some((o) => "deliveryOtpHash" in o)
+  );
+  ok(
+    "seller sees delivery partner name",
+    (sellerOrdersSec.data.orders || []).some(
+      (o) => o.id === oid1 && o.deliveryPartnerName === "Ravi Kumar"
+    )
+  );
+
+  const p1Sec = await req("GET", "/api/delivery/orders", { token: p1 });
+  ok(
+    "partner orders response has NO deliveryOtpHash",
+    p1Sec.status === 200 && !(p1Sec.data.orders || []).some((o) => "deliveryOtpHash" in o)
+  );
+
+  // Cancel path returns the updated order — that response must also be clean.
+  const orderSec = await req("POST", "/api/orders", {
+    token: customer,
+    body: {
+      items: [{ productId, quantity: 1, price: "₹1" }],
+      address: "3 Security Lane, Test City, India",
+      phone: "9000000099",
+      paymentMethod: "COD",
+    },
+  });
+  ok("security probe order placed", orderSec.status === 201);
+  const cancelSec = await req("PUT", `/api/customer/orders/${orderSec.data.order?.id}/cancel`, {
+    token: customer,
+  });
+  ok("security probe order cancelled", cancelSec.status === 200);
+  ok(
+    "cancel response has NO deliveryOtpHash",
+    !("deliveryOtpHash" in (cancelSec.data.order || {}))
+  );
+
   // ===== 3. PARTNER SEES OWN ORDER =====
   console.log("\n— Partner order visibility");
   const p1Orders = await req("GET", "/api/delivery/orders", { token: p1 });

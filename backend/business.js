@@ -623,7 +623,12 @@ function orderWithItems(order) {
     .prepare(`SELECT * FROM order_items WHERE orderId = ?`)
     .all(order.id);
 
-  return { ...order, items };
+  // SECURITY: never expose the delivery OTP hash to any customer/seller/
+  // public API response. It is an internal bcrypt digest used only by the
+  // delivery module (deliveryOrderShape keeps its own safe field list).
+  const { deliveryOtpHash, ...safeOrder } = order;
+
+  return { ...safeOrder, items };
 }
 
 // =====================================================
@@ -1859,7 +1864,21 @@ businessRouter.get(
       .prepare(`SELECT * FROM orders WHERE customerId = ? ORDER BY id DESC`)
       .all(req.user.customerId);
 
-    res.json({ success: true, orders: orders.map(orderWithItems) });
+    // Customer tracking visibility: the partner's NAME only (no phone,
+    // bank or other partner details) so buyers can see who will deliver.
+    const partnerNames = new Map(
+      db.prepare(`SELECT id, name FROM delivery_partners`).all().map((p) => [p.id, p.name])
+    );
+
+    res.json({
+      success: true,
+      orders: orders.map((order) => ({
+        ...orderWithItems(order),
+        deliveryPartnerName: order.deliveryPartnerId
+          ? partnerNames.get(order.deliveryPartnerId) || null
+          : null,
+      })),
+    });
   }
 );
 
