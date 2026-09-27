@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import "../index.css";
+import ProductImageManager from "../components/ProductImageManager";
 
 const API_URL = "https://justbrand-in-144629.hostingersite.com";
 const GST_RATES = [0, 5, 12, 18, 28, 40];
@@ -12,7 +13,6 @@ export default function AddProduct() {
     comparePrice: "",
     hsnCode: "",
     gstRate: "",
-    image: "",
     description: "",
     shortDetails: "",
   });
@@ -23,6 +23,9 @@ export default function AddProduct() {
     mlmPercent: 3,
   });
   const [kycStatus, setKycStatus] = useState("Pending");
+
+  // Multi-image state (1–6). images[0] = primary/main image.
+  const [images, setImages] = useState([]);
   const [saving, setSaving] = useState(false);
   const [loadingRules, setLoadingRules] = useState(true);
 
@@ -69,24 +72,6 @@ export default function AddProduct() {
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleImageChange = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith("image/")) {
-      alert("Please select a valid image file.");
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      alert("Image 5MB se chhoti honi chahiye.");
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => setForm((prev) => ({ ...prev, image: reader.result }));
-    reader.readAsDataURL(file);
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -107,6 +92,11 @@ export default function AddProduct() {
 
     if (form.gstRate === "") {
       alert("GST rate select kijiye.");
+      return;
+    }
+
+    if (images.length < 1) {
+      alert("Kam se kam 1 product image add kijiye.");
       return;
     }
 
@@ -131,7 +121,8 @@ export default function AddProduct() {
           comparePrice: form.comparePrice.trim(),
           hsnCode: form.hsnCode.trim(),
           gstRate: Number(form.gstRate),
-          image: form.image || "",
+          image: images[0] || "",
+          images,
           description: form.description.trim(),
           shortDetails: form.shortDetails.trim(),
         }),
@@ -165,10 +156,10 @@ export default function AddProduct() {
         comparePrice: "",
         hsnCode: "",
         gstRate: "",
-        image: "",
         description: "",
         shortDetails: "",
       });
+      setImages([]);
     } catch (error) {
       console.error("Add Product Error:", error);
       alert(error.message || "Product save nahi ho paya.");
@@ -257,15 +248,7 @@ export default function AddProduct() {
             </div>
           </div>
 
-          <label style={labelStyle}>Product Image</label>
-          <input type="file" accept="image/*" onChange={handleImageChange} style={inputStyle} />
-
-          {form.image && (
-            <div style={{ marginBottom: "20px" }}>
-              <p style={{ marginBottom: "8px", fontWeight: "600" }}>Image Preview</p>
-              <img src={form.image} alt="Product Preview" style={{ width: "180px", height: "180px", objectFit: "contain", border: "1px solid #ddd", borderRadius: "10px", padding: "5px", background: "#fafafa" }} />
-            </div>
-          )}
+          <ProductImageManager images={images} onChange={setImages} />
 
           <label style={labelStyle}>Short Details</label>
           <textarea name="shortDetails" value={form.shortDetails} onChange={handleChange} placeholder="Short product details" rows="3" style={inputStyle} />

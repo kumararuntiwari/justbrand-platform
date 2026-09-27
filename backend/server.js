@@ -8,6 +8,7 @@ import cors from "cors";
 import db from "./db.js";
 import businessRouter, {
   initBusiness,
+  mapPublicProduct,
 } from "./business.js";
 import deliveryRouter, {
   initDelivery,
@@ -216,6 +217,23 @@ db.prepare(`
 `).run();
 
 console.log("Product table ready.");
+
+// =====================================
+// ADDITIVE PRODUCT MULTI-IMAGE FIELD
+// =====================================
+// Purely additive: adds an `images` TEXT column (JSON array, up to 6
+// entries; first entry is the primary/main image) without touching
+// the legacy `image` column or any existing row. Existing single-
+// image products keep working unchanged.
+function ensureProductImagesColumn() {
+  const columns = db.prepare("PRAGMA table_info(products)").all();
+  const hasImagesColumn = columns.some((column) => column.name === "images");
+  if (!hasImagesColumn) {
+    db.prepare("ALTER TABLE products ADD COLUMN images TEXT").run();
+  }
+}
+
+ensureProductImagesColumn();
 
 // =====================================
 // ADDITIVE PRODUCT PRICING FIELDS
@@ -1620,7 +1638,10 @@ app.get("/api/products", withTimeout((req, res) => {
       LIMIT ?
     `).all(RUNTIME_LIMITS.maxProducts);
 
-    res.json(products);
+    // mapPublicProduct keeps every existing field, syncs the legacy
+    // `image` field to the primary image, and adds the ordered
+    // `images` array for the buyer gallery.
+    res.json(products.map((product) => mapPublicProduct(product)));
   } catch (error) {
     console.error(error);
 
@@ -1645,16 +1666,16 @@ app.get(
   ),
   (req, res) => {
     try {
-      const products = db.prepare(`
-        SELECT *
-        FROM products
-        ORDER BY id DESC
-      `).all();
+    const products = db.prepare(`
+      SELECT *
+      FROM products
+      ORDER BY id DESC
+    `).all();
 
-      res.json({
-        success: true,
-        products,
-      });
+    res.json({
+      success: true,
+      products: products.map((product) => mapPublicProduct(product)),
+    });
     } catch (error) {
       console.error(error);
 
@@ -1723,6 +1744,17 @@ app.post("/api/products", requireAuth, (req, res) => {
       });
     }
 
+    // Multi-image (additive): accepts `images` arrays from newer
+    // clients while the legacy `image` field keeps working. The
+    // images column mirrors the resolved list; image = images[0].
+    const imageList = Array.isArray(req.body.images)
+      ? req.body.images.map((entry) => String(entry || "").trim()).filter(Boolean).slice(0, 6)
+      : [];
+    const resolvedImages =
+      imageList.length > 0
+        ? imageList
+        : [String(image || "").trim()].filter(Boolean);
+
     const result = db.prepare(`
       INSERT INTO products (
         sellerId,
@@ -1732,12 +1764,13 @@ app.post("/api/products", requireAuth, (req, res) => {
         price,
         comparePrice,
         image,
+        images,
         description,
         shortDetails,
         status,
         createdAt
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?)
     `).run(
       sellerId,
       sellerName,
@@ -1745,7 +1778,8 @@ app.post("/api/products", requireAuth, (req, res) => {
       category,
       price,
       comparePrice,
-      image,
+      resolvedImages[0] || "",
+      JSON.stringify(resolvedImages),
       description,
       shortDetails,
       createdAt ||
