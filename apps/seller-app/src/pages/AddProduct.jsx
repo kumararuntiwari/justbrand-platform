@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import "../index.css";
+import ProductImageManager from "../components/ProductImageManager";
 
 const API_URL = "https://justbrand-in-144629.hostingersite.com";
 
@@ -9,10 +10,12 @@ export default function AddProduct() {
     category: "",
     price: "",
     comparePrice: "",
-    image: "",
     description: "",
     shortDetails: "",
   });
+
+  // Multi-image state (1–6). images[0] = primary/main image.
+  const [images, setImages] = useState([]);
 
   const [saving, setSaving] = useState(false);
 
@@ -23,33 +26,6 @@ export default function AddProduct() {
       ...prev,
       [name]: value,
     }));
-  };
-
-  const handleImageChange = (e) => {
-    const file = e.target.files?.[0];
-
-    if (!file) return;
-
-    if (!file.type.startsWith("image/")) {
-      alert("Please select a valid image file.");
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      alert("Image 5MB se chhoti honi chahiye.");
-      return;
-    }
-
-    const reader = new FileReader();
-
-    reader.onload = () => {
-      setForm((prev) => ({
-        ...prev,
-        image: reader.result,
-      }));
-    };
-
-    reader.readAsDataURL(file);
   };
 
   const handleSubmit = async (e) => {
@@ -67,6 +43,11 @@ export default function AddProduct() {
 
     if (!form.price.trim()) {
       alert("Product price enter kijiye.");
+      return;
+    }
+
+    if (images.length < 1) {
+      alert("Kam se kam 1 product image add kijiye.");
       return;
     }
 
@@ -96,7 +77,8 @@ export default function AddProduct() {
           price: form.price.trim(),
           comparePrice: form.comparePrice.trim(),
 
-          image: form.image || "",
+          image: images[0] || "",
+          images,
 
           description: form.description.trim(),
           shortDetails: form.shortDetails.trim(),
@@ -124,10 +106,10 @@ export default function AddProduct() {
         category: "",
         price: "",
         comparePrice: "",
-        image: "",
         description: "",
         shortDetails: "",
       });
+      setImages([]);
     } catch (error) {
       console.error("Add Product Error:", error);
 
@@ -227,41 +209,7 @@ export default function AddProduct() {
             style={inputStyle}
           />
 
-          <label style={labelStyle}>Product Image</label>
-
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleImageChange}
-            style={inputStyle}
-          />
-
-          {form.image && (
-            <div style={{ marginBottom: "20px" }}>
-              <p
-                style={{
-                  marginBottom: "8px",
-                  fontWeight: "600",
-                }}
-              >
-                Image Preview
-              </p>
-
-              <img
-                src={form.image}
-                alt="Product Preview"
-                style={{
-                  width: "180px",
-                  height: "180px",
-                  objectFit: "contain",
-                  border: "1px solid #ddd",
-                  borderRadius: "10px",
-                  padding: "5px",
-                  background: "#fafafa",
-                }}
-              />
-            </div>
-          )}
+          <ProductImageManager images={images} onChange={setImages} />
 
           <label style={labelStyle}>Short Details</label>
           <textarea

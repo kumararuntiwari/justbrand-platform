@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import "../index.css";
+import ProductImageManager from "./ProductImageManager";
 
 const API_URL = "https://justbrand-in-144629.hostingersite.com";
 
@@ -22,9 +23,15 @@ function EditProduct({
     description: product.description || "",
   });
 
-  const [image, setImage] = useState(
-    product.image || "/images/product1.png"
-  );
+  // Existing images (backward compatible): prefer the ordered `images`
+  // array; fall back to the legacy single `image` column. A placeholder
+  // is never seeded — an empty product shows the uploader, not a fake
+  // image, and the backend requires 1–6 real images.
+  const initialImages = Array.isArray(product.images)
+    ? product.images.filter(Boolean)
+    : [product.image].filter(Boolean);
+
+  const [images, setImages] = useState(initialImages);
 
   const [saving, setSaving] = useState(false);
 
@@ -35,20 +42,6 @@ function EditProduct({
       ...prev,
       [name]: value,
     }));
-  };
-
-  const handleImageChange = (e) => {
-    const file = e.target.files?.[0];
-
-    if (!file) return;
-
-    const reader = new FileReader();
-
-    reader.onload = () => {
-      setImage(reader.result);
-    };
-
-    reader.readAsDataURL(file);
   };
 
   const handleSubmit = async (e) => {
@@ -71,6 +64,11 @@ function EditProduct({
 
     if (form.stock === "") {
       alert("Please enter Stock Quantity.");
+      return;
+    }
+
+    if (images.length < 1) {
+      alert("Kam se kam 1 product image add kijiye.");
       return;
     }
 
@@ -108,7 +106,9 @@ function EditProduct({
 
       description: form.description,
 
-      image: image || "/images/product1.png",
+      image: images[0] || "",
+
+      images,
 
       updatedAt: new Date().toISOString(),
     };
@@ -145,6 +145,7 @@ function EditProduct({
             price: String(updatedProduct.price || "").replace("₹", ""),
             comparePrice: String(updatedProduct.mrp || "").replace("₹", ""),
             image: updatedProduct.image,
+            images: updatedProduct.images,
             description: updatedProduct.description,
             shortDetails: updatedProduct.shortDetails,
           }),
@@ -273,55 +274,15 @@ function EditProduct({
             Update your product information.
           </p>
 
-          {/* IMAGE */}
+          {/* IMAGES (1–6, first = Main) */}
 
           <div
             style={{
               marginTop: "20px",
               marginBottom: "25px",
-              textAlign: "center",
             }}
           >
-            <img
-              src={image}
-              alt={form.name}
-              onError={(e) => {
-                e.currentTarget.src =
-                  "/images/product1.png";
-              }}
-              style={{
-                width: "220px",
-                height: "180px",
-                objectFit: "contain",
-                background: "#f5f5f5",
-                borderRadius: "10px",
-              }}
-            />
-
-            <div style={{ marginTop: "12px" }}>
-              <label
-                style={{
-                  display: "inline-block",
-                  background: "#ff6b00",
-                  color: "white",
-                  padding: "10px 16px",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontWeight: "bold",
-                }}
-              >
-                📷 Change Image
-
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/jpg"
-                  onChange={handleImageChange}
-                  style={{
-                    display: "none",
-                  }}
-                />
-              </label>
-            </div>
+            <ProductImageManager images={images} onChange={setImages} />
           </div>
 
           {/* FORM */}

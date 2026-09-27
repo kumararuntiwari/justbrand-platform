@@ -276,6 +276,95 @@ async function runFlow() {
   const reApprove = await req("PUT", `/api/admin/products/${webId}/approve`, { token: staff });
   ok("admin re-approves", reApprove.status === 200);
 
+  // ===== 8b. MULTI-IMAGE PRODUCTS (1–6, backward compatible) =====
+  console.log("\n— Multi-image products (additive)");
+  const pMulti = await req("POST", "/api/sellers/products", {
+    token: seller,
+    body: {
+      name: "Multi Image Product",
+      category: "Fashion",
+      price: "₹999",
+      images: [
+        "data:image/webp;base64,UklGRhIA",
+        "data:image/png;base64,iVBORw0KGgo=",
+        "https://cdn.example.com/three.jpg",
+      ],
+    },
+  });
+  ok("seller adds product with 3 images", pMulti.status === 201);
+  ok(
+    "stored product carries ordered images array",
+    Array.isArray(pMulti.data.product?.images) && pMulti.data.product.images.length === 3
+  );
+  ok(
+    "first image is primary (legacy image field synced)",
+    pMulti.data.product?.image === "data:image/webp;base64,UklGRhIA"
+  );
+  const multiId = pMulti.data.product?.id;
+
+  const pTooMany = await req("POST", "/api/sellers/products", {
+    token: seller,
+    body: {
+      name: "Too Many Images",
+      category: "Fashion",
+      price: "₹10",
+      images: ["https://a/1.jpg", "https://a/2.jpg", "https://a/3.jpg", "https://a/4.jpg", "https://a/5.jpg", "https://a/6.jpg", "https://a/7.jpg"],
+    },
+  });
+  ok("7 images rejected with clear error", pTooMany.status === 400 && /maximum 6/i.test(pTooMany.data?.message || ""));
+
+  const pBadType = await req("POST", "/api/sellers/products", {
+    token: seller,
+    body: {
+      name: "Bad Type",
+      category: "Fashion",
+      price: "₹10",
+      images: ["data:image/gif;base64,R0lGODlh"],
+    },
+  });
+  ok("non-JPG/PNG/WebP image rejected", pBadType.status === 400 && /JPG, JPEG, PNG and WebP/i.test(pBadType.data?.message || ""));
+
+  const pNoImage = await req("POST", "/api/sellers/products", {
+    token: seller,
+    body: { name: "No Image", category: "Fashion", price: "₹10", images: [] },
+  });
+  ok("zero images rejected (min 1)", pNoImage.status === 400);
+
+  // Reorder: images[0] becomes the primary image everywhere.
+  const reorder = await req("PUT", `/api/sellers/products/${multiId}`, {
+    token: seller,
+    body: {
+      images: [
+        "https://cdn.example.com/three.jpg",
+        "data:image/webp;base64,UklGRhIA",
+        "data:image/png;base64,iVBORw0KGgo=",
+      ],
+    },
+  });
+  ok("seller reorders images via edit", reorder.status === 200);
+  ok(
+    "reordered primary synced to legacy image field",
+    reorder.data.product?.image === "https://cdn.example.com/three.jpg" &&
+      reorder.data.product?.images?.[0] === "https://cdn.example.com/three.jpg"
+  );
+
+  const apMulti = await req("PUT", `/api/admin/products/${multiId}/approve`, { token: staff });
+  ok("admin approves multi-image product", apMulti.status === 200);
+
+  pub = await req("GET", "/api/products");
+  pubArr = publicArray(pub.data);
+  const pubMulti = pubArr.find((p) => p.id === multiId);
+  ok("buyer sees multi-image product", Boolean(pubMulti));
+  ok(
+    "buyer payload exposes full images array",
+    Array.isArray(pubMulti?.images) && pubMulti.images.length === 3
+  );
+  ok(
+    "single-image (legacy) product still exposes image + images[0]",
+    pubArr.find((p) => p.id === webId)?.image === "https://cdn.example.com/pic.jpg" &&
+      pubArr.find((p) => p.id === webId)?.images?.[0] === "https://cdn.example.com/pic.jpg"
+  );
+
   // ===== 9. CROSS-SELLER PROTECTION =====
   console.log("\n— Cross-seller protection");
   await req("POST", "/api/sellers/register", {
@@ -298,6 +387,15 @@ async function runFlow() {
   ok("cross-seller edit blocked", steal.status === 403 || steal.status === 404);
   const stealDel = await req("DELETE", `/api/sellers/products/${webId}`, { token: rival });
   ok("cross-seller delete blocked", stealDel.status === 403 || stealDel.status === 404);
+
+  const rivalMulti = await req("PUT", `/api/sellers/products/${multiId}`, {
+    token: rival,
+    body: { images: ["https://evil.example.com/x.jpg"] },
+  });
+  ok("cross-seller image edit blocked", rivalMulti.status === 403 || rivalMulti.status === 404);
+
+  const rivalDeleteMulti = await req("DELETE", `/api/sellers/products/${multiId}`, { token: rival });
+  ok("cross-seller delete blocked (multi-image product)", rivalDeleteMulti.status === 403 || rivalDeleteMulti.status === 404);
 
   // ===== 10. PRIVACY: no KYC/bank leak in public products =====
   console.log("\n— Public data privacy");
@@ -462,15 +560,14 @@ async function runFlow() {
   const summary = await req("GET", "/api/sellers/summary", { token: seller });
   ok("seller summary endpoint responds", summary.status === 200);
   ok(
-    "summary counts match seller's 2 products",
-    Number(summary.data.summary?.totalProducts) === 2
+    "summary counts match seller's 3 products",
+    Number(summary.data.summary?.totalProducts) === 3
   );
   ok(
-    "summary shows 1 approved / 1 rejected",
-    Number(summary.data.summary?.approvedProducts) === 1 &&
+    "summary shows 2 approved / 1 rejected (incl. multi-image product)",
+    Number(summary.data.summary?.approvedProducts) === 2 &&
       Number(summary.data.summary?.rejectedProducts) === 1
-  );
-  ok(
+  );  ok(
     "summary shows the delivered/cancelled order",
     Number(summary.data.summary?.orders) >= 1
   );

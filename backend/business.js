@@ -42,6 +42,95 @@ function clean(value) {
   return String(value ?? "").trim();
 }
 
+// =====================================
+// MULTI-IMAGE HELPERS (additive)
+// =====================================
+// Products can carry up to 6 images. Canonical storage is the
+// `images` column (JSON array, first entry = primary/main image);
+// the legacy `image` column stays in sync (image = images[0]) so the
+// old single-image field keeps working for every existing client.
+
+const MAX_PRODUCT_IMAGES = 6;
+const ALLOWED_IMAGE_MIME = new Set([
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+]);
+
+function parseProductImages(value) {
+  let list = [];
+  if (value) {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        list = parsed.map((entry) => String(entry || "").trim()).filter(Boolean);
+      }
+    } catch {
+      // Corrupt/non-JSON value — fall back to the legacy image column.
+      list = [];
+    }
+  }
+  return list;
+}
+
+// Accepts the product row and any *newly submitted* image payload and
+// returns the canonical image list. Backward compatible: when no
+// images payload arrives, falls back to the legacy `image` column.
+// The list is NOT truncated here — over-limit submissions are
+// rejected by validateProductImages with a clear error instead.
+function resolveProductImages(row, incoming) {
+  if (Array.isArray(incoming)) {
+    const list = incoming
+      .map((entry) => String(entry || "").trim())
+      .filter(Boolean);
+    return list.length > 0 ? list : [String(row?.image || "").trim()].filter(Boolean);
+  }
+  const legacy = String(incoming || "").trim() || String(row?.image || "").trim();
+  return legacy ? [legacy] : [];
+}
+
+// Validates image entries for seller-owned writes. `data:` URLs and
+// http(s) URLs are both accepted (matches the existing upload flow);
+// anything else is rejected so invalid uploads never reach the DB.
+function validateProductImages(list) {
+  if (list.length < 1) {
+    return "At least one product image is required.";
+  }
+  if (list.length > MAX_PRODUCT_IMAGES) {
+    return `Maximum ${MAX_PRODUCT_IMAGES} images are allowed per product.`;
+  }
+  for (const entry of list) {
+    if (entry.startsWith("data:image/")) {
+      const mimeMatch = /^data:(image\/[a-z0-9.+-]+);/i.exec(entry);
+      const mime = mimeMatch ? mimeMatch[1].toLowerCase() : "";
+      if (!ALLOWED_IMAGE_MIME.has(mime)) {
+        return "Only JPG, JPEG, PNG and WebP image formats are allowed.";
+      }
+    } else if (!/^(https?:\/\/|\/)/i.test(entry)) {
+      return "Each image must be an uploaded file or a valid image URL.";
+    }
+  }
+  return null;
+}
+
+// Response shaping: keeps the legacy `image` field populated and adds
+// an `images` array. Only seller/admin payloads include the images
+// array — the public buyer list maps rows through mapPublicProduct.
+function withProductImages(product) {
+  if (!product) return product;
+  const list = parseProductImages(product.images);
+  const images = list.length > 0 ? list : [String(product.image || "").trim()].filter(Boolean);
+  return { ...product, images };
+}
+
+// Public (buyer-facing) shaping: exposes `images` and keeps `image`
+// as the primary entry so old bundles keep rendering unchanged.
+export function mapPublicProduct(product) {
+  const { images } = withProductImages(product);
+  return { ...product, images, image: images[0] || "" };
+}
+
 function publicSeller(seller) {
   if (!seller) return null;
   return {
@@ -1074,7 +1163,13 @@ businessRouter.get(
       merged.set(String(product.id), product)
     );
 
-    res.json({ success: true, products: Array.from(merged.values()) });
+    // Additive multi-image support: each product carries its ordered
+    // `images` array (first entry = primary). Legacy `image` column
+    // stays untouched and keeps working as before.
+    res.json({
+      success: true,
+      products: Array.from(merged.values()).map((product) => withProductImages(product)),
+    });
   }
 );
 
@@ -1116,14 +1211,22 @@ businessRouter.post(
 
       const pricing = calculateCustomerPricing(price, gstRate);
 
+      // Multi-image (1–6): images[0] is the primary/main image. The
+      // legacy `image` column is kept in sync (image = images[0]).
+      const images = resolveProductImages(null, req.body.images ?? req.body.image ?? "");
+      const imageError = validateProductImages(images);
+      if (imageError) {
+        return res.status(400).json({ success: false, message: imageError });
+      }
+
       const result = db.prepare(`
         INSERT INTO products (
           sellerId, sellerName, name, category, price, comparePrice,
-          image, description, shortDetails, status, createdAt,
+          image, images, description, shortDetails, status, createdAt,
           hsnCode, gstRate, deliveryCharge, platformCharge, mlmCommission,
           customerPrice, pricingUpdatedAt
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         seller.sellerCode,
         seller.name,
@@ -1131,7 +1234,8 @@ businessRouter.post(
         category,
         price,
         clean(req.body.comparePrice),
-        String(req.body.image || ""),
+        images[0],
+        JSON.stringify(images),
         clean(req.body.description),
         clean(req.body.shortDetails),
         now(),
@@ -1139,9 +1243,9 @@ businessRouter.post(
         pricing.mlmCommission, pricing.customerPrice, now()
       );
 
-      const product = db
-        .prepare(`SELECT * FROM products WHERE id = ?`)
-        .get(result.lastInsertRowid);
+      const product = withProductImages(
+        db.prepare(`SELECT * FROM products WHERE id = ?`).get(result.lastInsertRowid)
+      );
 
       res.status(201).json({
         success: true,
@@ -1177,7 +1281,6 @@ businessRouter.put(
       const category = req.body.category !== undefined ? clean(req.body.category) : product.category;
       const price = req.body.price !== undefined ? clean(req.body.price) : product.price;
       const comparePrice = req.body.comparePrice !== undefined ? clean(req.body.comparePrice) : product.comparePrice;
-      const image = req.body.image !== undefined ? String(req.body.image) : product.image;
       const description = req.body.description !== undefined ? clean(req.body.description) : product.description;
       const shortDetails = req.body.shortDetails !== undefined ? clean(req.body.shortDetails) : product.shortDetails;
       const hsnCode = req.body.hsnCode !== undefined ? clean(req.body.hsnCode) : (product.hsnCode || "");
@@ -1187,25 +1290,34 @@ businessRouter.put(
         return res.status(400).json({ success: false, message: "Product name is required." });
       }
 
+      // Multi-image edit: existing images arrive in `images`; when only
+      // the legacy `image` field is sent it replaces the primary image.
+      const images = resolveProductImages(product, req.body.images ?? req.body.image);
+      const imageError = validateProductImages(images);
+      if (imageError) {
+        return res.status(400).json({ success: false, message: imageError });
+      }
+
       const pricing = calculateCustomerPricing(price, gstRate);
 
       // Edited products go back to admin approval and pricing is recalculated.
       db.prepare(`
         UPDATE products
         SET name = ?, category = ?, price = ?, comparePrice = ?,
-            image = ?, description = ?, shortDetails = ?, status = 'Pending',
+            image = ?, images = ?, description = ?, shortDetails = ?, status = 'Pending',
             hsnCode = ?, gstRate = ?, deliveryCharge = ?, platformCharge = ?,
             mlmCommission = ?, customerPrice = ?, pricingUpdatedAt = ?
         WHERE id = ?
       `).run(
-        name, category, price, comparePrice, image, description, shortDetails,
+        name, category, price, comparePrice, images[0], JSON.stringify(images),
+        description, shortDetails,
         hsnCode, pricing.gstRate, pricing.deliveryCharge, pricing.platformCharge,
         pricing.mlmCommission, pricing.customerPrice, now(), productId
       );
 
-      const updated = db
-        .prepare(`SELECT * FROM products WHERE id = ?`)
-        .get(productId);
+      const updated = withProductImages(
+        db.prepare(`SELECT * FROM products WHERE id = ?`).get(productId)
+      );
 
       res.json({
         success: true,

@@ -16,6 +16,16 @@ function ProductDetails({ product, addToCart, onBack, onBuyNow }) {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  // IMAGE GALLERY state (additive). Hooks must sit above the early
+  // `if (!product) return null` return — React hooks order rules.
+  const [activeImage, setActiveImage] = useState(0);
+
+  // Reset the selected slide when the product changes (back → another
+  // product) so the gallery always opens on the primary image.
+  useEffect(() => {
+    setActiveImage(0);
+  }, [product?.id]);
+
   if (!product) {
     return null;
   }
@@ -33,6 +43,18 @@ function ProductDetails({ product, addToCart, onBack, onBuyNow }) {
 
   const rating = product.rating || 4.5;
   const trustedSeller = product.trustedSeller !== false;
+
+  // IMAGE GALLERY (additive): use the ordered `images` array when the
+  // product has multiple images; single-image (legacy) products keep
+  // working exactly as before via product.image.
+  const gallery =
+    Array.isArray(product.images) && product.images.length > 0
+      ? product.images.filter(Boolean)
+      : [product.image].filter(Boolean);
+
+  const safeIndex = Math.min(activeImage, Math.max(gallery.length - 1, 0));
+  const mainImage = gallery[safeIndex] || "";
+  const hasMultipleImages = gallery.length > 1;
 
   return (
     <div
@@ -75,31 +97,153 @@ function ProductDetails({ product, addToCart, onBack, onBuyNow }) {
           boxSizing: "border-box",
         }}
       >
-        {/* PRODUCT IMAGE / GALLERY — always first: full image, never cropped */}
-        <div
-          style={{
-            height: isMobile ? "390px" : "400px",
-            background: "#f8f8f8",
-            borderRadius: "12px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            overflow: "hidden",
-            width: "100%",
-          }}
-        >
-          <img
-            src={product.image}
-            alt={product.name}
+        {/* PRODUCT IMAGE / GALLERY — always first: full image, never cropped.
+            Multi-image products get a slider with thumbnails and arrows;
+            single-image products render exactly as before. */}
+        <div>
+          <div
             style={{
-              width: "100%",
-              height: "100%",
-              objectFit: "contain",
-              padding: "8px",
-              boxSizing: "border-box",
+              height: isMobile ? "390px" : "400px",
+              background: "#f8f8f8",
               borderRadius: "12px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              overflow: "hidden",
+              width: "100%",
+              position: "relative",
             }}
-          />
+          >
+            <img
+              src={mainImage}
+              alt={product.name}
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "contain",
+                padding: "8px",
+                boxSizing: "border-box",
+                borderRadius: "12px",
+              }}
+            />
+
+            {hasMultipleImages && (
+              <>
+                {/* prev / next arrows */}
+                <button
+                  type="button"
+                  aria-label="Previous image"
+                  onClick={() =>
+                    setActiveImage((safeIndex - 1 + gallery.length) % gallery.length)
+                  }
+                  style={{
+                    position: "absolute",
+                    left: "8px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    width: "34px",
+                    height: "34px",
+                    borderRadius: "50%",
+                    border: "none",
+                    background: "rgba(255,255,255,0.92)",
+                    color: "#333",
+                    fontSize: "17px",
+                    fontWeight: "bold",
+                    cursor: "pointer",
+                    boxShadow: "0 1px 4px rgba(0,0,0,0.18)",
+                  }}
+                >
+                  ‹
+                </button>
+                <button
+                  type="button"
+                  aria-label="Next image"
+                  onClick={() =>
+                    setActiveImage((safeIndex + 1) % gallery.length)
+                  }
+                  style={{
+                    position: "absolute",
+                    right: "8px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    width: "34px",
+                    height: "34px",
+                    borderRadius: "50%",
+                    border: "none",
+                    background: "rgba(255,255,255,0.92)",
+                    color: "#333",
+                    fontSize: "17px",
+                    fontWeight: "bold",
+                    cursor: "pointer",
+                    boxShadow: "0 1px 4px rgba(0,0,0,0.18)",
+                  }}
+                >
+                  ›
+                </button>
+
+                {/* image counter */}
+                <span
+                  style={{
+                    position: "absolute",
+                    bottom: "8px",
+                    right: "10px",
+                    background: "rgba(0,0,0,0.55)",
+                    color: "#fff",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    padding: "2px 8px",
+                    borderRadius: "999px",
+                  }}
+                >
+                  {safeIndex + 1} / {gallery.length}
+                </span>
+              </>
+            )}
+          </div>
+
+          {/* thumbnails (multi-image only) */}
+          {hasMultipleImages && (
+            <div
+              style={{
+                display: "flex",
+                gap: "8px",
+                marginTop: "10px",
+                overflowX: "auto",
+                paddingBottom: "4px",
+              }}
+            >
+              {gallery.map((src, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  onClick={() => setActiveImage(index)}
+                  style={{
+                    flex: "0 0 auto",
+                    width: isMobile ? "52px" : "64px",
+                    height: isMobile ? "52px" : "64px",
+                    padding: "2px",
+                    borderRadius: "8px",
+                    border:
+                      index === safeIndex ? "2px solid #ff6b00" : "1px solid #ddd",
+                    background: "#fff",
+                    cursor: "pointer",
+                  }}
+                >
+                  <img
+                    src={src}
+                    alt={`${product.name} ${index + 1}`}
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "contain",
+                      borderRadius: "6px",
+                      display: "block",
+                    }}
+                  />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* PRODUCT INFORMATION */}
