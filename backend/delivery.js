@@ -99,6 +99,41 @@ db.prepare(`
 
 console.log("Delivery partners table ready.");
 
+// ADDITIVE PARTNER COLUMNS — professional registration/KYC workflow.
+// Same guarded pattern as the order columns above: each column is added
+// only if missing; existing rows keep NULL/default (non-destructive).
+const DELIVERY_PARTNER_COLUMNS = [
+  { name: "address", decl: "TEXT" },
+  { name: "state", decl: "TEXT" },
+  { name: "pincode", decl: "TEXT" },
+  { name: "kycIdType", decl: "TEXT" },
+  { name: "kycIdNumber", decl: "TEXT" },
+  { name: "kycDocumentRef", decl: "TEXT" },
+  { name: "vehicleType", decl: "TEXT" },
+  { name: "drivingLicence", decl: "TEXT" },
+  { name: "emergencyContact", decl: "TEXT" },
+  { name: "kycStatus", decl: "TEXT NOT NULL DEFAULT 'Pending'" },
+  { name: "kycReviewedAt", decl: "TEXT" },
+  { name: "kycReviewNote", decl: "TEXT" },
+  // 'admin' (created by admin, default/legacy) or 'self' (self-registered
+  // through the Delivery Partner Panel — starts inactive, pending approval).
+  { name: "registrationSource", decl: "TEXT" },
+];
+
+for (const column of DELIVERY_PARTNER_COLUMNS) {
+  try {
+    db.prepare(
+      `ALTER TABLE delivery_partners ADD COLUMN ${column.name} ${column.decl}`
+    ).run();
+  } catch (error) {
+    if (!String(error.message || "").includes("duplicate column")) {
+      throw error;
+    }
+  }
+}
+
+console.log("Delivery partner registration columns ready (additive migration).");
+
 db.prepare(`
   CREATE TABLE IF NOT EXISTS delivery_earnings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -241,7 +276,24 @@ function publicPartner(partner) {
     mobile: partner.mobile,
     email: partner.email,
     city: partner.city,
+    address: partner.address || null,
+    state: partner.state || null,
+    pincode: partner.pincode || null,
     vehicleNumber: partner.vehicleNumber,
+    vehicleType: partner.vehicleType || null,
+    drivingLicence: partner.drivingLicence || null,
+    emergencyContact: partner.emergencyContact || null,
+    // KYC identifiers are visible to authorized admin roles only
+    // (this shape is only served through requireRole-gated endpoints).
+    kycIdType: partner.kycIdType || null,
+    kycIdNumber: partner.kycIdNumber || null,
+    kycDocumentRef: partner.kycDocumentRef || null,
+    // Registration lifecycle: kycStatus Pending → Verified/Rejected;
+    // status active/inactive/suspended controls login + assignment.
+    registrationSource: partner.registrationSource || "admin",
+    kycStatus: partner.kycStatus || "Pending",
+    kycReviewedAt: partner.kycReviewedAt || null,
+    kycReviewNote: partner.kycReviewNote || null,
     // Bank details are shown truncated to admins (last 4 only).
     bankAccountName: partner.bankAccountName || "",
     bankAccountLast4: (partner.bankAccountNumber || "").slice(-4),
@@ -402,10 +454,40 @@ deliveryRouter.post("/api/delivery/login", loginRateLimit(10, 5 * 60 * 1000), as
       });
     }
 
+    // Registration lifecycle messaging. Admin-created partners keep the
+    // original messages; self-registered partners get workflow-specific
+    // ones (pending approval / rejection with reason).
     if (partner.status !== "active") {
+      if (
+        partner.registrationSource === "self" &&
+        (partner.kycStatus || "Pending") === "Pending"
+      ) {
+        return res.status(403).json({
+          success: false,
+          message: "Your registration is submitted and is awaiting Super Admin approval.",
+        });
+      }
+
+      if ((partner.kycStatus || "Pending") === "Rejected") {
+        const reason = partner.kycReviewNote
+          ? ` Reason: ${partner.kycReviewNote}`
+          : "";
+        return res.status(403).json({
+          success: false,
+          message: `Your registration was rejected and delivery access is disabled.${reason}`,
+        });
+      }
+
       return res.status(403).json({
         success: false,
         message: "This delivery partner account is inactive.",
+      });
+    }
+
+    if ((partner.kycStatus || "Pending") === "Rejected") {
+      return res.status(403).json({
+        success: false,
+        message: "This delivery partner registration was rejected. Please contact support.",
       });
     }
 
@@ -429,6 +511,174 @@ deliveryRouter.post("/api/delivery/login", loginRateLimit(10, 5 * 60 * 1000), as
   } catch (error) {
     console.error("DELIVERY LOGIN ERROR:", error);
     res.status(500).json({ success: false, message: "Login failed." });
+  }
+});
+
+// =====================================
+// PARTNER SELF-REGISTRATION (public)
+// =====================================
+// Creates a Pending registration that requires super_admin approval
+// before the partner can log in or receive any deliveries.
+
+deliveryRouter.post("/api/delivery/register", async (req, res) => {
+  try {
+    const name = clean(req.body.name);
+    const mobile = clean(req.body.mobile);
+    const email = clean(req.body.email).toLowerCase();
+    const address = clean(req.body.address);
+    const city = clean(req.body.city);
+    const state = clean(req.body.state);
+    const pincode = clean(req.body.pincode).replace(/\s/g, "");
+    const kycIdType = clean(req.body.kycIdType);
+    const kycIdNumber = clean(req.body.kycIdNumber).toUpperCase();
+    const kycDocumentRef = clean(req.body.kycDocumentRef);
+    const vehicleType = clean(req.body.vehicleType);
+    const vehicleNumber = clean(req.body.vehicleNumber).toUpperCase();
+    const drivingLicence = clean(req.body.drivingLicence).toUpperCase();
+    const emergencyContact = clean(req.body.emergencyContact).replace(/\s/g, "");
+    const bankAccountName = clean(req.body.bankAccountName);
+    const bankAccountNumber = clean(req.body.bankAccountNumber).replace(/\s/g, "");
+    const bankIfscCode = clean(req.body.bankIfscCode).toUpperCase();
+    const upiId = clean(req.body.upiId);
+    const password = String(req.body.password || "");
+    const confirmPassword = String(req.body.confirmPassword || "");
+
+    if (!name) {
+      return res.status(400).json({ success: false, message: "Full name is required." });
+    }
+
+    if (!/^\d{10}$/.test(mobile)) {
+      return res.status(400).json({
+        success: false,
+        message: "A valid 10-digit mobile number is required.",
+      });
+    }
+
+    if (pincode && !/^\d{6}$/.test(pincode)) {
+      return res.status(400).json({ success: false, message: "PIN code must be exactly 6 digits." });
+    }
+
+    if (emergencyContact && !/^\d{10}$/.test(emergencyContact)) {
+      return res.status(400).json({
+        success: false,
+        message: "Emergency contact must be a 10-digit mobile number.",
+      });
+    }
+
+    if (bankAccountNumber && !/^\d{6,20}$/.test(bankAccountNumber)) {
+      return res.status(400).json({
+        success: false,
+        message: "Bank account number must be 6-20 digits.",
+      });
+    }
+
+    if (bankIfscCode && !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(bankIfscCode)) {
+      return res.status(400).json({
+        success: false,
+        message: "IFSC code format is invalid.",
+      });
+    }
+
+    if (drivingLicence && !/^[A-Z0-9-]{5,20}$/.test(drivingLicence)) {
+      return res.status(400).json({
+        success: false,
+        message: "Driving licence format looks invalid.",
+      });
+    }
+
+    if (!password || password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 6 characters.",
+      });
+    }
+
+    if (password !== confirmPassword) {
+      return res.status(400).json({ success: false, message: "Passwords do not match." });
+    }
+
+    // Duplicate prevention: mobile must be unique (username is generated).
+    const duplicateMobile = db
+      .prepare(`SELECT id FROM delivery_partners WHERE mobile = ?`)
+      .get(mobile);
+
+    if (duplicateMobile) {
+      return res.status(409).json({
+        success: false,
+        message: "A delivery partner with this mobile number already exists.",
+      });
+    }
+
+    const passwordHash = await hashPassword(password);
+
+    // Username: generated from the (unique) mobile number; collisions are
+    // impossible because the mobile check above is unique.
+    const username = `dp${mobile}`;
+
+    // Partner code follows the existing DP-code style.
+    let partnerCode = `DP${Math.floor(100000 + Math.random() * 900000)}`;
+    const codeExists = db
+      .prepare(`SELECT id FROM delivery_partners WHERE partnerCode = ?`)
+      .get(partnerCode);
+    if (codeExists) {
+      partnerCode = `DP${Date.now().toString().slice(-6)}`;
+    }
+
+    // Self-registrations start INACTIVE + Pending KYC: no delivery access
+    // until a super_admin approves. Additive & backward-compatible.
+    const result = db.prepare(`
+      INSERT INTO delivery_partners (
+        partnerCode, name, username, passwordHash, mobile, email,
+        city, address, state, pincode,
+        vehicleType, vehicleNumber, drivingLicence,
+        kycIdType, kycIdNumber, kycDocumentRef, kycStatus,
+        emergencyContact,
+        bankAccountName, bankAccountNumber, bankIfscCode, upiId,
+        registrationSource, status, createdAt
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, ?, ?, ?, ?, 'self', 'inactive', ?)
+    `).run(
+      partnerCode,
+      name,
+      username,
+      passwordHash,
+      mobile,
+      email || null,
+      city || null,
+      address || null,
+      state || null,
+      pincode || null,
+      vehicleType || null,
+      vehicleNumber || null,
+      drivingLicence || null,
+      kycIdType || null,
+      kycIdNumber || null,
+      kycDocumentRef || null,
+      emergencyContact || null,
+      bankAccountName || null,
+      bankAccountNumber || null,
+      bankIfscCode || null,
+      upiId || null,
+      now()
+    );
+
+    const partner = db
+      .prepare(`SELECT * FROM delivery_partners WHERE id = ?`)
+      .get(result.lastInsertRowid);
+
+    res.status(201).json({
+      success: true,
+      message:
+        "Registration submitted successfully. Your account is now awaiting Super Admin approval.",
+      partnerCode: partner.partnerCode,
+      status: "Pending Super Admin Approval",
+    });
+  } catch (error) {
+    console.error("DELIVERY SELF-REGISTER ERROR:", error);
+    res.status(500).json({
+      success: false,
+      message: "Registration failed. Please try again.",
+    });
   }
 });
 
@@ -1142,6 +1392,35 @@ deliveryRouter.post(
       const city = clean(req.body.city);
       const vehicleNumber = clean(req.body.vehicleNumber).toUpperCase();
 
+      // Extended registration fields (all optional — additive fields).
+      const address = clean(req.body.address);
+      const state = clean(req.body.state);
+      const pincode = clean(req.body.pincode).replace(/\s/g, "");
+      const kycIdType = clean(req.body.kycIdType);
+      const kycIdNumber = clean(req.body.kycIdNumber).toUpperCase();
+      const kycDocumentRef = clean(req.body.kycDocumentRef);
+      const vehicleType = clean(req.body.vehicleType);
+      const drivingLicence = clean(req.body.drivingLicence).toUpperCase();
+      const emergencyContact = clean(req.body.emergencyContact).replace(/\s/g, "");
+
+      if (pincode && !/^\d{6}$/.test(pincode)) {
+        return res.status(400).json({ success: false, message: "PIN code must be exactly 6 digits." });
+      }
+
+      if (emergencyContact && !/^\d{10}$/.test(emergencyContact)) {
+        return res.status(400).json({
+          success: false,
+          message: "Emergency contact must be a 10-digit mobile number.",
+        });
+      }
+
+      if (drivingLicence && !/^[A-Z0-9-]{5,20}$/.test(drivingLicence)) {
+        return res.status(400).json({
+          success: false,
+          message: "Driving licence format looks invalid.",
+        });
+      }
+
       if (!name) {
         return res.status(400).json({ success: false, message: "Partner name is required." });
       }
@@ -1186,12 +1465,17 @@ deliveryRouter.post(
         partnerCode = `DP${Date.now().toString().slice(-6)}`;
       }
 
+      // New registrations enter the review workflow: KYC starts Pending.
+      // status stays 'active' (login-capable) for backward compatibility.
       const result = db.prepare(`
         INSERT INTO delivery_partners (
           partnerCode, name, username, passwordHash, mobile, email,
-          city, vehicleNumber, status, createdAt
+          city, address, state, pincode,
+          vehicleType, vehicleNumber, drivingLicence,
+          kycIdType, kycIdNumber, kycDocumentRef, kycStatus,
+          emergencyContact, status, createdAt
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, 'active', ?)
       `).run(
         partnerCode,
         name,
@@ -1200,7 +1484,16 @@ deliveryRouter.post(
         mobile,
         email || null,
         city || null,
+        address || null,
+        state || null,
+        pincode || null,
+        vehicleType || null,
         vehicleNumber || null,
+        drivingLicence || null,
+        kycIdType || null,
+        kycIdNumber || null,
+        kycDocumentRef || null,
+        emergencyContact || null,
         now()
       );
 
@@ -1234,12 +1527,73 @@ deliveryRouter.put(
         return res.status(404).json({ success: false, message: "Partner not found." });
       }
 
-      const status = req.body.status === "inactive" ? "inactive" : "active";
       const name = clean(req.body.name) || partner.name;
       const mobile = clean(req.body.mobile) || partner.mobile;
       const city = clean(req.body.city) || partner.city;
       const vehicleNumber =
         clean(req.body.vehicleNumber).toUpperCase() || partner.vehicleNumber;
+
+      // Account status: allow the full operational lifecycle.
+      const allowedStatuses = ["active", "inactive", "suspended"];
+      let status = allowedStatuses.includes(req.body.status)
+        ? req.body.status
+        : partner.status || "active";
+
+      // Registration/KYC review actions (Pending → Verified/Rejected).
+      // SECURITY: approving/rejecting a SELF-REGISTERED partner is a
+      // super_admin-only action; managers may still review admin-created
+      // partners exactly as before.
+      let kycStatus = partner.kycStatus || "Pending";
+      let kycReviewedAt = partner.kycReviewedAt || null;
+      let kycReviewNote = partner.kycReviewNote || null;
+
+      if (req.body.kycStatus !== undefined) {
+        const requestedKyc = clean(req.body.kycStatus);
+        if (["Pending", "Verified", "Rejected"].includes(requestedKyc)) {
+          if (
+            partner.registrationSource === "self" &&
+            requestedKyc !== "Pending" &&
+            req.user.role !== "super_admin"
+          ) {
+            return res.status(403).json({
+              success: false,
+              message:
+                "Only a Super Admin can approve or reject self-registered delivery partners.",
+            });
+          }
+
+          kycStatus = requestedKyc;
+          kycReviewedAt = now();
+          kycReviewNote =
+            clean(req.body.kycReviewNote) || partner.kycReviewNote || null;
+
+          // Approving a self-registration activates the account.
+          if (
+            partner.registrationSource === "self" &&
+            requestedKyc === "Verified"
+          ) {
+            status = "active";
+          }
+        }
+      }
+
+      // Profile edits (all optional — keep existing values when blank).
+      const email = clean(req.body.email).toLowerCase() || partner.email;
+      const address = clean(req.body.address) || partner.address;
+      const state = clean(req.body.state) || partner.state;
+      const pincode =
+        clean(req.body.pincode).replace(/\s/g, "") || partner.pincode;
+      const vehicleType = clean(req.body.vehicleType) || partner.vehicleType;
+      const drivingLicence =
+        clean(req.body.drivingLicence).toUpperCase() || partner.drivingLicence;
+      const emergencyContact =
+        clean(req.body.emergencyContact).replace(/\s/g, "") ||
+        partner.emergencyContact;
+      const kycIdType = clean(req.body.kycIdType) || partner.kycIdType;
+      const kycIdNumber =
+        clean(req.body.kycIdNumber).toUpperCase() || partner.kycIdNumber;
+      const kycDocumentRef =
+        clean(req.body.kycDocumentRef) || partner.kycDocumentRef;
 
       let passwordHash = partner.passwordHash;
       if (req.body.password) {
@@ -1255,9 +1609,35 @@ deliveryRouter.put(
 
       db.prepare(`
         UPDATE delivery_partners
-        SET name = ?, mobile = ?, city = ?, vehicleNumber = ?, status = ?, passwordHash = ?
+        SET name = ?, mobile = ?, city = ?, vehicleNumber = ?,
+            email = ?, address = ?, state = ?, pincode = ?,
+            vehicleType = ?, drivingLicence = ?, emergencyContact = ?,
+            kycIdType = ?, kycIdNumber = ?, kycDocumentRef = ?,
+            kycStatus = ?, kycReviewedAt = ?, kycReviewNote = ?,
+            status = ?, passwordHash = ?
         WHERE id = ?
-      `).run(name, mobile, city, vehicleNumber, status, passwordHash, partner.id);
+      `).run(
+        name,
+        mobile,
+        city,
+        vehicleNumber,
+        email,
+        address,
+        state,
+        pincode,
+        vehicleType,
+        drivingLicence,
+        emergencyContact,
+        kycIdType,
+        kycIdNumber,
+        kycDocumentRef,
+        kycStatus,
+        kycReviewedAt,
+        kycReviewNote,
+        status,
+        passwordHash,
+        partner.id
+      );
 
       const updated = db
         .prepare(`SELECT * FROM delivery_partners WHERE id = ?`)
@@ -1434,7 +1814,8 @@ deliveryRouter.get(
       .prepare(`
         SELECT
           COUNT(*) AS total,
-          COALESCE(SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END), 0) AS active
+          COALESCE(SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END), 0) AS active,
+          COALESCE(SUM(CASE WHEN registrationSource = 'self' AND COALESCE(kycStatus, 'Pending') = 'Pending' THEN 1 ELSE 0 END), 0) AS pendingApprovals
         FROM delivery_partners
       `)
       .get();
@@ -1460,6 +1841,7 @@ deliveryRouter.get(
         returns: counts.returns || 0,
         partnersTotal: partnerCounts.total || 0,
         partnersActive: partnerCounts.active || 0,
+        pendingApprovals: partnerCounts.pendingApprovals || 0,
       },
       recentOrders: recent.map((order) => deliveryOrderShape(order)),
     });

@@ -501,6 +501,102 @@ function Orders({ onBack }) {
         </div>
 
         {/* ===================================
+            DELIVERY & SHIPMENT CAPABILITY (ALWAYS VISIBLE)
+        =================================== */}
+
+        <div
+          style={{
+            background: "white",
+            borderRadius: "12px",
+            padding: "18px",
+            marginTop: "20px",
+            boxShadow:
+              "0 2px 8px rgba(0,0,0,0.06)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent:
+                "space-between",
+              alignItems: "center",
+              gap: "10px",
+              flexWrap: "wrap",
+            }}
+          >
+            <h2
+              style={{
+                margin: 0,
+                fontSize: "20px",
+              }}
+            >
+              🚚 Delivery & Shipment
+            </h2>
+
+            <span
+              style={{
+                background: "#fff7ed",
+                color: "#c2410c",
+                padding: "6px 12px",
+                borderRadius: "20px",
+                fontSize: "12px",
+                fontWeight: "bold",
+              }}
+            >
+              Live shipment tracking built-in
+            </span>
+          </div>
+
+          <p
+            style={{
+              margin: "10px 0 0",
+              color: "#777",
+              fontSize: "13px",
+            }}
+          >
+            Open any order with{" "}
+            <strong>👁️ View Order</strong> and set{" "}
+            <strong>Order Status → Ready for Pickup</strong> once packed. The
+            JustBrand admin team then assigns a delivery partner — the
+            partner name, shipment status and progress appear on the order
+            card and inside the order's{" "}
+            <strong>Delivery &amp; Shipment</strong> section.
+          </p>
+
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "6px",
+              marginTop: "14px",
+            }}
+          >
+            {[
+              { label: "Pickup Pending", bg: "#fef3c7", fg: "#92400e" },
+              { label: "Picked Up", bg: "#e0f2fe", fg: "#075985" },
+              { label: "Out for Delivery", bg: "#e0f2fe", fg: "#075985" },
+              { label: "Delivered", bg: "#dcfce7", fg: "#166534" },
+              { label: "Failed → Retry", bg: "#fee2e2", fg: "#b91c1c" },
+              { label: "Return to Seller", bg: "#f1f5f9", fg: "#475569" },
+            ].map((s) => (
+              <span
+                key={s.label}
+                style={{
+                  fontSize: 11,
+                  padding: "4px 10px",
+                  borderRadius: 999,
+                  fontWeight: 600,
+                  background: s.bg,
+                  color: s.fg,
+                }}
+              >
+                {s.label}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* ===================================
             SEARCH + FILTER
         =================================== */}
 
@@ -1247,8 +1343,10 @@ function OrderDetails({
             </div>
           </DetailSection>
 
-          {order.deliveryStatus ? (
-            <DetailSection title="🚚 Delivery & Shipment">
+          {/* Shipment section is ALWAYS visible: it shows a clear waiting
+               state until the admin assigns a delivery partner, then follows
+               the live delivery milestones. */}
+          <DetailSection title="🚚 Delivery & Shipment">
               {/* Delivery lifecycle chips */}
               <div
                 style={{
@@ -1279,8 +1377,11 @@ function OrderDetails({
               </div>
 
               <DetailRow
-                label="Delivery Status"
-                value={order.deliveryStatus}
+                label="Current Shipment Status"
+                value={
+                  order.deliveryStatus ||
+                  "Pickup Pending — awaiting admin partner assignment"
+                }
               />
 
               {order.deliveryPartnerName ? (
@@ -1379,8 +1480,7 @@ function OrderDetails({
                 delivery flow — assignment and reassignment are handled by the
                 JustBrand admin team.
               </div>
-            </DetailSection>
-          ) : null}
+          </DetailSection>
 
           {/* CLOSE */}
 

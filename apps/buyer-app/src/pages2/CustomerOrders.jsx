@@ -112,15 +112,13 @@ function CustomerOrders({ token, onBack, onNeedLogin }) {
     ];
   }
 
-  // Orders that carry real delivery data can open the tracking screen.
-  // Cancelled orders and orders not yet in the delivery flow cannot.
+  // Tracking is always available for live orders: the timeline shows
+  // "Pickup Pending" until the admin assigns a delivery partner, then
+  // follows the real delivery milestones. Only cancelled/refunded orders
+  // hide the button (no tracking to show).
   function canTrack(order) {
     if (["Cancelled", "Refunded"].includes(order.status)) return false;
-    return Boolean(
-      order.deliveryStatus ||
-        order.assignedAt ||
-        ["Processing", "Shipped", "Delivered"].includes(order.status)
-    );
+    return true;
   }
 
   function orderItems(order) {
@@ -194,9 +192,17 @@ function CustomerOrders({ token, onBack, onNeedLogin }) {
                   ))}
                 </div>
 
-                {order.deliveryStatus ? (
+                {order.status !== "Cancelled" ? (
                   <div style={styles.trackBox}>
                     <div style={styles.trackTitle}>🚚 Delivery Tracking</div>
+                    {order.deliveryPartnerName ? (
+                      <div style={{ fontSize: 12, color: "#6b7280", margin: "2px 0 4px" }}>
+                        🛵 Delivery Partner: {order.deliveryPartnerName}
+                      </div>
+                    ) : null}
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#c2410c", marginBottom: 6 }}>
+                      Current Status: {order.deliveryStatus || "Pickup Pending"}
+                    </div>
                     {order.deliveryStatus === "Delivery Failed" ? (
                       <div style={styles.trackFail}>
                         Delivery attempt failed
@@ -231,6 +237,11 @@ function CustomerOrders({ token, onBack, onNeedLogin }) {
                         ) : null}
                       </div>
                     ))}
+                    {order.deliveryStatus === "Delivery Failed" && order.deliveryFailureReason ? (
+                      <div style={styles.trackFail}>
+                        Last failure: {order.deliveryFailureReason}
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
 

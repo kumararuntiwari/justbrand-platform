@@ -2578,7 +2578,21 @@ businessRouter.get(
       .prepare(`SELECT * FROM orders ORDER BY id DESC LIMIT 500`)
       .all();
 
-    res.json({ success: true, orders: orders.map(orderWithItems) });
+    // Additive delivery visibility for the admin orders table (same
+    // partner-name pattern as the seller/customer order endpoints).
+    const partnerNames = new Map(
+      db.prepare(`SELECT id, name FROM delivery_partners`).all().map((p) => [p.id, p.name])
+    );
+
+    res.json({
+      success: true,
+      orders: orders.map((order) => ({
+        ...orderWithItems(order),
+        deliveryPartnerName: order.deliveryPartnerId
+          ? partnerNames.get(order.deliveryPartnerId) || null
+          : null,
+      })),
+    });
   }
 );
 

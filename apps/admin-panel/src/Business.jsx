@@ -680,6 +680,7 @@ function Business({
                     <th>Amount</th>
                     <th>Payment</th>
                     <th>Status</th>
+                    <th>Delivery / Shipment</th>
                     <th>Update</th>
                   </tr>
                 </thead>
@@ -715,6 +716,25 @@ function Business({
                           good="Delivered"
                           bad="Cancelled"
                         />
+                      </td>
+                      <td>
+                        {order.deliveryStatus ? (
+                          <div style={{ display: "flex", flexDirection: "column", gap: "3px", alignItems: "flex-start" }}>
+                            <StatusPill
+                              value={order.deliveryStatus}
+                              good="Delivered"
+                              bad="Delivery Failed"
+                            />
+                            {order.deliveryPartnerName ? (
+                              <small className="ov-note">🛵 {order.deliveryPartnerName}</small>
+                            ) : null}
+                            {order.deliveryStatus === "Delivery Failed" && order.deliveryFailureReason ? (
+                              <small style={{ color: "#b91c1c" }}>{order.deliveryFailureReason}</small>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <small className="ov-note">Not assigned</small>
+                        )}
                       </td>
                       <td>
                         <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>

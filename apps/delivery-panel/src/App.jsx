@@ -65,7 +65,7 @@ function useIsMobile() {
 // Section id → (label, icon emoji, group)
 const NAV = [
   ["dashboard", "Dashboard", "🛵", "DELIVERY"],
-  ["assigned", "Assigned Orders", "📦", "DELIVERY"],
+  ["assigned", "Assigned Deliveries", "📦", "DELIVERY"],
   ["pickup", "Pickup", "🏪", "DELIVERY"],
   ["ofd", "Out for Delivery", "🛣️", "DELIVERY"],
   ["delivered", "Delivered", "✅", "DELIVERY"],
@@ -125,12 +125,40 @@ export default function App() {
   );
 }
 
+const EMPTY_REG_FORM = {
+  name: "",
+  mobile: "",
+  email: "",
+  address: "",
+  city: "",
+  state: "",
+  pincode: "",
+  kycIdType: "Aadhaar",
+  kycIdNumber: "",
+  kycDocumentRef: "",
+  vehicleType: "Bike",
+  vehicleNumber: "",
+  drivingLicence: "",
+  emergencyContact: "",
+  bankAccountName: "",
+  bankAccountNumber: "",
+  bankIfscCode: "",
+  upiId: "",
+  password: "",
+  confirmPassword: "",
+};
+
 function LoginScreen({ onLoggedIn }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [mode, setMode] = useState("login"); // login | register | registered
+  const [form, setForm] = useState(EMPTY_REG_FORM);
+  const [regBusy, setRegBusy] = useState(false);
+  const [regError, setRegError] = useState("");
+  const [regCode, setRegCode] = useState("");
 
   async function submit(event) {
     event.preventDefault();
@@ -155,6 +183,224 @@ function LoginScreen({ onLoggedIn }) {
     }
   }
 
+  // ============ SELF-REGISTRATION ============
+  async function register(event) {
+    event.preventDefault();
+    setRegError("");
+
+    if (form.password !== form.confirmPassword) {
+      setRegError("Passwords do not match.");
+      return;
+    }
+
+    setRegBusy(true);
+    try {
+      const response = await fetch(`${API}/api/delivery/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.success) {
+        setRegError(data.message || "Registration failed. Please check the form and try again.");
+        return;
+      }
+      setRegCode(data.partnerCode || "");
+      setMode("registered");
+    } catch {
+      setRegError("Network error — please try again.");
+    } finally {
+      setRegBusy(false);
+    }
+  }
+
+  const regField = (key, placeholder, extra = {}) => (
+    <input
+      className="dl-input"
+      value={form[key]}
+      onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+      placeholder={placeholder}
+      style={{ width: "100%", marginBottom: 10 }}
+      {...extra}
+    />
+  );
+
+  // ============ SUCCESS: REGISTRATION SUBMITTED ============
+  if (mode === "registered") {
+    return (
+      <div className="dl-screen">
+        <div className="dl-glow dl-glow-orange" aria-hidden="true" />
+        <div className="dl-glow dl-glow-green" aria-hidden="true" />
+        <div className="dl-glow dl-glow-pink" aria-hidden="true" />
+        <div className="dl-content">
+          <header className="dl-brand">
+            <div className="dl-brand-badge" aria-hidden="true">🛵</div>
+            <h1 className="dl-brand-name">JustBrand</h1>
+            <div className="dl-brand-role">Delivery Partner</div>
+          </header>
+          <Card className="dl-card">
+            <div className="dl-card-accent" aria-hidden="true" />
+            <h2 className="dl-card-title" style={{ color: "#047857" }}>
+              ✅ Registration Submitted
+            </h2>
+            <p className="dl-card-sub">
+              Status: <strong>Pending Super Admin Approval</strong>
+            </p>
+            {regCode ? (
+              <p className="dl-card-sub" style={{ fontWeight: 600 }}>
+                Your Delivery ID: {regCode}
+              </p>
+            ) : null}
+            <p className="dl-note">
+              Your registration is submitted and is awaiting Super Admin approval. Once approved,
+              you can log in here with your registered mobile number and password to see your
+              assigned deliveries and earnings.
+            </p>
+            <button type="button" className="dl-submit" onClick={() => {
+              setMode("login");
+              setForm(EMPTY_REG_FORM);
+            }}>
+              Back to Login
+            </button>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // ============ REGISTRATION FORM ============
+  if (mode === "register") {
+    return (
+      <div className="dl-screen">
+        <div className="dl-glow dl-glow-orange" aria-hidden="true" />
+        <div className="dl-glow dl-glow-green" aria-hidden="true" />
+        <div className="dl-glow dl-glow-pink" aria-hidden="true" />
+        <div className="dl-content">
+          <header className="dl-brand">
+            <div className="dl-brand-badge" aria-hidden="true">🛵</div>
+            <h1 className="dl-brand-name">JustBrand</h1>
+            <div className="dl-brand-role">Delivery Partner</div>
+            <p className="dl-brand-tag">Create your delivery partner account</p>
+          </header>
+          <Card className="dl-card">
+            <div className="dl-card-accent" aria-hidden="true" />
+            <h2 className="dl-card-title">Create Delivery Partner Account</h2>
+            <p className="dl-card-sub">
+              Registrations are reviewed by the JustBrand Super Admin before delivery access is
+              granted.
+            </p>
+
+            <form onSubmit={register}>
+              <LoginField label="Full Name *">
+                {regField("name", "Your full name", { required: true })}
+              </LoginField>
+              <LoginField label="Mobile Number *">
+                {regField("mobile", "10-digit mobile number", { required: true, inputMode: "numeric" })}
+              </LoginField>
+              <LoginField label="Email">
+                {regField("email", "you@example.com", { type: "email" })}
+              </LoginField>
+              <LoginField label="Address">
+                {regField("address", "House / street / area")}
+              </LoginField>
+              <LoginField label="City">
+                {regField("city", "City")}
+              </LoginField>
+              <LoginField label="State">
+                {regField("state", "State")}
+              </LoginField>
+              <LoginField label="PIN Code">
+                {regField("pincode", "6-digit PIN", { inputMode: "numeric" })}
+              </LoginField>
+              <LoginField label="ID Type">
+                <select
+                  className="dl-input"
+                  value={form.kycIdType}
+                  onChange={(e) => setForm({ ...form, kycIdType: e.target.value })}
+                  style={{ width: "100%", marginBottom: 10 }}
+                >
+                  {["Aadhaar", "PAN", "Voter ID", "Passport", "Driving Licence"].map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </LoginField>
+              <LoginField label="ID Number">
+                {regField("kycIdNumber", "KYC ID number")}
+              </LoginField>
+              <LoginField label="KYC Document Reference">
+                {regField("kycDocumentRef", "Document reference / upload note")}
+              </LoginField>
+              <LoginField label="Vehicle Type">
+                <select
+                  className="dl-input"
+                  value={form.vehicleType}
+                  onChange={(e) => setForm({ ...form, vehicleType: e.target.value })}
+                  style={{ width: "100%", marginBottom: 10 }}
+                >
+                  {["Bike", "Scooter", "Cycle", "Auto", "Car", "Van"].map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </LoginField>
+              <LoginField label="Vehicle Number">
+                {regField("vehicleNumber", "e.g. DL1AB1234")}
+              </LoginField>
+              <LoginField label="Driving Licence">
+                {regField("drivingLicence", "Driving licence number")}
+              </LoginField>
+              <LoginField label="Emergency Contact">
+                {regField("emergencyContact", "10-digit emergency number", { inputMode: "numeric" })}
+              </LoginField>
+              <LoginField label="Bank Account Holder Name">
+                {regField("bankAccountName", "As printed on the passbook")}
+              </LoginField>
+              <LoginField label="Bank Account Number">
+                {regField("bankAccountNumber", "6-20 digit account number", { inputMode: "numeric" })}
+              </LoginField>
+              <LoginField label="IFSC Code">
+                {regField("bankIfscCode", "e.g. SBIN0001234")}
+              </LoginField>
+              <LoginField label="UPI ID">
+                {regField("upiId", "name@upi")}
+              </LoginField>
+              <LoginField label="Password *">
+                {regField("password", "Minimum 6 characters", { type: "password", required: true, autoComplete: "new-password" })}
+              </LoginField>
+              <LoginField label="Confirm Password *">
+                {regField("confirmPassword", "Re-enter password", { type: "password", required: true, autoComplete: "new-password" })}
+              </LoginField>
+
+              {regError ? (
+                <div className="dl-error" role="alert">
+                  <span aria-hidden="true">⚠️</span> {regError}
+                </div>
+              ) : null}
+
+              <button type="submit" className="dl-submit" disabled={regBusy}>
+                {regBusy ? "Submitting…" : "Submit Registration"}
+              </button>
+            </form>
+
+            <div className="dl-forgot-row">
+              <button
+                type="button"
+                className="dl-forgot"
+                onClick={() => {
+                  setMode("login");
+                  setRegError("");
+                }}
+                style={{ background: "none", border: "none", cursor: "pointer" }}
+              >
+                ← Already a partner? Login instead
+              </button>
+            </div>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // ============ LOGIN (default) ============
   return (
     <div className="dl-screen">
       {/* Subtle Tiranga glow accents (pure CSS, no images) */}
@@ -241,6 +487,30 @@ function LoginScreen({ onLoggedIn }) {
             Password resets are handled by the JustBrand admin team. Contact operations support
             from your registered mobile number.
           </p>
+
+          <div
+            style={{
+              borderTop: "1px solid #eef1f7",
+              marginTop: 16,
+              paddingTop: 14,
+              textAlign: "center",
+            }}
+          >
+            <p className="dl-card-sub" style={{ marginBottom: 10 }}>
+              New Delivery Partner?
+            </p>
+            <button
+              type="button"
+              className="dl-submit"
+              style={{ background: "linear-gradient(90deg, #10b981, #059669)" }}
+              onClick={() => {
+                setMode("register");
+                setError("");
+              }}
+            >
+              Create Delivery Partner Account
+            </button>
+          </div>
         </Card>
 
         {/* Logistics feature strip — subtle visual language, no images */}
