@@ -304,7 +304,7 @@ function MLMDashboard({ member, onLogout }) {
 
           <MenuButton
             icon="💰"
-            text="Commission"
+            text="Reward"
             active={activeMenu === "commission"}
             onClick={() => setActiveMenu("commission")}
           />
@@ -366,7 +366,7 @@ function MLMDashboard({ member, onLogout }) {
               { id: "dashboard", icon: "🏠", text: "Dashboard" },
               { id: "team", icon: "🌳", text: "My Team" },
               { id: "wallet", icon: "💳", text: "Wallet" },
-              { id: "commission", icon: "💰", text: "Commission" },
+              { id: "commission", icon: "💰", text: "Reward" },
               { id: "earnings", icon: "💵", text: "Earnings" },
               { id: "referral", icon: "🔗", text: "Referral" },
               { id: "history", icon: "📜", text: "Income History" },
@@ -697,7 +697,7 @@ function MLMDashboard({ member, onLogout }) {
               </div>
 
               <div style={styles.infoMessage}>
-                ℹ️ Approved commission will be added
+                ℹ️ Approved reward will be added
                 to your wallet after the applicable
                 return period.
               </div>
@@ -730,7 +730,7 @@ function MLMDashboard({ member, onLogout }) {
 
               <div style={styles.infoMessage}>
                 🎁 Direct referral, shopping and
-                binary commissions will be shown here.
+                binary rewards will be shown here.
               </div>
 
             </PageBox>

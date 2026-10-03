@@ -4,6 +4,7 @@ import Header from "./components/Header";
 import Footer from "./components/Footer";
 import { useState, useEffect } from 'react';
 import ProductDetails from "./pages2/ProductDetails";
+import ProductChat from "./pages2/ProductChat";
 import Cart from "./pages2/Cart";
 import InfoPages from "./pages2/InfoPages.jsx";
 import {
@@ -38,6 +39,20 @@ import MLMWallet from "./Pages/MLMWallet";
 // ==========================================
 
 const BACKEND_URL = "https://justbrand-in-144629.hostingersite.com/api/products";
+
+// Phase 1: admin-managed category list. On any failure the Buyer
+// keeps showing the built-in fallback category chips below.
+const CATEGORIES_URL =
+  "https://justbrand-in-144629.hostingersite.com/api/categories";
+
+const FALLBACK_CATEGORY_CHIPS = [
+  "All",
+  "Electronics",
+  "Fashion",
+  "Beauty",
+  "Home",
+  "Grocery",
+];
 
 // Admin-managed site content (logo, banners, About/Contact copy).
 // Same production origin as the products API — never localhost.
@@ -348,6 +363,16 @@ function App() {
 
   const [siteContent, setSiteContent] = useState(null);
 
+  // Admin-managed categories (Phase 1). Empty = API not loaded/failed →
+  // the hardcoded fallback chips keep rendering exactly as before.
+  const [shopCategories, setShopCategories] = useState([]);
+
+  // Fallback safety: any API failure keeps the built-in chips.
+  const categoryChips =
+    shopCategories.length > 0
+      ? ["All", ...shopCategories.map((c) => c.name)]
+      : FALLBACK_CATEGORY_CHIPS;
+
   // Admin-configured banners/promo — used by HomeHero on the homepage.
   const adminBanners = (siteContent?.banners || []).filter((b) => b.active);
   const homepagePromo = siteContent?.homepage || null;
@@ -553,6 +578,61 @@ function App() {
       cancelled = true;
     };
   }, []);
+
+  // ==========================================
+  // LOAD CATEGORIES (admin-managed, Phase 1)
+  // Failure-tolerant: on error the list stays empty and the
+  // built-in fallback categories are shown — never a blank bar.
+  // ==========================================
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadCategories() {
+      try {
+        const response = await fetch(CATEGORIES_URL);
+
+        if (!response.ok) return;
+
+        const data = await response.json().catch(() => null);
+
+        if (!cancelled && data?.success && Array.isArray(data.categories)) {
+          setShopCategories(data.categories);
+        }
+      } catch {
+        // Keep fallback categories — never break the Buyer app.
+      }
+    }
+
+    loadCategories();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // ==========================================
+  // CUSTOM FAVICON (admin-managed, Phase 1)
+  // Applied at runtime — index.html is never modified. When no
+  // custom favicon is configured the built-in /favicon.svg stays.
+  // ==========================================
+
+  useEffect(() => {
+    const url = siteContent?.branding?.faviconUrl;
+
+    if (!url) return;
+    if (!/^data:image\//i.test(url) && !/^https:\/\//i.test(url)) return;
+
+    let link = document.querySelector("link[rel~='icon']");
+
+    if (!link) {
+      link = document.createElement("link");
+      link.rel = "icon";
+      document.head.appendChild(link);
+    }
+
+    link.href = url;
+  }, [siteContent]);
 
   async function loadProducts() {
     setLoading(true);
@@ -1244,6 +1324,7 @@ function App() {
   if (mlmPage === "rules") {
     return (
       <MLMCommissionRules
+        rewardInfo={siteContent?.rewardInfo || null}
         onBack={() =>
           setMlmPage("dashboard")
         }
@@ -1282,6 +1363,37 @@ function App() {
   }
 
   // ==========================================
+  // PROTECTED PRODUCT CHAT (buyer ↔ seller)
+  // Requires a logged-in customer; the backend enforces product
+  // scope + participant checks + contact-info redaction.
+  // ==========================================
+
+  if (buyerPage === "chat" && selectedProduct) {
+    if (!customer || !customerToken) {
+      return (
+        <CustomerAuth
+          onAuth={(authCustomer) => {
+            handleCustomerAuth(authCustomer);
+            // Resume the chat right after login.
+            setBuyerPage("chat");
+          }}
+          onBack={() => setBuyerPage(null)}
+        />
+      );
+    }
+
+    return (
+      <>
+        <Header {...commonHeaderProps} onCart={() => setShowCart(true)} />
+        <ProductChat
+          product={selectedProduct}
+          onBack={() => setBuyerPage(null)}
+        />
+      </>
+    );
+  }
+
+  // ==========================================
   // PRODUCT DETAILS
   // ==========================================
 
@@ -1297,6 +1409,7 @@ function App() {
 
         <ProductDetails
           product={selectedProduct}
+          onChat={() => setBuyerPage("chat")}
           onBack={() =>
             setSelectedProduct(null)
           }
@@ -1413,7 +1526,10 @@ function App() {
   if (
     buyerPage === "contact" ||
     buyerPage === "about" ||
-    buyerPage === "returns"
+    buyerPage === "returns" ||
+    buyerPage === "shipping" ||
+    buyerPage === "privacy" ||
+    buyerPage === "terms"
   ) {
     const meta = infoPageMeta[buyerPage];
     if (meta) {
@@ -1429,6 +1545,9 @@ function App() {
               ? siteContent?.about || null
               : siteContent?.contact || null
           }
+          policies={siteContent?.policies || null}
+          deliveryInfo={siteContent?.deliveryInfo || null}
+          familyInfo={siteContent?.familyInfo || null}
           onBack={() => setBuyerPage(null)}
         />
       </>
@@ -1684,14 +1803,7 @@ function App() {
           boxSizing: "border-box",
         }}
       >
-        {[
-          "All",
-          "Electronics",
-          "Fashion",
-          "Beauty",
-          "Home",
-          "Grocery",
-        ].map((item) => (
+        {categoryChips.map((item) => (
           <button
             key={item}
             onClick={() =>
@@ -2062,6 +2174,7 @@ function App() {
         onFamily={() => setMlmPage(mlmMember ? "dashboard" : "login")}
         onCart={() => setShowCart(true)}
         onWishlist={() => setBuyerPage("wishlist")}
+        content={siteContent?.footer || null}
       />
     </div>
   );

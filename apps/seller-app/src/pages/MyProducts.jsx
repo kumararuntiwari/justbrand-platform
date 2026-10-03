@@ -5,7 +5,7 @@ import "../index.css";
 
 const API_URL = "https://justbrand-in-144629.hostingersite.com";
 
-function MyProducts({ onBack, onAddProduct }) {
+function MyProducts({ onBack, onAddProduct, onOpenChats }) {
   const [products, setProducts] = useState([]);
   const [search, setSearch] = useState("");
   const [editingProduct, setEditingProduct] = useState(null);
@@ -502,20 +502,39 @@ function MyProducts({ onBack, onAddProduct }) {
           </div>
         </div>
 
-        <button
-          onClick={onBack}
-          style={{
-            border: "none",
-            background: "white",
-            color: "#ff1493",
-            padding: "10px 16px",
-            borderRadius: "8px",
-            cursor: "pointer",
-            fontWeight: "bold",
-          }}
-        >
-          ← Dashboard
-        </button>
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          {onOpenChats ? (
+            <button
+              onClick={onOpenChats}
+              style={{
+                border: "none",
+                background: "white",
+                color: "#ff6b00",
+                padding: "10px 16px",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontWeight: "bold",
+              }}
+            >
+              💬 Buyer Chats
+            </button>
+          ) : null}
+
+          <button
+            onClick={onBack}
+            style={{
+              border: "none",
+              background: "white",
+              color: "#ff1493",
+              padding: "10px 16px",
+              borderRadius: "8px",
+              cursor: "pointer",
+              fontWeight: "bold",
+            }}
+          >
+            ← Dashboard
+          </button>
+        </div>
       </header>
 
       {/* =====================================

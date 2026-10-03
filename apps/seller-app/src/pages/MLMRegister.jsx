@@ -293,8 +293,8 @@ function MLMRegister({ onBack, onRegistered, onLogin }) {
             </h1>
 
             <p style={styles.subtitle}>
-              Create your JustBrand MLM Member
-              Account
+              Create your JustBrand Family
+              Member Account
             </p>
 
           </div>

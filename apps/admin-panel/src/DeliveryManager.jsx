@@ -155,7 +155,9 @@ export default function DeliveryManager({ token, role, onMessage }) {
       {tab === "assign" && <AssignPanel token={token} canManage={canManage} onMessage={onMessage} />}
       {tab === "tracking" && <Tracking token={token} />}
       {tab === "settings" && <DeliverySettings token={token} canManage={role === "super_admin"} onMessage={onMessage} />}
-      {tab === "earnings" && canSeeFinance && <EarningsPanel token={token} />}
+      {tab === "earnings" && canSeeFinance && (
+        <EarningsPanel token={token} canPay={role === "super_admin"} />
+      )}
     </section>
   );
 }
@@ -1282,7 +1284,7 @@ function DeliverySettings({ token, canManage, onMessage }) {
 
 // ---------------- EARNINGS (finance) ----------------
 
-function EarningsPanel({ token }) {
+function EarningsPanel({ token, canPay }) {
   const [data, setData] = useState(null);
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState("");
@@ -1294,7 +1296,7 @@ function EarningsPanel({ token }) {
   }, [token]);
 
   // Finance action — mirrors PUT /api/admin/delivery/earnings/:id/pay
-  // (allowed for super_admin and accountant, same as this panel's roles).
+  // (super_admin only; other finance roles keep read-only reporting).
   async function markPaid(earning) {
     const confirmed = window.confirm(
       `Mark ₹${earning.amount} for ${earning.partnerName || "partner"} (order #${earning.orderNumber || earning.orderId}) as Paid?`
@@ -1357,13 +1359,17 @@ function EarningsPanel({ token }) {
                   <td style={{ padding: "10px 14px" }}>{rupees(e.amount)}</td>
                   <td style={{ padding: "10px 14px" }}>
                     {e.status === "Pending" ? (
-                      <button
-                        onClick={() => markPaid(e)}
-                        disabled={busyId === e.id}
-                        style={miniBtn}
-                      >
-                        {busyId === e.id ? "Saving…" : "Mark Paid"}
-                      </button>
+                      canPay ? (
+                        <button
+                          onClick={() => markPaid(e)}
+                          disabled={busyId === e.id}
+                          style={miniBtn}
+                        >
+                          {busyId === e.id ? "Saving…" : "Mark Paid"}
+                        </button>
+                      ) : (
+                        <span style={{ color: "#8b93a8", fontSize: 12.5 }}>🔒 Super Admin only</span>
+                      )
                     ) : (
                       <span style={{ color: "#047857", fontWeight: 600 }}>Paid ✓</span>
                     )}

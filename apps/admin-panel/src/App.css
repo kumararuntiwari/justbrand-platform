@@ -500,7 +500,7 @@ body {
 
   .notif-pop {
     position: fixed;
-    top: 76px;
+    top: calc(var(--admin-header-h, 64px) + 8px);
     right: 12px;
     left: 12px;
     width: auto;
@@ -542,6 +542,19 @@ body {
 .admin-app {
   display: flex;
   flex-direction: column;
+  /* No horizontal page overflow on any viewport. overflow-x: clip does
+     NOT create a scroll container, so the sticky header keeps working. */
+  width: 100%;
+  min-width: 0;
+  overflow-x: clip;
+}
+
+/* Content never stretches under wide children (tables scroll inside
+   their own .sec-tablewrap wrappers instead of widening the page). */
+.admin-content {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .admin-header {
@@ -573,18 +586,20 @@ body {
 
 .admin-sidebar {
   position: fixed;
-  top: 0;
+  /* Pinned exactly below the header (measured in App.jsx) so no menu
+     item can ever slide under the header on any viewport. */
+  top: var(--admin-header-h, 64px);
   bottom: 0;
   left: 0;
   width: 248px;
-  padding: 18px 12px;
-  padding-top: 84px;
+  padding: 16px 12px 18px;
   background: #141419;
   display: flex;
   flex-direction: column;
   gap: 4px;
   z-index: 30;
   overflow-y: auto;
+  overscroll-behavior: contain;
   transform: translateX(-100%);
   transition: transform 0.22s ease;
 }
@@ -665,8 +680,13 @@ body {
 }
 
 .sidebar-backdrop {
+  /* Starts below the header: the drawer covers only the content area,
+     clicking/tapping anywhere outside the drawer closes it. */
   position: fixed;
-  inset: 0;
+  top: var(--admin-header-h, 64px);
+  right: 0;
+  bottom: 0;
+  left: 0;
   background: rgba(0, 0, 0, 0.45);
   z-index: 25;
 }

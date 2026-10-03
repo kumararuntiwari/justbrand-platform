@@ -1,10 +1,48 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import "../index.css";
 import ProductImageManager from "../components/ProductImageManager";
 
 const API_URL = "https://justbrand-in-144629.hostingersite.com";
 
 export default function AddProduct() {
+  // Phase 1: admin-managed category suggestions. The input stays
+  // free text — if the API fails, typing a category works exactly
+  // as before (no behavior change for existing flows).
+  const [categorySuggestions, setCategorySuggestions] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadCategories() {
+      try {
+        const response = await fetch(`${API_URL}/api/categories`);
+
+        if (!response.ok) return;
+
+        const data = await response.json().catch(() => null);
+
+        if (!cancelled && data?.success && Array.isArray(data.categories)) {
+          const names = [];
+          for (const c of data.categories) {
+            if (c?.name) names.push(c.name);
+            for (const child of c?.children || []) {
+              if (child?.name) names.push(child.name);
+            }
+          }
+          setCategorySuggestions(names);
+        }
+      } catch {
+        // Fallback safety: free-text category entry keeps working.
+      }
+    }
+
+    loadCategories();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const [form, setForm] = useState({
     name: "",
     category: "",
@@ -185,7 +223,13 @@ export default function AddProduct() {
             onChange={handleChange}
             placeholder="Example: Fashion"
             style={inputStyle}
+            list="jb-category-suggestions"
           />
+          <datalist id="jb-category-suggestions">
+            {categorySuggestions.map((name) => (
+              <option key={name} value={name} />
+            ))}
+          </datalist>
 
           <label style={labelStyle}>Selling Price *</label>
           <input

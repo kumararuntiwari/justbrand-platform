@@ -1,14 +1,67 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import "../index.css";
 import ProductImageManager from "./ProductImageManager";
 
 const API_URL = "https://justbrand-in-144629.hostingersite.com";
+
+// Existing hardcoded options kept as fallback so this select works
+// exactly as before if the categories API is unavailable.
+const FALLBACK_CATEGORIES = [
+  "Electronics",
+  "Fashion",
+  "Beauty",
+  "Home",
+  "Grocery",
+  "Mobiles",
+  "Appliances",
+  "Sports",
+  "Toys",
+  "Other",
+];
 
 function EditProduct({
   product,
   onBack,
   onSaved,
 }) {
+  // Phase 1: admin-managed categories (top-level + sub-categories).
+  // Merged with the fallback list above; the product's current
+  // category is always kept selectable so no existing value breaks.
+  const [apiCategories, setApiCategories] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadCategories() {
+      try {
+        const response = await fetch(`${API_URL}/api/categories`);
+
+        if (!response.ok) return;
+
+        const data = await response.json().catch(() => null);
+
+        if (!cancelled && data?.success && Array.isArray(data.categories)) {
+          const names = [];
+          for (const c of data.categories) {
+            if (c?.name) names.push(c.name);
+            for (const child of c?.children || []) {
+              if (child?.name) names.push(child.name);
+            }
+          }
+          setApiCategories(names);
+        }
+      } catch {
+        // Fallback safety: the hardcoded option list keeps working.
+      }
+    }
+
+    loadCategories();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const [form, setForm] = useState({
     name: product.name || "",
     category: product.category || "",
@@ -22,6 +75,16 @@ function EditProduct({
     shortDetails: product.shortDetails || "",
     description: product.description || "",
   });
+
+  // Merged option list: fallback ∪ API ∪ the product's current value
+  // (so an existing free-text category always stays selectable).
+  const categoryOptions = Array.from(
+    new Set([
+      ...FALLBACK_CATEGORIES,
+      ...apiCategories,
+      ...(form.category ? [form.category] : []),
+    ])
+  );
 
   // Existing images (backward compatible): prefer the ordered `images`
   // array; fall back to the legacy single `image` column. A placeholder
@@ -318,45 +381,11 @@ function EditProduct({
                     Select Category
                   </option>
 
-                  <option value="Electronics">
-                    Electronics
-                  </option>
-
-                  <option value="Fashion">
-                    Fashion
-                  </option>
-
-                  <option value="Beauty">
-                    Beauty
-                  </option>
-
-                  <option value="Home">
-                    Home
-                  </option>
-
-                  <option value="Grocery">
-                    Grocery
-                  </option>
-
-                  <option value="Mobiles">
-                    Mobiles
-                  </option>
-
-                  <option value="Appliances">
-                    Appliances
-                  </option>
-
-                  <option value="Sports">
-                    Sports
-                  </option>
-
-                  <option value="Toys">
-                    Toys
-                  </option>
-
-                  <option value="Other">
-                    Other
-                  </option>
+                  {categoryOptions.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
                 </select>
               </div>
 

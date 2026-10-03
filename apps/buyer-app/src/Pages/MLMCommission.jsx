@@ -163,19 +163,22 @@ function MLMCommission({ onBack }) {
   // ==========================================
 
   function getCommissionType(item) {
-    if (item?.type) {
-      return item.type;
+    const raw =
+      item?.type ||
+      item?.commissionType ||
+      item?.source;
+
+    if (raw) {
+      // Display-only labels — backend tokens/identifiers unchanged.
+      const key = String(raw).toLowerCase();
+      if (key === "shopping") return "Shopping Reward";
+      if (key === "direct") return "Direct Reward";
+      if (key === "level") return "Level Reward";
+      if (key === "binary") return "Binary Reward";
+      return raw;
     }
 
-    if (item?.commissionType) {
-      return item.commissionType;
-    }
-
-    if (item?.source) {
-      return item.source;
-    }
-
-    return "Shopping Commission";
+    return "Shopping Reward";
   }
 
   // ==========================================
@@ -220,16 +223,16 @@ function MLMCommission({ onBack }) {
     const status = getStatus(item);
 
     if (status === "approved") {
-      return "Return period completed. Commission added to wallet.";
+      return "Return period completed. Reward added to wallet.";
     }
 
     if (status === "cancelled") {
-      return "Order cancelled/returned. Commission not payable.";
+      return "Order cancelled/returned. Reward not payable.";
     }
 
     const days = getReturnDays(item);
 
-    return `Commission will be released after ${days} days return period.`;
+    return `Reward will be released after ${days} days return period.`;
   }
 
   // ==========================================
@@ -242,11 +245,11 @@ function MLMCommission({ onBack }) {
         <div style={styles.emptyIcon}>💰</div>
 
         <h3 style={styles.emptyTitle}>
-          No Commission Found
+          No Reward Found
         </h3>
 
         <p style={styles.emptyText}>
-          Your Family commission will appear here
+          Your Family reward will appear here
           when eligible shopping or referral
           transactions are generated.
         </p>
@@ -283,14 +286,14 @@ function MLMCommission({ onBack }) {
             </div>
 
             <div style={styles.headerTitle}>
-              Family Commission
+              Family Reward
             </div>
           </div>
 
         </div>
 
         <div style={styles.headerBadge}>
-          Commission Center
+          Reward Center
         </div>
 
       </div>
@@ -310,12 +313,12 @@ function MLMCommission({ onBack }) {
           <div>
 
             <h1 style={styles.title}>
-              💰 Family Commission
+              💰 Family Reward
             </h1>
 
             <p style={styles.subtitle}>
               Track your shopping, referral and
-              binary commissions.
+              binary rewards.
             </p>
 
           </div>
@@ -353,7 +356,7 @@ function MLMCommission({ onBack }) {
             icon="💰"
             title="Total Earned"
             value={summary.total}
-            description="Approved commission"
+            description="Approved reward"
           />
 
         </div>
@@ -371,15 +374,15 @@ function MLMCommission({ onBack }) {
           <div>
 
             <div style={styles.ruleTitle}>
-              JustBrand Commission Rule
+              JustBrand Reward Rule
             </div>
 
             <div style={styles.ruleText}>
-              Commission is credited to the
+              Reward is credited to the
               wallet only after the applicable
               order return period is completed.
               Cancelled or returned orders do
-              not generate payable commission.
+              not generate payable reward.
             </div>
 
           </div>
@@ -393,32 +396,32 @@ function MLMCommission({ onBack }) {
         <section style={styles.typesSection}>
 
           <h2 style={styles.sectionTitle}>
-            Commission Types
+            Reward Types
           </h2>
 
           <div style={styles.typeGrid}>
 
             <TypeCard
               icon="🛒"
-              title="Shopping Commission"
+              title="Shopping Reward"
               text="Eligible purchases made through the JustBrand network."
             />
 
             <TypeCard
               icon="👥"
               title="Direct Referral"
-              text="Special commission for directly introduced members."
+              text="Special reward for directly introduced members."
             />
 
             <TypeCard
               icon="🌳"
-              title="Binary Commission"
-              text="Commission based on the applicable left and right team rules."
+              title="Binary Reward"
+              text="Reward based on the applicable left and right team rules."
             />
 
             <TypeCard
               icon="🌐"
-              title="Network Commission"
+              title="Network Reward"
               text="Eligible shopping activity across the JustBrand network."
             />
 
@@ -437,11 +440,11 @@ function MLMCommission({ onBack }) {
             <div>
 
               <h2 style={styles.sectionTitle}>
-                📜 Commission History
+                📜 Reward History
               </h2>
 
               <p style={styles.historySubtitle}>
-                All commission transactions
+                All reward transactions
               </p>
 
             </div>
@@ -748,7 +751,7 @@ function CommissionItem({
         )}
 
         <div style={styles.detailBox}>
-          <span>Commission</span>
+          <span>Reward</span>
           <strong>
             ₹{amount.toLocaleString("en-IN")}
           </strong>

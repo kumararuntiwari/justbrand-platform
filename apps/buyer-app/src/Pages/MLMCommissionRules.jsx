@@ -13,7 +13,7 @@ const DEFAULT_RULES = {
   returnCommission: false,
 };
 
-function MLMCommissionRules() {
+function MLMCommissionRules({ rewardInfo }) {
   const [rules, setRules] = useState({ ...DEFAULT_RULES });
 
   const [saved, setSaved] = useState(false);
@@ -54,7 +54,7 @@ function MLMCommissionRules() {
 
     if (!staffToken) {
       setRulesMessage(
-        "Only a JustBrand Super Admin can change commission rules."
+        "Only a JustBrand Super Admin can change reward rules."
       );
       return;
     }
@@ -79,7 +79,7 @@ function MLMCommissionRules() {
     } catch (error) {
       setRulesMessage(
         error?.message ||
-          "Failed to save commission rules."
+          "Failed to save reward rules."
       );
     }
   }
@@ -90,7 +90,7 @@ function MLMCommissionRules() {
     setRules({ ...DEFAULT_RULES });
 
     setRulesMessage(
-      "Showing platform defaults. Press Save Commission Rules with a Super Admin account to apply."
+      "Showing platform defaults. Press Save Reward Rules with a Super Admin account to apply."
     );
   }
 
@@ -108,24 +108,54 @@ function MLMCommissionRules() {
             </div>
 
             <h1 style={styles.title}>
-              Family Commission Rules
+              Family Reward Rules
             </h1>
 
             <p style={styles.subtitle}>
-              Configure commission rules for the JustBrand Family system.
+              Configure reward rules for the JustBrand Family system.
             </p>
           </div>
 
           <div style={styles.status}>
-            ● Commission System
+            ● Reward System
           </div>
         </div>
+
+        {/* ADMIN-EDITABLE REWARD INFO (site_reward_info — Phase 1) */}
+
+        {rewardInfo &&
+        rewardInfo.active !== false &&
+        (String(rewardInfo.explanation || "").trim() ||
+          String(rewardInfo.rules || "").trim() ||
+          String(rewardInfo.levelInfo || "").trim()) ? (
+          <section style={styles.card}>
+            <div style={styles.cardHeader}>
+              <div style={styles.icon}>🎁</div>
+
+              <div>
+                <h2 style={styles.cardTitle}>
+                  {rewardInfo.heading || "Rewards & Benefits"}
+                </h2>
+              </div>
+            </div>
+
+            {String(rewardInfo.explanation || "").trim() ? (
+              <p style={styles.cardSubtitle}>{rewardInfo.explanation}</p>
+            ) : null}
+            {String(rewardInfo.rules || "").trim() ? (
+              <p style={styles.cardSubtitle}>{rewardInfo.rules}</p>
+            ) : null}
+            {String(rewardInfo.levelInfo || "").trim() ? (
+              <p style={styles.cardSubtitle}>{rewardInfo.levelInfo}</p>
+            ) : null}
+          </section>
+        ) : null}
 
         {/* SUCCESS */}
 
         {saved && (
           <div style={styles.success}>
-            ✓ Commission rules saved successfully.
+            ✓ Reward rules saved successfully.
           </div>
         )}
 
@@ -143,11 +173,11 @@ function MLMCommissionRules() {
 
             <div>
               <h2 style={styles.cardTitle}>
-                Direct Member Commission
+                Direct Member Reward
               </h2>
 
               <p style={styles.cardSubtitle}>
-                Commission for members directly introduced by a member.
+                Reward for members directly introduced by a member.
               </p>
             </div>
           </div>
@@ -155,7 +185,7 @@ function MLMCommissionRules() {
           <div style={styles.formGrid}>
 
             <InputField
-              label="Direct Commission (%)"
+              label="Direct Reward (%)"
               value={rules.directCommission}
               onChange={(value) =>
                 updateRule(
@@ -180,7 +210,7 @@ function MLMCommissionRules() {
 
           <div style={styles.info}>
             ℹ️ A member can receive special direct
-            commission for the first{" "}
+            reward for the first{" "}
             <strong>
               {rules.directMemberLimit}
             </strong>{" "}
@@ -196,17 +226,17 @@ function MLMCommissionRules() {
 
             <div>
               <h2 style={styles.cardTitle}>
-                Shopping Commission
+                Shopping Reward
               </h2>
 
               <p style={styles.cardSubtitle}>
-                Commission generated from eligible customer shopping.
+                Reward generated from eligible customer shopping.
               </p>
             </div>
           </div>
 
           <InputField
-            label="Shopping Commission (%)"
+            label="Shopping Reward (%)"
             value={rules.shoppingCommission}
             onChange={(value) =>
               updateRule(
@@ -219,7 +249,7 @@ function MLMCommissionRules() {
           <div style={styles.info}>
             🛍️ When an eligible customer completes
             shopping on JustBrand, the applicable
-            commission can be generated for the Family network.
+            reward can be generated for the Family network.
           </div>
         </section>
 
@@ -231,17 +261,17 @@ function MLMCommissionRules() {
 
             <div>
               <h2 style={styles.cardTitle}>
-                Level Commission
+                Level Reward
               </h2>
 
               <p style={styles.cardSubtitle}>
-                Commission generated from the Family network levels.
+                Reward generated from the Family network levels.
               </p>
             </div>
           </div>
 
           <InputField
-            label="Level Commission (%)"
+            label="Level Reward (%)"
             value={rules.levelCommission}
             onChange={(value) =>
               updateRule(
@@ -265,17 +295,17 @@ function MLMCommissionRules() {
 
             <div>
               <h2 style={styles.cardTitle}>
-                Binary Commission
+                Binary Reward
               </h2>
 
               <p style={styles.cardSubtitle}>
-                Commission based on the left and right binary teams.
+                Reward based on the left and right binary teams.
               </p>
             </div>
           </div>
 
           <InputField
-            label="Binary Commission (%)"
+            label="Binary Reward (%)"
             value={rules.binaryCommission}
             onChange={(value) =>
               updateRule(
@@ -324,7 +354,7 @@ function MLMCommissionRules() {
               </h2>
 
               <p style={styles.cardSubtitle}>
-                Commission is released only after the order becomes eligible.
+                Reward is released only after the order becomes eligible.
               </p>
             </div>
           </div>
@@ -345,8 +375,8 @@ function MLMCommissionRules() {
           </div>
 
           <Toggle
-            label="Release Commission After Return Period"
-            description="Commission remains pending until the return period is completed."
+            label="Release Reward After Return Period"
+            description="Reward remains pending until the return period is completed."
             checked={rules.commissionAfterReturn}
             onChange={(value) =>
               updateRule(
@@ -357,8 +387,8 @@ function MLMCommissionRules() {
           />
 
           <Toggle
-            label="Commission on Cancelled Order"
-            description="If disabled, cancelled orders generate no commission."
+            label="Reward on Cancelled Order"
+            description="If disabled, cancelled orders generate no reward."
             checked={rules.cancelCommission}
             onChange={(value) =>
               updateRule(
@@ -369,8 +399,8 @@ function MLMCommissionRules() {
           />
 
           <Toggle
-            label="Commission on Returned Order"
-            description="If disabled, returned orders do not generate payable commission."
+            label="Reward on Returned Order"
+            description="If disabled, returned orders do not generate payable reward."
             checked={rules.returnCommission}
             onChange={(value) =>
               updateRule(
@@ -384,7 +414,7 @@ function MLMCommissionRules() {
             ⚠️ Current rule:
             <strong>
               {" "}
-              Cancelled orders will not generate commission.
+              Cancelled orders will not generate reward.
             </strong>
           </div>
         </section>
@@ -397,11 +427,11 @@ function MLMCommissionRules() {
 
             <div>
               <h2 style={styles.cardTitle}>
-                Commission Flow
+                Reward Flow
               </h2>
 
               <p style={styles.cardSubtitle}>
-                How an order moves through the commission system.
+                How an order moves through the reward system.
               </p>
             </div>
           </div>
@@ -422,8 +452,8 @@ function MLMCommissionRules() {
             <FlowStep
               number="2"
               icon="⏳"
-              title="Commission Pending"
-              text="Commission remains locked."
+              title="Reward Pending"
+              text="Reward remains locked."
             />
 
             <div style={styles.flowArrow}>
@@ -445,7 +475,7 @@ function MLMCommissionRules() {
               number="4"
               icon="💰"
               title="Wallet"
-              text="Eligible commission becomes payable."
+              text="Eligible reward becomes payable."
             />
 
           </div>
@@ -466,7 +496,7 @@ function MLMCommissionRules() {
             onClick={saveRules}
             style={styles.saveButton}
           >
-            ✓ Save Commission Rules
+            ✓ Save Reward Rules
           </button>
 
         </div>

@@ -103,7 +103,7 @@ function MLMDashboard({ member, onLogout }) {
     mlmMember?.name ||
     mlmMember?.memberName ||
     mlmMember?.fullName ||
-    "MLM Member";
+    "Family Member";
 
   const memberId =
     mlmMember?.memberId ||
@@ -175,7 +175,7 @@ function MLMDashboard({ member, onLogout }) {
           </div>
 
           <div style={styles.panelText}>
-            MLM Dashboard
+            Family Dashboard
           </div>
 
         </div>
@@ -217,7 +217,7 @@ function MLMDashboard({ member, onLogout }) {
         <aside style={styles.sidebar}>
 
           <div style={styles.menuTitle}>
-            MLM MENU
+            FAMILY MENU
           </div>
 
           <MenuButton
@@ -249,7 +249,7 @@ function MLMDashboard({ member, onLogout }) {
 
           <MenuButton
             icon="💰"
-            text="Commission"
+            text="Reward"
             active={activeMenu === "commission"}
             onClick={() =>
               menuClick("commission")
@@ -344,7 +344,7 @@ function MLMDashboard({ member, onLogout }) {
                   </h1>
 
                   <p style={styles.welcomeText}>
-                    Welcome to your JustBrand MLM
+                    Welcome to your JustBrand Family
                     dashboard.
                   </p>
 
@@ -487,7 +487,7 @@ function MLMDashboard({ member, onLogout }) {
                 </h2>
 
                 <p style={styles.sectionSubtitle}>
-                  Your latest MLM income.
+                  Your latest Family income.
                 </p>
 
                 {transactions.length === 0 ? (
@@ -502,7 +502,7 @@ function MLMDashboard({ member, onLogout }) {
                     </h3>
 
                     <p>
-                      Your MLM earnings will appear
+                      Your Family earnings will appear
                       here.
                     </p>
 
@@ -537,7 +537,7 @@ function MLMDashboard({ member, onLogout }) {
             <PageBox
               icon="🌳"
               title="My Team"
-              subtitle="Manage your binary MLM team."
+              subtitle="Manage your binary Family team."
             >
 
               <div style={styles.bigTeamGrid}>
@@ -568,7 +568,7 @@ function MLMDashboard({ member, onLogout }) {
           {activeMenu === "wallet" && (
             <PageBox
               icon="💳"
-              title="MLM Wallet"
+              title="Family Wallet"
               subtitle="Manage your JustBrand wallet."
             >
 
@@ -589,7 +589,7 @@ function MLMDashboard({ member, onLogout }) {
               </div>
 
               <div style={styles.infoMessage}>
-                ℹ️ Approved commission will be
+                ℹ️ Approved reward will be
                 added to your wallet after the
                 applicable return period.
               </div>
@@ -605,7 +605,7 @@ function MLMDashboard({ member, onLogout }) {
             <PageBox
               icon="💵"
               title="My Earnings"
-              subtitle="Track your MLM income."
+              subtitle="Track your Family income."
             >
 
               <div style={styles.earningsCard}>
@@ -628,7 +628,7 @@ function MLMDashboard({ member, onLogout }) {
 
               <div style={styles.infoMessage}>
                 🎁 Direct referral, shopping and
-                binary commissions will be shown
+                binary rewards will be shown
                 here.
               </div>
 
@@ -676,7 +676,7 @@ function MLMDashboard({ member, onLogout }) {
             <PageBox
               icon="📜"
               title="Income History"
-              subtitle="View all MLM transactions."
+              subtitle="View all Family transactions."
             >
 
               {transactions.length === 0 ? (
@@ -725,7 +725,7 @@ function MLMDashboard({ member, onLogout }) {
             <PageBox
               icon="👤"
               title="My Profile"
-              subtitle="Your JustBrand MLM member details."
+              subtitle="Your JustBrand Family member details."
             >
 
               <div style={styles.profileGrid}>
@@ -956,7 +956,7 @@ function Transaction({ item }) {
         <div style={styles.transactionTitle}>
           {item?.title ||
             item?.type ||
-            "MLM Income"}
+            "Family Income"}
         </div>
 
         <div style={styles.transactionDate}>

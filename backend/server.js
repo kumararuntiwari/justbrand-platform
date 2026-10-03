@@ -13,6 +13,7 @@ import businessRouter, {
 import deliveryRouter, {
   initDelivery,
 } from "./delivery.js";
+import chatRouter from "./chat.js";
 import {
   hashPassword,
   comparePassword,
@@ -312,6 +313,29 @@ db.prepare(`
 console.log("Family gifts table ready.");
 
 // =====================================
+// CATEGORIES TABLE (Phase 1 — additive)
+// =====================================
+// Admin-managed category / sub-category foundation for the Buyer
+// and Seller apps. parentId = NULL means top-level category;
+// parentId = <id> means sub-category. Purely additive: products.category
+// remains free text and existing products are NEVER touched — this
+// table only feeds pickers/display, so no migration or seeding is done.
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS categories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    icon TEXT,
+    sortOrder INTEGER NOT NULL DEFAULT 0,
+    active INTEGER NOT NULL DEFAULT 1,
+    parentId INTEGER,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT
+  )
+`).run();
+
+console.log("Categories table ready.");
+
+// =====================================
 // HELPER
 // =====================================
 
@@ -364,6 +388,14 @@ const SITE_SETTING_DEFAULTS = {
   site_contact: null,
   site_branding: null,
   site_homepage: null,
+  // Phase 1 (additive): admin-editable Buyer-facing static content.
+  // null = "not configured yet" → the Buyer app keeps its existing
+  // hardcoded defaults (never a blank screen).
+  site_footer: null,
+  site_policies: null,
+  site_delivery_info: null,
+  site_family_info: null,
+  site_reward_info: null,
 };
 
 function getSiteSetting(key) {
@@ -420,6 +452,11 @@ app.get("/api/site/content", (req, res) => {
         contact: getSiteSetting("site_contact"),
         branding: getSiteSetting("site_branding"),
         homepage: getSiteSetting("site_homepage"),
+        footer: getSiteSetting("site_footer"),
+        policies: getSiteSetting("site_policies"),
+        deliveryInfo: getSiteSetting("site_delivery_info"),
+        familyInfo: getSiteSetting("site_family_info"),
+        rewardInfo: getSiteSetting("site_reward_info"),
         banners,
       },
     });
@@ -435,6 +472,11 @@ app.get("/api/site/content", (req, res) => {
         contact: null,
         branding: null,
         homepage: null,
+        footer: null,
+        policies: null,
+        deliveryInfo: null,
+        familyInfo: null,
+        rewardInfo: null,
         banners: [],
       },
     });
@@ -461,6 +503,11 @@ app.get(
           contact: getSiteSetting("site_contact"),
           homepage: getSiteSetting("site_homepage"),
           branding: getSiteSetting("site_branding"),
+          footer: getSiteSetting("site_footer"),
+          policies: getSiteSetting("site_policies"),
+          delivery: getSiteSetting("site_delivery_info"),
+          family: getSiteSetting("site_family_info"),
+          reward: getSiteSetting("site_reward_info"),
         },
         banners,
       });
@@ -557,6 +604,13 @@ const SITE_SETTING_KEYS = {
   contact: "site_contact",
   homepage: "site_homepage",
   branding: "site_branding",
+  // Phase 1 (additive) — new admin-editable sections. Existing keys
+  // above are untouched; these only ADD new site_settings rows.
+  footer: "site_footer",
+  policies: "site_policies",
+  delivery: "site_delivery_info",
+  family: "site_family_info",
+  reward: "site_reward_info",
 };
 
 app.put(
@@ -787,6 +841,240 @@ app.delete(
     }
   }
 );
+
+// =====================================
+// CATEGORIES (Phase 1 — additive, NON-DESTRUCTIVE)
+// =====================================
+// Public read for Buyer/Seller pickers + admin CRUD.
+// Deliberately NO delete endpoint: categories that are already used
+// by products must never orphan them — admins deactivate instead.
+
+function validateCategoryPayload(body, { partial = false } = {}) {
+  const errors = [];
+  const out = {};
+
+  if (!partial || body.name !== undefined) {
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    if (!name) errors.push("Category name is required.");
+    else if (name.length > 100) errors.push("Name must be 100 characters or fewer.");
+    else out.name = name;
+  }
+
+  if (body.icon !== undefined) {
+    const icon = typeof body.icon === "string" ? body.icon.trim() : "";
+    if (icon.length > 10) errors.push("Icon must be 10 characters or fewer.");
+    else out.icon = icon;
+  }
+
+  if (body.sortOrder !== undefined) {
+    const n = Number(body.sortOrder);
+    if (!Number.isFinite(n) || n < 0 || n > 10000)
+      errors.push("Sort order must be a number between 0 and 10000.");
+    else out.sortOrder = Math.round(n);
+  }
+
+  if (body.active !== undefined) {
+    out.active = body.active ? 1 : 0;
+  }
+
+  if (body.parentId !== undefined) {
+    if (body.parentId === null || body.parentId === "") {
+      out.parentId = null;
+    } else {
+      const parentId = Number(body.parentId);
+      if (!Number.isInteger(parentId) || parentId <= 0) {
+        errors.push("Invalid parent category.");
+      } else {
+        const parent = db.prepare(`SELECT id, parentId FROM categories WHERE id = ?`).get(parentId);
+        if (!parent) errors.push("Parent category not found.");
+        else if (parent.parentId !== null) errors.push("Sub-categories cannot have sub-categories (2 levels max).");
+        else out.parentId = parentId;
+      }
+    }
+  }
+
+  return { errors, out };
+}
+
+// ---- PUBLIC: active categories for Buyer/Seller pickers ----
+// Top-level categories with their active sub-categories nested
+// under `children`. Empty list (not an error) when nothing is
+// configured — clients keep their hardcoded fallback.
+app.get("/api/categories", (req, res) => {
+  try {
+    const rows = db
+      .prepare(`
+        SELECT id, name, icon, sortOrder, parentId
+        FROM categories
+        WHERE active = 1
+        ORDER BY sortOrder ASC, id ASC
+      `)
+      .all();
+
+    const mapChild = (c) => ({
+      id: c.id,
+      name: c.name,
+      icon: c.icon || "",
+      sortOrder: c.sortOrder,
+      parentId: c.parentId,
+    });
+
+    const categories = rows
+      .filter((c) => c.parentId === null)
+      .map((c) => ({
+        ...mapChild(c),
+        children: rows.filter((ch) => ch.parentId === c.id).map(mapChild),
+      }));
+
+    res.json({ success: true, categories });
+  } catch (error) {
+    console.error("categories read failed:", error.message);
+    // Fallback safety: valid empty payload, never a broken response.
+    res.json({ success: true, categories: [] });
+  }
+});
+
+// ---- ADMIN: full list (including inactive) with usage hints ----
+app.get(
+  "/api/admin/categories",
+  requireAuth,
+  requireRole("super_admin", "manager"),
+  (req, res) => {
+    try {
+      const rows = db
+        .prepare(`SELECT * FROM categories ORDER BY sortOrder ASC, id ASC`)
+        .all()
+        .map((c) => ({ ...c, active: c.active === 1 }));
+
+      // Read-only usage hint so admins prefer deactivate over delete
+      // for categories that products already reference (free-text match).
+      const countProducts = db.prepare(
+        `SELECT COUNT(*) AS n FROM products WHERE category = ?`
+      );
+
+      const categories = rows.map((c) => ({
+        ...c,
+        productCount: countProducts.get(c.name)?.n || 0,
+        subCategoryCount: rows.filter((r) => r.parentId === c.id).length,
+      }));
+
+      res.json({ success: true, categories });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+);
+
+// ---- ADMIN: create category / sub-category ----
+app.post(
+  "/api/admin/categories",
+  requireAuth,
+  requireRole("super_admin", "manager"),
+  (req, res) => {
+    const { errors, out } = validateCategoryPayload(req.body || {});
+
+    if (errors.length) {
+      return res.status(400).json({ success: false, message: errors.join(" ") });
+    }
+
+    try {
+      const now = new Date().toISOString();
+      const info = db
+        .prepare(`
+          INSERT INTO categories (name, icon, sortOrder, active, parentId, createdAt, updatedAt)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `)
+        .run(
+          out.name,
+          out.icon || "",
+          out.sortOrder === undefined ? 0 : out.sortOrder,
+          out.active === undefined ? 1 : out.active,
+          out.parentId === undefined ? null : out.parentId,
+          now,
+          now
+        );
+
+      res.status(201).json({
+        success: true,
+        message: "Category added successfully.",
+        id: info.lastInsertRowid,
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+);
+
+// ---- ADMIN: update category / sub-category (partial) ----
+app.put(
+  "/api/admin/categories/:id",
+  requireAuth,
+  requireRole("super_admin", "manager"),
+  (req, res) => {
+    const id = Number(req.params.id);
+
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({ success: false, message: "Invalid category id." });
+    }
+
+    const existing = db.prepare(`SELECT * FROM categories WHERE id = ?`).get(id);
+
+    if (!existing) {
+      return res.status(404).json({ success: false, message: "Category not found." });
+    }
+
+    const { errors, out } = validateCategoryPayload(req.body || {}, { partial: true });
+
+    if (errors.length) {
+      return res.status(400).json({ success: false, message: errors.join(" ") });
+    }
+
+    if (out.parentId === id) {
+      return res.status(400).json({ success: false, message: "A category cannot be its own parent." });
+    }
+
+    if (out.parentId !== undefined && out.parentId !== null) {
+      const hasChildren = db
+        .prepare(`SELECT id FROM categories WHERE parentId = ? LIMIT 1`)
+        .get(id);
+      if (hasChildren) {
+        return res.status(400).json({
+          success: false,
+          message: "A category with sub-categories cannot become a sub-category.",
+        });
+      }
+    }
+
+    if (Object.keys(out).length === 0) {
+      return res.status(400).json({ success: false, message: "Nothing to update." });
+    }
+
+    try {
+      const merged = { ...existing, ...out };
+
+      db.prepare(`
+        UPDATE categories
+        SET name = ?, icon = ?, sortOrder = ?, active = ?, parentId = ?, updatedAt = ?
+        WHERE id = ?
+      `).run(
+        merged.name,
+        merged.icon || "",
+        merged.sortOrder,
+        merged.active === 1 || merged.active === true ? 1 : 0,
+        merged.parentId === undefined ? null : merged.parentId,
+        new Date().toISOString(),
+        id
+      );
+
+      res.json({ success: true, message: "Category updated successfully." });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+);
+
+// NOTE: no DELETE /api/admin/categories/:id on purpose — categories
+// referenced by products must be deactivated, never removed.
 
 // =====================================
 // JUSTBRAND FAMILY: LEVEL COMMISSION + GIFTS (additive)
@@ -2195,6 +2483,8 @@ app.use(businessRouter);
 // Delivery module (partners, assignment, OTP delivery, earnings) —
 // mounted additively; all of its routes live under distinct paths.
 app.use(deliveryRouter);
+// Protected product chat (buyer ↔ seller) — additive, distinct paths.
+app.use(chatRouter);
 
 async function startServer() {
   // Safe now: staff/products tables were created at module level

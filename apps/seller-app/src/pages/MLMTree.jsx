@@ -56,7 +56,7 @@ function MLMTree({ member, onBack }) {
       <header style={styles.header}>
         <div>
           <div style={styles.logo}>JustBrand</div>
-          <div style={styles.panelText}>MLM Network</div>
+          <div style={styles.panelText}>Family Network</div>
         </div>
 
         <button onClick={onBack} style={styles.backButton}>
@@ -68,7 +68,7 @@ function MLMTree({ member, onBack }) {
       <main style={styles.container}>
         <div style={styles.titleBox}>
           <div>
-            <h1 style={styles.title}>🌳 My MLM Network</h1>
+            <h1 style={styles.title}>🌳 My Family Network</h1>
 
             <p style={styles.subtitle}>
               View your direct members and network placement.
@@ -153,19 +153,19 @@ function MLMTree({ member, onBack }) {
 
           <div style={styles.commissionContent}>
             <h3 style={styles.commissionTitle}>
-              Shopping Commission
+              Shopping Reward
             </h3>
 
             <p style={styles.commissionText}>
               Eligible shopping by members in your
-              network can generate commission according
-              to the JustBrand MLM commission rules.
+              network can generate reward according
+              to the JustBrand Family reward rules.
             </p>
 
             <div style={styles.commissionRules}>
-              <div>✓ Direct member commission</div>
-              <div>✓ Network / level commission</div>
-              <div>✓ Shopping based commission</div>
+              <div>✓ Direct member reward</div>
+              <div>✓ Network / level reward</div>
+              <div>✓ Shopping based reward</div>
               <div>✓ Refund/cancellation adjustment</div>
             </div>
           </div>
@@ -186,7 +186,7 @@ function MLMTree({ member, onBack }) {
               When the available direct placement
               positions are full, new members can be
               placed automatically into eligible
-              positions according to the MLM placement
+              positions according to the Family placement
               rules.
             </p>
           </div>

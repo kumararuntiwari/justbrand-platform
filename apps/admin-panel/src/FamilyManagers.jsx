@@ -48,10 +48,10 @@ function LevelCommissionsEditor({ token, isSuper, onMessage }) {
           setLevels(next);
           setSavedLevels({ ...next });
         } else {
-          onMessage("❌ Could not load level commissions.");
+          onMessage("❌ Could not load level rewards.");
         }
       } catch {
-        if (!cancelled) onMessage("❌ Network error loading level commissions.");
+        if (!cancelled) onMessage("❌ Network error loading level rewards.");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -138,7 +138,7 @@ function LevelCommissionsEditor({ token, isSuper, onMessage }) {
         });
       }
 
-      onMessage("✅ Level-wise commissions saved — अगली eligible commission से लागू होंगी।");
+      onMessage("✅ Level-wise rewards saved — अगली eligible reward से लागू होंगी।");
     } catch (error) {
       onMessage(`❌ ${error.message}`);
     } finally {
@@ -205,9 +205,9 @@ function LevelCommissionsEditor({ token, isSuper, onMessage }) {
       <section className="products-section">
         <div className="section-title">
           <div>
-            <h2>📈 Level-wise Commission</h2>
+            <h2>📈 Level-wise Rewards</h2>
             <p>
-              हर level का commission % अलग से set करें। खाली field = existing
+              हर level का reward % अलग से set करें। खाली field = existing
               flat rules value (current behaviour unchanged)।
             </p>
           </div>
@@ -284,7 +284,7 @@ function LevelCommissionsEditor({ token, isSuper, onMessage }) {
 
         <p className="ov-note">
           Existing 3-direct-member limit और spillover rules इस change से
-          प्रभावित नहीं होते — केवल percentage values बदलती हैं। Commission
+          प्रभावित नहीं होते — केवल percentage values बदलती हैं। Reward
           release वही existing eligibility/return-window logic follow करता है।
         </p>
       </section>

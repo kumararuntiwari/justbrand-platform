@@ -25,6 +25,7 @@ function SellerDashboard({
   onMLMWallet,
 }) {
   const [products, setProducts] = useState([]);
+  const [summary, setSummary] = useState(null);
   const [activeMenu, setActiveMenu] = useState("dashboard");
 
   // Mobile hamburger drawer state (only visible <= 768px via index.css).
@@ -52,13 +53,45 @@ function SellerDashboard({
 
   useEffect(() => {
     loadProducts();
+    loadSummary();
 
     const timer = setInterval(() => {
       loadProducts();
-    }, 1000);
+      loadSummary();
+    }, 15000);
 
     return () => clearInterval(timer);
   }, []);
+
+  // Live summary from the backend (counts, orders, sales, KYC status).
+  // Falls back silently to product-derived stats if unreachable.
+  async function loadSummary() {
+    try {
+      const token =
+        localStorage.getItem("justbrand_seller_token") || "";
+
+      if (!token) return;
+
+      const response = await fetch(
+        "https://justbrand-in-144629.hostingersite.com/api/sellers/summary",
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) return;
+
+      const data = await response.json();
+
+      if (data?.success && data?.summary) {
+        setSummary(data.summary);
+      }
+    } catch {
+      // Offline/backend unreachable — keep last summary or null.
+    }
+  }
 
   function loadProducts() {
     try {
@@ -225,19 +258,44 @@ function SellerDashboard({
   // PRODUCT STATISTICS
   // ==========================================
 
-  const totalProducts = products.length;
+  const totalProducts =
+    summary ? summary.totalProducts : products.length;
 
-  const pendingProducts = products.filter(
-    (product) =>
-      String(product.status || "Pending").toLowerCase() ===
-      "pending"
-  ).length;
+  const pendingProducts =
+    summary
+      ? summary.pendingProducts
+      : products.filter(
+          (product) =>
+            String(product.status || "Pending").toLowerCase() ===
+            "pending"
+        ).length;
 
-  const approvedProducts = products.filter(
-    (product) =>
-      String(product.status || "Pending").toLowerCase() ===
-      "approved"
-  ).length;
+  const approvedProducts =
+    summary
+      ? summary.approvedProducts
+      : products.filter(
+          (product) =>
+            String(product.status || "Pending").toLowerCase() ===
+            "approved"
+        ).length;
+
+  const rejectedProducts = summary
+    ? summary.rejectedProducts
+    : products.filter(
+        (product) =>
+          String(product.status || "Pending").toLowerCase() ===
+          "rejected"
+      ).length;
+
+  const totalOrders = summary ? summary.orders : 0;
+
+  const totalSales = summary
+    ? Number(summary.sales) || 0
+    : 0;
+
+  const kycStatus = summary
+    ? summary.kycStatus
+    : "Pending";
 
   const lowStockProducts = products.filter(
     (product) =>
@@ -490,7 +548,7 @@ function SellerDashboard({
 
               <MenuButton
                 icon="💳"
-                text="MLM Wallet"
+                text="Family Wallet"
                 active={
                   activeMenu === "mlm-wallet"
                 }
@@ -582,6 +640,40 @@ function SellerDashboard({
               title="Approved"
               value={approvedProducts}
               description="Live products"
+            />
+
+            <StatCard
+              icon="❌"
+              title="Rejected"
+              value={rejectedProducts}
+              description="Need changes"
+            />
+
+            <StatCard
+              icon="🛒"
+              title="Orders"
+              value={totalOrders}
+              description="Orders received"
+            />
+
+            <StatCard
+              icon="💰"
+              title="Sales"
+              value={`₹${totalSales.toLocaleString("en-IN")}`}
+              description="Order value"
+            />
+
+            <StatCard
+              icon="🪪"
+              title="KYC Status"
+              value={kycStatus}
+              description={
+                kycStatus === "Approved"
+                  ? "Verified seller"
+                  : kycStatus === "Rejected"
+                    ? "Action needed"
+                    : "Verification pending"
+              }
             />
 
             <StatCard
@@ -756,13 +848,17 @@ function SellerDashboard({
           <section style={styles.kycBox}>
 
             <div style={styles.kycIcon}>
-              🪪
+              {kycStatus === "Approved" ? "✅" : "🪪"}
             </div>
 
             <div style={styles.kycContent}>
 
               <h3 style={{ margin: "0 0 5px" }}>
-                Complete Seller KYC
+                {kycStatus === "Approved"
+                  ? "KYC Verified ✓"
+                  : kycStatus === "Rejected"
+                    ? "KYC Rejected — Action Needed"
+                    : "Complete Seller KYC"}
               </h3>
 
               <p
@@ -772,10 +868,11 @@ function SellerDashboard({
                   fontSize: "14px",
                 }}
               >
-                Submit PAN Card, Aadhaar Card,
-                GST Certificate and Bank Account
-                details to activate your seller
-                account.
+                {kycStatus === "Approved"
+                  ? "Your seller account is fully verified. All features are unlocked."
+                  : kycStatus === "Rejected"
+                    ? "Your KYC was rejected. Please review your documents and resubmit."
+                    : "Submit PAN Card, Aadhaar Card, GST Certificate and Bank Account details to activate your seller account."}
               </p>
 
             </div>
@@ -784,7 +881,11 @@ function SellerDashboard({
               onClick={onKYC}
               style={styles.kycButton}
             >
-              Complete KYC →
+              {kycStatus === "Approved"
+                ? "View KYC →"
+                : kycStatus === "Rejected"
+                  ? "Resubmit KYC →"
+                  : "Complete KYC →"}
             </button>
 
           </section>

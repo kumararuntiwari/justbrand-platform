@@ -1966,12 +1966,13 @@ deliveryRouter.get(
   }
 );
 
-// Marking an earning Paid is a FINANCE action: accountant or super admin
-// (mirrors the existing mlm_commissions payment permission model).
+// Marking an earning Paid is a FINANCIAL SETTLEMENT action: super_admin
+// only (403 for everyone else). Read-only earnings reporting above stays
+// available to accountant — mirrors the mlm_commissions permission model.
 deliveryRouter.put(
   "/api/admin/delivery/earnings/:id/pay",
   requireAuth,
-  requireRole("super_admin", "accountant"),
+  requireRole("super_admin"),
   (req, res) => {
     const earning = db
       .prepare(`SELECT * FROM delivery_earnings WHERE id = ?`)

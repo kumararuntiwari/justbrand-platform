@@ -9,6 +9,7 @@ import SellerLogin from "./pages/SellerLogin";
 import SellerDashboard from "./pages/SellerDashboard";
 import AddProduct from "./pages/AddProduct";
 import MyProducts from "./pages/MyProducts";
+import ProductChat from "./pages/ProductChat";
 import SellerKYC from "./pages/SellerKYC";
 import Orders from "./pages/Orders";
 
@@ -508,6 +509,19 @@ function App() {
       <MyProducts
         onBack={handleDashboard}
         onAddProduct={handleAddProduct}
+        onOpenChats={() => setPage("chats")}
+      />
+    );
+  }
+
+  // ==========================================
+  // BUYER CHATS (protected product chat)
+  // ==========================================
+
+  if (page === "chats") {
+    return (
+      <ProductChat
+        onBack={() => setPage("my-products")}
       />
     );
   }
@@ -549,7 +563,7 @@ function App() {
     return (
       <SimplePage
         title="💰 Seller Earnings"
-        description="Your earnings and commission details will appear here."
+        description="Your earnings and reward details will appear here."
         onBack={handleDashboard}
       />
     );

@@ -751,7 +751,7 @@ function Business({
                               ))}
                             </select>
                           )}
-                          {isFinance && (
+                          {isSuper && (
                             <select
                               value={order.paymentStatus}
                               onChange={(e) => setOrderPayment(order, e.target.value)}
@@ -789,7 +789,7 @@ function Business({
         <>
           {/* RULES EDITOR */}
           <div className="drawer-card" style={{ marginBottom: "20px", padding: "20px" }}>
-            <h3 style={{ marginTop: 0 }}>⚙️ Commission Rules (admin-configurable)</h3>
+            <h3 style={{ marginTop: 0 }}>⚙️ Reward Rules (admin-configurable)</h3>
 
             {rules ? (
               <>
@@ -946,15 +946,19 @@ function Business({
                   flexWrap: "wrap",
                 }}
               >
-                <h3>💰 Commissions ({commissions.length})</h3>
-                <button className="refresh-btn" onClick={releaseCommissions}>
-                  🔄 Release Due Commissions
-                </button>
+                <h3>💰 Rewards ({commissions.length})</h3>
+                {isSuper ? (
+                  <button className="refresh-btn" onClick={releaseCommissions}>
+                    🔄 Release Due Rewards
+                  </button>
+                ) : (
+                  <small className="ov-note">🔒 Releasing rewards is Super Admin only.</small>
+                )}
               </div>
 
               <div className="sec-tablewrap" style={{ marginBottom: "20px" }}>
                 {commissions.length === 0 ? (
-                  <div className="empty">No commission records.</div>
+                  <div className="empty">No reward records.</div>
                 ) : (
                   <table className="sec-table">
                     <thead>
@@ -988,11 +992,14 @@ function Business({
                           <td><small>{commission.payableAt ? String(commission.payableAt).slice(0, 10) : "—"}</small></td>
                           <td><small>{commission.paidAt ? String(commission.paidAt).slice(0, 10) : "—"}</small></td>
                           <td>
-                            {commission.status === "Payable" && (
-                              <button className="refresh-btn" onClick={() => markCommissionPaid(commission)}>
-                                Mark Paid
-                              </button>
-                            )}
+                            {commission.status === "Payable" &&
+                              (isSuper ? (
+                                <button className="refresh-btn" onClick={() => markCommissionPaid(commission)}>
+                                  Mark Paid
+                                </button>
+                              ) : (
+                                <small className="ov-note">🔒 Super Admin only</small>
+                              ))}
                           </td>
                         </tr>
                       ))}
@@ -1035,11 +1042,14 @@ function Business({
                           <td><small>{String(payout.createdAt || "").slice(0, 10)}</small></td>
                           <td><small>{payout.processedAt ? String(payout.processedAt).slice(0, 10) : "—"}</small></td>
                           <td>
-                            {payout.status === "Processing" && (
-                              <button className="refresh-btn" onClick={() => markPayoutPaid(payout)}>
-                                Mark Paid
-                              </button>
-                            )}
+                            {payout.status === "Processing" &&
+                              (isSuper ? (
+                                <button className="refresh-btn" onClick={() => markPayoutPaid(payout)}>
+                                  Mark Paid
+                                </button>
+                              ) : (
+                                <small className="ov-note">🔒 Super Admin only</small>
+                              ))}
                           </td>
                         </tr>
                       ))}
@@ -1050,7 +1060,7 @@ function Business({
             </>
           ) : (
             <div className="empty">
-              🔒 Commission and payout records are restricted to Super Admin /
+              🔒 Reward and payout records are restricted to Super Admin /
               Accountant roles.
             </div>
           )}
@@ -1243,7 +1253,7 @@ function Business({
 
                 {isFinance && (
                   <div className="drawer-card">
-                    <h4>Commission summary (ledger)</h4>
+                    <h4>Reward summary (ledger)</h4>
                     <p><b>Pending / Eligible:</b> ₹{walletRow.pending.toLocaleString("en-IN")}</p>
                     <p><b>Paid:</b> ₹{walletRow.paid.toLocaleString("en-IN")}</p>
                     <p><b>Void:</b> ₹{walletRow.void.toLocaleString("en-IN")}</p>
@@ -1282,9 +1292,9 @@ function Business({
 
                 {isFinance && (
                   <div className="drawer-card drawer-wide">
-                    <h4>Commission history ({myCommissions.length})</h4>
+                    <h4>Reward history ({myCommissions.length})</h4>
                     {myCommissions.length === 0 ? (
-                      <p className="ov-note">No commission records.</p>
+                      <p className="ov-note">No reward records.</p>
                     ) : (
                       <div className="sec-tablewrap">
                         <table className="sec-table">

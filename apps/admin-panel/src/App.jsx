@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+﻿import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import Business from "./Business";
 import OverviewSection from "./OverviewSection";
@@ -526,6 +526,50 @@ function App() {
   };
 
   // ==========================================
+  // RESPONSIVE HEADER HEIGHT
+  // The sidebar and drawer backdrop are pinned below the header via
+  // --admin-header-h, so no menu item can ever slide under the header
+  // on any viewport (desktop / laptop / tablet / mobile).
+  // ==========================================
+
+  const headerRef = useRef(null);
+
+  // Drawer is a mobile/tablet pattern only: if the viewport grows to
+  // the docked-sidebar range, close it so no stale backdrop remains.
+  useEffect(() => {
+    const closeOnDesktop = () => {
+      if (window.innerWidth >= 1024) setSidebarOpen(false);
+    };
+    window.addEventListener("resize", closeOnDesktop);
+    return () => window.removeEventListener("resize", closeOnDesktop);
+  }, []);
+
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return undefined;
+
+    const apply = () => {
+      const h = Math.ceil(el.getBoundingClientRect().height);
+      if (h > 0) {
+        document.documentElement.style.setProperty("--admin-header-h", `${h}px`);
+      }
+    };
+
+    apply();
+
+    const ro =
+      typeof ResizeObserver !== "undefined" ? new ResizeObserver(apply) : null;
+    ro?.observe(el);
+    window.addEventListener("resize", apply);
+
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", apply);
+      document.documentElement.style.removeProperty("--admin-header-h");
+    };
+  }, [token, staff]);
+
+  // ==========================================
   // EFFECTS
   // ==========================================
 
@@ -754,6 +798,9 @@ function App() {
       items: [
         { key: "cm-banners", label: "🖼️ Homepage Banners", enabled: canUseSellers, crumb: "Buyer Experience · Banners" },
         { key: "cm-homepage", label: "🏠 Homepage Content", enabled: canUseSellers, crumb: "Buyer Experience · Homepage" },
+        { key: "cm-footer", label: "🦶 Footer Content", enabled: canUseSellers, crumb: "Buyer Experience · Footer" },
+        { key: "cm-policies", label: "📜 Policies", enabled: canUseSellers, crumb: "Buyer Experience · Policies" },
+        { key: "cm-delivery", label: "🛵 Delivery Info", enabled: canUseSellers, crumb: "Buyer Experience · Delivery Info" },
         { key: "buyer-settings", label: "⚙️ Buyer Settings", enabled: canUseSellers, crumb: "Buyer Experience · Settings" },
       ],
     },
@@ -765,16 +812,19 @@ function App() {
         { key: "sellers", label: "🏪 Sellers", enabled: canUseSellers, crumb: "Sellers" },
         { key: "buyers", label: "🛒 Buyers", enabled: canUseCustomers, crumb: "Buyers" },
         { key: "kyc", label: "🪪 KYC", enabled: canUseSellers, crumb: "KYC" },
+        { key: "cm-categories", label: "📂 Categories", enabled: canUseSellers, crumb: "Commerce · Categories" },
       ],
     },
     {
       label: "JustBrand Family",
       items: [
         { key: "family", label: "👨‍👩‍👧 Family Overview", enabled: canUseSellers, crumb: "Family · Overview" },
-        { key: "fam-commission", label: "💰 Commission Settings", enabled: canUseSellers, crumb: "Family · Commission Settings" },
-        { key: "fam-levels", label: "📈 Level-wise Commission", enabled: canUseSellers, crumb: "Family · Level Commission" },
+        { key: "fam-commission", label: "💰 Reward Settings", enabled: canUseSellers, crumb: "Family · Reward Settings" },
+        { key: "fam-levels", label: "📈 Level-wise Rewards", enabled: canUseSellers, crumb: "Family · Level Rewards" },
         { key: "fam-gifts", label: "🎁 Level-wise Gifts", enabled: canUseSellers, crumb: "Family · Gifts" },
         { key: "fam-rules", label: "📐 Family Rules", enabled: canUseSellers, crumb: "Family · Rules" },
+        { key: "cm-family", label: "👨‍👩‍👧 Family Info", enabled: canUseSellers, crumb: "Family · Family Info" },
+        { key: "cm-reward", label: "🎁 Reward Info", enabled: canUseSellers, crumb: "Family · Reward Info" },
         { key: "tree", label: "🌳 Family Tree", enabled: canUseSellers, crumb: "Family Tree" },
       ],
     },
@@ -815,7 +865,7 @@ function App() {
 
       {/* HEADER */}
 
-      <header className="admin-header">
+      <header className="admin-header" ref={headerRef}>
         <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
           <button
             type="button"
@@ -1046,7 +1096,7 @@ function App() {
 
         {/* CONTENT MANAGER (About/Contact/Branding/Banners/Homepage) */}
 
-        {["cm-about", "cm-contact", "cm-branding", "cm-banners", "cm-homepage"].includes(
+        {["cm-about", "cm-contact", "cm-branding", "cm-banners", "cm-homepage", "cm-footer", "cm-policies", "cm-delivery", "cm-family", "cm-reward", "cm-categories"].includes(
           activeView
         ) && (
           <ContentManager
@@ -1112,7 +1162,7 @@ function App() {
         )}
 
         {/* FAMILY COMMISSION/GIFTS/RULES sub-views — Family (mlm) tab
-            is the single source of truth; Commission Settings and Rules
+            is the single source of truth; Reward Settings and Rules
             render inside it. Levels/Gifts render dedicated managers. */}
 
         {activeView !== "overview" &&
@@ -1127,6 +1177,12 @@ function App() {
             "cm-branding",
             "cm-banners",
             "cm-homepage",
+            "cm-footer",
+            "cm-policies",
+            "cm-delivery",
+            "cm-family",
+            "cm-reward",
+            "cm-categories",
             "fam-levels",
             "fam-gifts",
             "delivery",

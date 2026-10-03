@@ -57,6 +57,10 @@ body {
   background: var(--page);
   color: var(--ink);
   font-family: var(--sans);
+  /* Belt-and-braces: no horizontal page scrolling on any viewport.
+     overflow-x: clip keeps the sticky header working (no scroll
+     container is created). */
+  overflow-x: clip;
 }
 
 #root {

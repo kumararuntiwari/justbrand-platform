@@ -221,16 +221,25 @@ export default function OverviewSection({ token, onNavigate }) {
     const todayStart = dayStart(new Date());
     const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 
-    const inPeriod = (arr) => arr.filter((x) => inRange(x.createdAt, from, to));
-    const sum = (arr, f) => arr.reduce((acc, x) => acc + f(x), 0);
+    // Role-restricted feeds intentionally remain null so their KPIs can show "—".
+    // Aggregations must still operate safely for every staff role.
+    const safeOrders = orders || [];
+    const safeCustomers = customers || [];
+    const safeSellers = sellers || [];
+    const safeProducts = products || [];
+    const safeMembers = members || [];
+    const safeCommissions = commissions || [];
 
-    const ordersIn = inPeriod(orders);
+    const inPeriod = (arr) => (arr || []).filter((x) => inRange(x.createdAt, from, to));
+    const sum = (arr, f) => (arr || []).reduce((acc, x) => acc + f(x), 0);
+
+    const ordersIn = inPeriod(safeOrders);
     const salesIn = sum(ordersIn.filter((o) => !["Cancelled", "Returned", "Refunded"].includes(o.status)), (o) => money(o.totalAmount));
 
     const dailySeries = EMPTY_DAILY().map((d) => {
       const next = new Date(d);
       next.setDate(next.getDate() + 1);
-      const dayOrders = orders.filter((o) => {
+      const dayOrders = safeOrders.filter((o) => {
         const od = new Date(o.createdAt);
         return od >= d && od < next && !["Cancelled", "Returned", "Refunded"].includes(o.status);
       });
@@ -248,7 +257,7 @@ export default function OverviewSection({ token, onNavigate }) {
     // backend provides category on items — it does not, so we use product
     // counts per category from the catalogue instead (never invented).
     const catCounts = new Map();
-    products.forEach((p) => {
+    safeProducts.forEach((p) => {
       const c = p.category || "Uncategorised";
       catCounts.set(c, (catCounts.get(c) || 0) + 1);
     });
@@ -282,33 +291,35 @@ export default function OverviewSection({ token, onNavigate }) {
     const membersIn = inPeriod(members);
 
     return {
-      totalBuyers: customers.length,
-      newBuyersToday: customers.filter((c) => inRange(c.createdAt, todayStart, null)).length,
-      newBuyersMonth: customers.filter((c) => new Date(c.createdAt) >= monthStart).length,
-      activeBuyers: customers.filter((c) => (c.status || "active") === "active").length,
-      totalSellers: sellers.length,
-      activeSellers: sellers.filter((s) => s.status === "active").length,
-      pendingSellers: sellers.filter((s) => s.status !== "active").length,
-      pendingKyc: sellers.filter((s) => s.kycStatus === "Pending").length,
-      totalProducts: products.length,
-      pendingProducts: products.filter((p) => p.status === "Pending").length,
-      approvedProducts: products.filter((p) => p.status === "Approved").length,
-      totalOrders: orders.length,
+      totalBuyers: safeCustomers.length,
+      newBuyersToday: safeCustomers.filter((c) => inRange(c.createdAt, todayStart, null)).length,
+      newBuyersMonth: safeCustomers.filter((c) => new Date(c.createdAt) >= monthStart).length,
+      activeBuyers: safeCustomers.filter((c) => (c.status || "active") === "active").length,
+      totalSellers: safeSellers.length,
+      activeSellers: safeSellers.filter((s) => s.status === "active").length,
+      pendingSellers: safeSellers.filter((s) => s.status !== "active").length,
+      pendingKyc: safeSellers.filter((s) => s.kycStatus === "Pending").length,
+      totalProducts: safeProducts.length,
+      pendingProducts: safeProducts.filter((p) => p.status === "Pending").length,
+      approvedProducts: safeProducts.filter((p) => p.status === "Approved").length,
+      totalOrders: safeOrders.length,
       ordersInPeriod: ordersIn.length,
-      ordersToday: orders.filter((o) => inRange(o.createdAt, todayStart, null)).length,
-      pendingOrders: orders.filter((o) => o.status === "Pending").length,
-      deliveredOrders: orders.filter((o) => o.status === "Delivered").length,
-      cancelledOrders: orders.filter((o) => o.status === "Cancelled").length,
-      returnedOrders: orders.filter((o) => o.status === "Returned").length,
-      refundedOrders: orders.filter((o) => o.status === "Refunded").length,
+      ordersToday: safeOrders.filter((o) => inRange(o.createdAt, todayStart, null)).length,
+      pendingOrders: safeOrders.filter((o) => o.status === "Pending").length,
+      deliveredOrders: safeOrders.filter((o) => o.status === "Delivered").length,
+      cancelledOrders: safeOrders.filter((o) => o.status === "Cancelled").length,
+      returnedOrders: safeOrders.filter((o) => o.status === "Returned").length,
+      refundedOrders: safeOrders.filter((o) => o.status === "Refunded").length,
+      processingOrders: safeOrders.filter((o) => o.status === "Processing").length,
+      shippedOrders: safeOrders.filter((o) => o.status === "Shipped").length,
       salesInPeriod: salesIn,
-      totalSales: sum(orders.filter((o) => !["Cancelled", "Returned", "Refunded"].includes(o.status)), (o) => money(o.totalAmount)),
-      todaySales: sum(orders.filter((o) => inRange(o.createdAt, todayStart, null) && !["Cancelled", "Returned", "Refunded"].includes(o.status)), (o) => money(o.totalAmount)),
-      monthSales: sum(orders.filter((o) => new Date(o.createdAt) >= monthStart && !["Cancelled", "Returned", "Refunded"].includes(o.status)), (o) => money(o.totalAmount)),
-      familyMembers: members.length,
-      activeFamily: members.filter((m) => m.status === "active").length,
+      totalSales: sum(safeOrders.filter((o) => !["Cancelled", "Returned", "Refunded"].includes(o.status)), (o) => money(o.totalAmount)),
+      todaySales: sum(safeOrders.filter((o) => inRange(o.createdAt, todayStart, null) && !["Cancelled", "Returned", "Refunded"].includes(o.status)), (o) => money(o.totalAmount)),
+      monthSales: sum(safeOrders.filter((o) => new Date(o.createdAt) >= monthStart && !["Cancelled", "Returned", "Refunded"].includes(o.status)), (o) => money(o.totalAmount)),
+      familyMembers: safeMembers.length,
+      activeFamily: safeMembers.filter((m) => m.status === "active").length,
       newFamilyInPeriod: membersIn.length,
-      commissionCounts: commissions.reduce((acc, c) => {
+      commissionCounts: safeCommissions.reduce((acc, c) => {
         acc[c.status] = (acc[c.status] || 0) + 1;
         return acc;
       }, {}),
@@ -321,7 +332,7 @@ export default function OverviewSection({ token, onNavigate }) {
         next.setDate(next.getDate() + 1);
         return {
           label: `${d.getDate()}/${d.getMonth() + 1}`,
-          value: customers.filter((c) => { const cd = new Date(c.createdAt); return cd >= d && cd < next; }).length,
+          value: safeCustomers.filter((c) => { const cd = new Date(c.createdAt); return cd >= d && cd < next; }).length,
         };
       }),
     };
@@ -424,8 +435,8 @@ export default function OverviewSection({ token, onNavigate }) {
           <div className="ov-status-grid">
             {[
               ["Pending", stats.pendingOrders],
-              ["Processing", orders.filter((o) => o.status === "Processing").length],
-              ["Shipped", orders.filter((o) => o.status === "Shipped").length],
+              ["Processing", stats.processingOrders],
+              ["Shipped", stats.shippedOrders],
               ["Delivered", stats.deliveredOrders],
               ["Cancelled", stats.cancelledOrders],
               ["Returned", stats.returnedOrders],
@@ -440,7 +451,7 @@ export default function OverviewSection({ token, onNavigate }) {
         </section>
         {isFinance && (
           <section className="ov-card">
-            <h3>Family commissions by status</h3>
+            <h3>Family rewards by status</h3>
             <div className="ov-status-grid">
               {["Pending", "Eligible", "Payable", "Paid", "Void"].map((s) => (
                 <div key={s} className="ov-status-item">
@@ -449,7 +460,7 @@ export default function OverviewSection({ token, onNavigate }) {
                 </div>
               ))}
             </div>
-            <p className="ov-note">Commission figures come straight from the ledger — nothing is projected.</p>
+            <p className="ov-note">Reward figures come straight from the ledger — nothing is projected.</p>
           </section>
         )}
       </div>

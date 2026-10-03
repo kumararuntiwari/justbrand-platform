@@ -15,7 +15,19 @@ export const infoPageMeta = {
   contact: { title: "Contact Us — JustBrand" },
   about: { title: "About Us — JustBrand" },
   returns: { title: "Return & Refund Policy — JustBrand" },
+  shipping: { title: "Shipping & Delivery Policy — JustBrand" },
+  privacy: { title: "Privacy Policy — JustBrand" },
+  terms: { title: "Terms & Conditions — JustBrand" },
 };
+
+// Splits admin-entered policy copy into paragraphs (newline or blank
+// line separated) so admins can format with plain text only.
+function paragraphs(text) {
+  return String(text || "")
+    .split(/\n{2,}|\n/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+}
 
 function Section({ title, children }) {
   return (
@@ -108,8 +120,10 @@ function ContactPage({ content }) {
   );
 }
 
-function AboutPage({ content }) {
+function AboutPage({ content, familyInfo }) {
   const c = content || {};
+  const f =
+    familyInfo && familyInfo.active !== false ? familyInfo : null;
 
   return (
     <>
@@ -177,14 +191,25 @@ function AboutPage({ content }) {
         </Section>
       ) : null}
 
-      <Section title="JustBrand Family">
+      <Section
+        title={f && hasText(f.heading) ? f.heading : "JustBrand Family"}
+      >
         <p>
-          JustBrand Family is our member rewards program. Members get
-          a personal referral code, can build their own team, and earn
-          commissions on qualifying purchases made through their
-          network. You can join from the “JustBrand Family” option in
-          the menu — participation is always optional.
+          {f && hasText(f.intro)
+            ? f.intro
+            : "JustBrand Family is our member rewards program. Members get a personal referral code, can build their own team, and earn rewards on qualifying purchases made through their network. You can join from the “JustBrand Family” option in the menu — participation is always optional."}
         </p>
+        {f && hasText(f.howItWorks) ? (
+          <p>
+            <strong>How it works:</strong> {f.howItWorks}
+          </p>
+        ) : null}
+        {f && hasText(f.treeExplanation) ? (
+          <p>
+            <strong>Your family tree:</strong> {f.treeExplanation}
+          </p>
+        ) : null}
+        {f && hasText(f.additionalInfo) ? <p>{f.additionalInfo}</p> : null}
       </Section>
 
       <Section title="Our Promise">
@@ -198,7 +223,31 @@ function AboutPage({ content }) {
   );
 }
 
-function ReturnsPage() {
+function ReturnsPage({ policies }) {
+  const custom =
+    policies &&
+    policies.active !== false &&
+    hasText(policies.returnsText);
+
+  // Admin-managed copy wins when present; otherwise the built-in
+  // structured policy below renders EXACTLY as before (fallback
+  // safety — existing Returns functionality is untouched).
+  if (custom) {
+    return (
+      <>
+        <Section
+          title={hasText(policies.returnsTitle)
+            ? policies.returnsTitle
+            : "Return & Refund Policy"}
+        >
+          {paragraphs(policies.returnsText).map((p, i) => (
+            <p key={i}>{p}</p>
+          ))}
+        </Section>
+      </>
+    );
+  }
+
   return (
     <>
       <Section title="Return & Refund Policy">
@@ -286,7 +335,125 @@ function ReturnsPage() {
   );
 }
 
-function InfoPages({ kind, onBack, content }) {
+function ShippingPage({ policies, deliveryInfo }) {
+  const d =
+    deliveryInfo && deliveryInfo.active !== false ? deliveryInfo : null;
+  const p = policies && policies.active !== false ? policies : null;
+  const customPolicy = p && hasText(p.shippingText);
+
+  return (
+    <>
+      {d && (hasText(d.heading) || hasText(d.description)) ? (
+        <Section title={hasText(d.heading) ? d.heading : "Delivery Information"}>
+          {hasText(d.description) ? <p>{d.description}</p> : null}
+          {hasText(d.timeline) ? (
+            <p>
+              <strong>Delivery timeline:</strong> {d.timeline}
+            </p>
+          ) : null}
+          {hasText(d.support) ? (
+            <p>
+              <strong>Delivery support:</strong> {d.support}
+            </p>
+          ) : null}
+          {hasText(d.policyText) ? <p>{d.policyText}</p> : null}
+        </Section>
+      ) : null}
+
+      <Section
+        title={
+          p && hasText(p.shippingTitle)
+            ? p.shippingTitle
+            : "Shipping & Delivery Policy"
+        }
+      >
+        {customPolicy ? (
+          paragraphs(p.shippingText).map((para, i) => <p key={i}>{para}</p>)
+        ) : (
+          <>
+            <p>
+              Orders are delivered across India by our delivery partners.
+              You can track every order from the “Orders” section of your
+              account, and you will be notified at each status change.
+            </p>
+            <p>
+              Delivery timelines depend on your pincode and are always shown
+              on the product page and at checkout. Cash-on-delivery orders
+              follow the same timeline as prepaid orders.
+            </p>
+            <p>
+              For anything delivery-related, reach our support team using the
+              contact details on the Contact Us page.
+            </p>
+          </>
+        )}
+      </Section>
+    </>
+  );
+}
+
+function PrivacyPage({ policies }) {
+  const p = policies && policies.active !== false ? policies : null;
+  const custom = p && hasText(p.privacyText);
+
+  return (
+    <Section
+      title={p && hasText(p.privacyTitle) ? p.privacyTitle : "Privacy Policy"}
+    >
+      {custom ? (
+        paragraphs(p.privacyText).map((para, i) => <p key={i}>{para}</p>)
+      ) : (
+        <>
+          <p>
+            We collect only the information needed to process your orders,
+            deliver your packages and provide customer support — such as your
+            name, contact details and delivery address.
+          </p>
+          <p>
+            We never sell your personal information. Payment details are
+            handled by our payment partners and are not stored on JustBrand.
+          </p>
+          <p>
+            Full privacy details are being finalised — this page will be
+            updated as soon as they are confirmed.
+          </p>
+        </>
+      )}
+    </Section>
+  );
+}
+
+function TermsPage({ policies }) {
+  const p = policies && policies.active !== false ? policies : null;
+  const custom = p && hasText(p.termsText);
+
+  return (
+    <Section
+      title={p && hasText(p.termsTitle) ? p.termsTitle : "Terms & Conditions"}
+    >
+      {custom ? (
+        paragraphs(p.termsText).map((para, i) => <p key={i}>{para}</p>)
+      ) : (
+        <>
+          <p>
+            By using JustBrand you agree to provide accurate information, use
+            the platform lawfully, and respect other buyers and sellers.
+          </p>
+          <p>
+            All product listings are reviewed before going live, and prices
+            are confirmed again on the server when an order is placed.
+          </p>
+          <p>
+            Full terms & conditions are being finalised — this page will be
+            updated as soon as they are confirmed.
+          </p>
+        </>
+      )}
+    </Section>
+  );
+}
+
+function InfoPages({ kind, onBack, content, policies, deliveryInfo, familyInfo }) {
   return (
     <div
       className="jb-page"
@@ -315,8 +482,13 @@ function InfoPages({ kind, onBack, content }) {
       </button>
 
       {kind === "contact" && <ContactPage content={content} />}
-      {kind === "about" && <AboutPage content={content} />}
-      {kind === "returns" && <ReturnsPage />}
+      {kind === "about" && <AboutPage content={content} familyInfo={familyInfo} />}
+      {kind === "returns" && <ReturnsPage policies={policies} />}
+      {kind === "shipping" && (
+        <ShippingPage policies={policies} deliveryInfo={deliveryInfo} />
+      )}
+      {kind === "privacy" && <PrivacyPage policies={policies} />}
+      {kind === "terms" && <TermsPage policies={policies} />}
     </div>
   );
 }

@@ -7,10 +7,46 @@ import React from "react";
 // Admin-managed content links open the same
 // info pages as before; all functionality is
 // preserved, only the presentation is upgraded.
+//
+// Phase 1: admin-editable copy comes from the
+// site_footer setting (via `content` prop). Every
+// field falls back to the hardcoded defaults below
+// when the setting is missing/inactive — so the
+// footer never goes blank.
 // ==========================================
 
-function Footer({ onInfoPage, onFamily, onCart, onWishlist }) {
+function Footer({ onInfoPage, onFamily, onCart, onWishlist, content }) {
   const goTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
+
+  // Admin-controlled values with built-in fallbacks.
+  const custom = content && content.active !== false;
+  const heading = custom && content.heading ? content.heading : "JustBrand";
+  const description =
+    custom && content.description
+      ? content.description
+      : "भारत का अपना marketplace — shopping, selling और growing together.";
+  const aboutText = custom && content.aboutText ? content.aboutText : "About Us";
+  const contactText =
+    custom && content.contactText ? content.contactText : "Contact Us";
+  const returnPolicyText =
+    custom && content.returnPolicyText
+      ? content.returnPolicyText
+      : "Return & Refund Policy";
+  const deliveryPolicyText =
+    custom && content.deliveryPolicyText
+      ? content.deliveryPolicyText
+      : "Shipping & Delivery Policy";
+  const privacyText =
+    custom && content.privacyText ? content.privacyText : "Privacy Policy";
+  const termsText =
+    custom && content.termsText ? content.termsText : "Terms & Conditions";
+  const familyText =
+    custom && content.familyText ? content.familyText : "JustBrand Family";
+  const showFamily = !custom || content.showFamily !== false;
+  const copyright =
+    custom && content.copyright
+      ? content.copyright
+      : `© ${new Date().getFullYear()} JustBrand`;
 
   return (
     <footer className="jb-footer">
@@ -126,22 +162,23 @@ function Footer({ onInfoPage, onFamily, onCart, onWishlist }) {
         <div className="jb-footer-brand">
           <div className="jb-footer-brand-row">
             <div>
-              <div className="jb-footer-title">JustBrand</div>
+              <div className="jb-footer-title">{heading}</div>
               <div className="jb-footer-tagline">
                 Shop smart • Earn smart • Grow together
               </div>
             </div>
           </div>
-          <p>
-            भारत का अपना marketplace — shopping, selling और growing together.
-          </p>
+          <p>{description}</p>
         </div>
         <div className="jb-footer-column">
           <h3>Company</h3>
-          <button onClick={() => onInfoPage?.("about")}>About Us</button>
-          <button onClick={() => onInfoPage?.("contact")}>Contact Us</button>
+          <button onClick={() => onInfoPage?.("about")}>{aboutText}</button>
+          <button onClick={() => onInfoPage?.("contact")}>{contactText}</button>
           <button onClick={() => onInfoPage?.("returns")}>
-            Return & Refund Policy
+            {returnPolicyText}
+          </button>
+          <button onClick={() => onInfoPage?.("shipping")}>
+            {deliveryPolicyText}
           </button>
         </div>
         <div className="jb-footer-column">
@@ -149,10 +186,14 @@ function Footer({ onInfoPage, onFamily, onCart, onWishlist }) {
           <button onClick={goTop}>Shop Now</button>
           <button onClick={() => onCart?.()}>My Cart</button>
           <button onClick={() => onWishlist?.()}>Wishlist</button>
+          <button onClick={() => onInfoPage?.("privacy")}>{privacyText}</button>
+          <button onClick={() => onInfoPage?.("terms")}>{termsText}</button>
         </div>
         <div className="jb-footer-column">
           <h3>JustBrand Family</h3>
-          <button onClick={() => onFamily?.()}>JustBrand Family</button>
+          {showFamily ? (
+            <button onClick={() => onFamily?.()}>{familyText}</button>
+          ) : null}
           <a href="https://seller.justbrand.in/">Sell on JustBrand</a>
           <button onClick={goTop}>Back to Top ↑</button>
         </div>
@@ -160,7 +201,7 @@ function Footer({ onInfoPage, onFamily, onCart, onWishlist }) {
       <div className="jb-footer-bottom">
         <span>🇮🇳 Made for India</span>
         <span>Secure shopping experience</span>
-        <span>© {new Date().getFullYear()} JustBrand</span>
+        <span>{copyright}</span>
       </div>
     </footer>
   );

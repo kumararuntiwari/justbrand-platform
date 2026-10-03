@@ -2647,11 +2647,12 @@ businessRouter.put(
   }
 );
 
-// Payment verification is a FINANCIAL action: accountant or super admin only.
+// Payment verification is a FINANCIAL SETTLEMENT action: super_admin only.
+// (Read-only financial reporting stays available to accountant — see GETs.)
 businessRouter.put(
   "/api/admin/orders/:id/payment",
   requireAuth,
-  requireRole("super_admin", "accountant"),
+  requireRole("super_admin"),
   (req, res) => {
     const orderId = Number(req.params.id);
 
@@ -2797,10 +2798,11 @@ businessRouter.put(
 );
 
 // Release due commissions (also runs automatically on member reads).
+// Releasing rewards moves money: super_admin only (403 for everyone else).
 businessRouter.post(
   "/api/admin/mlm/commissions/release",
   requireAuth,
-  requireRole("super_admin", "accountant"),
+  requireRole("super_admin"),
   (req, res) => {
     releaseDueCommissions();
 
@@ -2843,10 +2845,11 @@ businessRouter.get(
 );
 
 // Process a payout request: debit wallet and mark paid.
+// Financial settlement: super_admin only (403 for everyone else).
 businessRouter.put(
   "/api/admin/mlm/payouts/:id",
   requireAuth,
-  requireRole("super_admin", "accountant"),
+  requireRole("super_admin"),
   (req, res) => {
     const payout = db
       .prepare(`SELECT * FROM payout_requests WHERE id = ?`)
@@ -2878,11 +2881,12 @@ businessRouter.put(
   }
 );
 
-// Mark a payable commission as actually paid (financial action).
+// Mark a payable commission as actually paid (financial settlement):
+// super_admin only (403 for everyone else).
 businessRouter.put(
   "/api/admin/mlm/commissions/:id/paid",
   requireAuth,
-  requireRole("super_admin", "accountant"),
+  requireRole("super_admin"),
   (req, res) => {
     const commission = db
       .prepare(`SELECT * FROM mlm_commissions WHERE id = ?`)

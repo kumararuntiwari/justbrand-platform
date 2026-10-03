@@ -1,12 +1,54 @@
+import { useEffect, useState } from "react";
+
+// Phase 1: categories come from the admin-managed API. On any
+// failure the built-in list below keeps rendering exactly as
+// before (fallback safety — never a blank section).
+const FALLBACK_CATEGORIES = [
+  "👕 Fashion",
+  "📱 Electronics",
+  "🥫 Grocery",
+  "💄 Beauty",
+  "🏠 Home",
+  "💻 Computers",
+];
+
 function Category() {
-  const categories = [
-    "👕 Fashion",
-    "📱 Electronics",
-    "🥫 Grocery",
-    "💄 Beauty",
-    "🏠 Home",
-    "💻 Computers",
-  ];
+  const [apiCategories, setApiCategories] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadCategories() {
+      try {
+        const response = await fetch(
+          "https://justbrand-in-144629.hostingersite.com/api/categories"
+        );
+
+        if (!response.ok) return;
+
+        const data = await response.json().catch(() => null);
+
+        if (!cancelled && data?.success && Array.isArray(data.categories)) {
+          const names = data.categories
+            .filter((c) => c && c.name)
+            .map((c) => `${c.icon ? `${c.icon} ` : ""}${c.name}`);
+
+          if (names.length > 0) setApiCategories(names);
+        }
+      } catch {
+        // Keep the built-in fallback categories.
+      }
+    }
+
+    loadCategories();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const categories =
+    apiCategories.length > 0 ? apiCategories : FALLBACK_CATEGORIES;
 
   return (
     <div

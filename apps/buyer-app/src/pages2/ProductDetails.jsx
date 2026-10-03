@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 
-function ProductDetails({ product, addToCart, onBack, onBuyNow }) {
+function ProductDetails({ product, addToCart, onBack, onBuyNow, onChat }) {
   // Mobile: gallery stacks above the details (vertical hierarchy).
   // Desktop: gallery left, details right. Desktop layout is unchanged.
   const [isMobile, setIsMobile] = useState(
@@ -440,6 +440,27 @@ function ProductDetails({ product, addToCart, onBack, onBuyNow }) {
             >
               ⚡ Buy Now
             </button>
+
+            {/* PROTECTED CHAT — product-scoped buyer ↔ seller chat */}
+            {onChat ? (
+              <button
+                onClick={() => onChat(product)}
+                style={{
+                  width: "100%",
+                  background: "white",
+                  color: "#ff6b00",
+                  border: "2px solid #ff6b00",
+                  padding: "13px",
+                  borderRadius: "10px",
+                  cursor: "pointer",
+                  fontSize: "16px",
+                  fontWeight: "bold",
+                  marginTop: "12px",
+                }}
+              >
+                💬 Chat with Seller
+              </button>
+            ) : null}
           </div>
         </div>
       </div>

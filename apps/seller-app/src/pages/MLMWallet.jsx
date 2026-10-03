@@ -201,7 +201,7 @@ function MLMWallet({ member, onBack }) {
     member?.name ||
     member?.memberName ||
     member?.fullName ||
-    "MLM Member";
+    "Family Member";
 
   const memberId =
     member?.memberId ||
@@ -233,7 +233,7 @@ function MLMWallet({ member, onBack }) {
             </div>
 
             <div style={styles.headerText}>
-              MLM Wallet
+              Family Wallet
             </div>
 
           </div>
@@ -277,11 +277,11 @@ function MLMWallet({ member, onBack }) {
           <div>
 
             <h1 style={styles.title}>
-              💰 MLM Wallet
+              💰 Family Wallet
             </h1>
 
             <p style={styles.subtitle}>
-              Manage your commission,
+              Manage your reward,
               earnings and withdrawals.
             </p>
 
@@ -314,7 +314,7 @@ function MLMWallet({ member, onBack }) {
 
           <WalletCard
             icon="🕐"
-            title="Pending Commission"
+            title="Pending Reward"
             amount={wallet.pending}
             description="Return period pending"
           />
@@ -323,7 +323,7 @@ function MLMWallet({ member, onBack }) {
             icon="📈"
             title="Total Earned"
             amount={wallet.totalEarned}
-            description="Lifetime commission"
+            description="Lifetime reward"
           />
 
           <WalletCard
@@ -348,13 +348,13 @@ function MLMWallet({ member, onBack }) {
           <div>
 
             <h3 style={styles.infoTitle}>
-              Commission Release Rule
+              Reward Release Rule
             </h3>
 
             <p style={styles.infoText}>
               Product order cancel होने पर
-              commission calculate नहीं होगी।
-              Successful order की commission
+              reward calculate नहीं होगी।
+              Successful order की reward
               return period पूरा होने के बाद
               Pending से Available Wallet में
               जाएगी।
@@ -375,7 +375,7 @@ function MLMWallet({ member, onBack }) {
             <div>
 
               <h2 style={styles.sectionTitle}>
-                💳 Withdraw Commission
+                💳 Withdraw Reward
               </h2>
 
               <p style={styles.sectionSubtitle}>
@@ -501,7 +501,7 @@ function MLMWallet({ member, onBack }) {
               </h2>
 
               <p style={styles.sectionSubtitle}>
-                Your commission and withdrawal
+                Your reward and withdrawal
                 history.
               </p>
 
@@ -522,7 +522,7 @@ function MLMWallet({ member, onBack }) {
               </h3>
 
               <p>
-                Your MLM commission
+                Your Family reward
                 transactions will appear here.
               </p>
 
@@ -560,33 +560,33 @@ function MLMWallet({ member, onBack }) {
         <section style={styles.section}>
 
           <h2 style={styles.sectionTitle}>
-            🌐 Commission Types
+            🌐 Reward Types
           </h2>
 
           <div style={styles.commissionGrid}>
 
             <CommissionBox
               icon="👤"
-              title="Direct Commission"
-              description="आपके द्वारा directly introduce किए गए member की eligible shopping पर commission."
+              title="Direct Reward"
+              description="आपके द्वारा directly introduce किए गए member की eligible shopping पर reward."
             />
 
             <CommissionBox
               icon="👥"
-              title="Team Commission"
-              description="आपकी MLM team की eligible shopping से applicable commission."
+              title="Team Reward"
+              description="आपकी Family team की eligible shopping से applicable reward."
             />
 
             <CommissionBox
               icon="⏱️"
-              title="Time / Level Commission"
-              description="Level और configured time-based rules के अनुसार commission."
+              title="Time / Level Reward"
+              description="Level और configured time-based rules के अनुसार reward."
             />
 
             <CommissionBox
               icon="🛍️"
-              title="Shopping Commission"
-              description="पूरे India में eligible customer shopping से applicable MLM commission."
+              title="Shopping Reward"
+              description="पूरे India में eligible customer shopping से applicable Family reward."
             />
 
           </div>
@@ -599,7 +599,7 @@ function MLMWallet({ member, onBack }) {
 
         <div style={styles.footerNote}>
 
-          🔒 Commission तभी withdraw होगी जब
+          🔒 Reward तभी withdraw होगी जब
           order की return/cancellation eligibility
           successfully complete हो जाए।
 
@@ -695,7 +695,7 @@ function Transaction({
         <div style={styles.transactionTitle}>
           {transaction.description ||
             transaction.type ||
-            "Commission"}
+            "Reward"}
         </div>
 
         <div style={styles.transactionDate}>
