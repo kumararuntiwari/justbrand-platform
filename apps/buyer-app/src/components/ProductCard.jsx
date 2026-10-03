@@ -59,7 +59,10 @@ function ProductCard({
   }
 
   const productName = product?.name || "Product";
-  const price = product?.price !== undefined ? product.price : 0;
+  const sellerPrice = product?.price !== undefined ? product.price : 0;
+  const price = product?.customerPrice !== undefined && product?.customerPrice !== null && product?.customerPrice !== ""
+    ? product.customerPrice
+    : sellerPrice;
   // MRP comes from the backend's comparePrice column (fall back to
   // any mrp field for older data). Used for the strike-through and
   // the real discount percentage — no invented numbers.
@@ -268,6 +271,12 @@ function ProductCard({
         {discount > 0 && (
           <p style={{ margin: "3px 0 7px", color: "#d32f2f", fontSize: "13px", fontWeight: "600" }}>
             🔥 {discount}% off
+          </p>
+        )}
+
+        {product?.customerPrice !== undefined && (
+          <p style={{ margin: "0 0 7px", color: "#666", fontSize: "11px" }}>
+            Final price includes delivery, platform charges, JustBrand Family commission & GST
           </p>
         )}
 

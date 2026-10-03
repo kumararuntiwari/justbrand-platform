@@ -1250,6 +1250,7 @@ businessRouter.post(
       res.status(201).json({
         success: true,
         message: "Product submitted for admin approval.",
+        pricing,
         product,
       });
     } catch (error) {
