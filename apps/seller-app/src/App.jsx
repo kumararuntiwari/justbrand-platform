@@ -659,6 +659,8 @@ function App() {
 
         onSettings={handleSettings}
 
+        onReturnPolicy={() => setPage("return-policy")}
+
         // ======================================
         // MLM
         // ======================================
