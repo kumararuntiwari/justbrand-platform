@@ -44,6 +44,22 @@ import {
   computeSellerTaxEligibility,
   isIntraState,
 } from "./seller-tax.js";
+// ADDITIVE: 3×3 direct / spillover / time-wise earning engine. Its
+// settings, snapshots and commission rows are isolated by source, so
+// existing Family commission and wallet behaviour stays unchanged.
+import {
+  initMlm3x3,
+  captureMlm3x3OrderSnapshot,
+  generateMlm3x3CommissionsForOrder,
+  voidMlm3x3CommissionsForOrder,
+  getMlm3x3Settings,
+  saveMlm3x3Settings,
+  listMlm3x3SettingsAudit,
+  listMlm3x3Commissions,
+  getMlm3x3Summary,
+  classifyIntroduction,
+  recordMlmReferral,
+} from "./mlm-3x3.js";
 // ADDITIVE: admin-verified GST mappings (category / subcategory / HSN),
 // approval + effective-date gating, audit history and CSV/XLSX staging.
 import {
@@ -3008,11 +3024,23 @@ export function applyOrderStatus(orderId, newStatus) {
       ...order,
       ...updates,
     });
+
+    // Additive 3×3 layer. It uses its own source-scoped rows and its
+    // own one-per-order/member guard; legacy rows above are untouched.
+    generateMlm3x3CommissionsForOrder({
+      ...order,
+      ...updates,
+    });
   }
 
   if (["Cancelled", "Returned", "Refunded"].includes(newStatus)) {
     // Cancelled / returned orders do not generate commission.
     voidCommissionsForOrder(orderId);
+    voidMlm3x3CommissionsForOrder(
+      orderId,
+      `order ${String(newStatus).toLowerCase()}`,
+      "order-status-engine"
+    );
 
     // …and must not count for placement either: revoke the
     // eligibility event + audit the placement (member stays put).
@@ -3470,6 +3498,23 @@ businessRouter.post(
 
         const orderId = result.lastInsertRowid;
 
+        // 3×3 Family earnings: freeze the rule and calculation bases
+        // at shopping time. A later admin percentage change can never
+        // alter this order's rate. This does not touch order totals.
+        captureMlm3x3OrderSnapshot({
+          orderId,
+          orderNumber,
+          shoppingAt: now(),
+          phone,
+          bases: {
+            order_total: totals.grandTotal,
+            product_total: totals.baseTotal,
+            items_total: totals.itemsTotal,
+            taxable_total:
+              totals.tax?.totals?.taxableValue ?? totals.baseTotal,
+          },
+        });
+
         resolvedItems.forEach(({ product, quantity }) => {
           db.prepare(`
             INSERT INTO order_items (orderId, productId, productName, sellerId, price, quantity)
@@ -3689,7 +3734,9 @@ businessRouter.post(
       const mobile = clean(req.body.mobile);
       const email = clean(req.body.email).toLowerCase();
       const password = String(req.body.password || "");
-      const referralCode = clean(req.body.referralCode);
+      const referralCode = clean(
+        req.body.referralCode || req.body.sponsorId || req.body.referrerId
+      ).toUpperCase();
 
       if (!name) {
         return res.status(400).json({ success: false, message: "Please enter member name." });
@@ -3711,23 +3758,56 @@ businessRouter.post(
         return res.status(409).json({ success: false, message: "This mobile number is already registered." });
       }
 
-      // Referrer: by referral code (or member ID). Optional — a member
-      // without a referrer becomes a root of their own tree.
+      // Sponsor / referral ID is mandatory for every public member
+      // registration. MLM_ALLOW_ROOT_REGISTRATION=1 is an explicit
+      // server-level bootstrap/testing switch only; it is never set by
+      // the buyer app and never bypasses invalid/self referrals.
+      const allowRoot = process.env.MLM_ALLOW_ROOT_REGISTRATION === "1";
+
+      if (!referralCode && !allowRoot) {
+        return res.status(400).json({
+          success: false,
+          code: "SPONSOR_REQUIRED",
+          message: "Sponsor / Referral Member ID is required.",
+        });
+      }
+
       let referrer = null;
 
       if (referralCode) {
         referrer = db
           .prepare(
-            `SELECT * FROM mlm_members WHERE referralCode = ? OR memberId = ? LIMIT 1`
+            `SELECT * FROM mlm_members
+             WHERE UPPER(referralCode) = ? OR UPPER(memberId) = ?
+             LIMIT 1`
           )
           .get(referralCode, referralCode);
 
         if (!referrer) {
-          return res.status(400).json({ success: false, message: "Invalid referral code." });
+          return res.status(400).json({
+            success: false,
+            code: "INVALID_SPONSOR",
+            message: "Invalid Sponsor / Referral Member ID.",
+          });
         }
 
         if (referrer.status !== "active") {
-          return res.status(400).json({ success: false, message: "This referrer is not active." });
+          return res.status(400).json({
+            success: false,
+            code: "INACTIVE_SPONSOR",
+            message: "This sponsor is not active.",
+          });
+        }
+
+        if (
+          String(referrer.mobile || "") === mobile ||
+          (email && String(referrer.email || "").toLowerCase() === email)
+        ) {
+          return res.status(400).json({
+            success: false,
+            code: "SELF_REFERRAL",
+            message: "Self-referral is not allowed.",
+          });
         }
       }
 
@@ -3739,7 +3819,15 @@ businessRouter.post(
       // this member's shopping eligibility is confirmed (first
       // Delivered order) — see confirmShoppingEligibility(). Members
       // may join from anywhere in India; no location restriction.
+      //
+      // Referral attribution is stored separately from placement. The
+      // first three introductions are direct; the fourth and later are
+      // recorded as spillover introductions and are NEVER rejected.
       const insertMember = db.transaction(() => {
+        const introduction = referrer
+          ? classifyIntroduction(referrer.memberId)
+          : { introductionType: null, directSlot: null, priorCount: 0 };
+
         const result = db.prepare(`
           INSERT INTO mlm_members (
             memberId, name, mobile, email, passwordHash, referralCode, parentId, position, sponsorId, createdAt
@@ -3751,7 +3839,7 @@ businessRouter.post(
           mobile,
           email || null,
           passwordHash,
-          memberId, // referral code defaults to member ID
+          memberId, // Member ID is also the referral ID
           referrer ? referrer.memberId : null,
           now()
         );
@@ -3761,12 +3849,25 @@ businessRouter.post(
           VALUES (?, 0, 0, 0, ?)
         `).run(memberId, now());
 
+        if (referrer) {
+          recordMlmReferral({
+            sponsorId: referrer.memberId,
+            memberId,
+            introductionType: introduction.introductionType,
+            directSlot: introduction.directSlot,
+            note: `referral attribution; prior sponsored members: ${introduction.priorCount}`,
+          });
+        }
+
         placementAudit(
           "member-registered",
           memberId,
           {
             sponsorId: referrer ? referrer.memberId : null,
-            note: "placement deferred until shopping eligibility is confirmed",
+            introductionType: introduction.introductionType,
+            directSlot: introduction.directSlot,
+            priorSponsoredMembers: introduction.priorCount,
+            note: "referral attribution recorded; tree placement deferred until shopping eligibility is confirmed",
           },
           "member-registration"
         );
@@ -4594,6 +4695,11 @@ businessRouter.put(
     // event (audit only — the member's tree position is untouched).
     if (paymentStatus === "Refunded") {
       voidCommissionsForOrder(orderId);
+      voidMlm3x3CommissionsForOrder(
+        orderId,
+        "payment refunded",
+        "staff-payment-settlement"
+      );
       recordEligibilityRevocation(orderId, "payment refunded", "staff-payment-settlement");
     }
 
@@ -5025,6 +5131,90 @@ businessRouter.put(
       console.error("ADMIN MLM SETTINGS ERROR:", error);
       res.status(500).json({ success: false, message: "Failed to update commission rules." });
     }
+  }
+);
+
+// =====================================================
+// ADMIN: 3×3 FAMILY EARNING SETTINGS + REPORTS
+// =====================================================
+// Settings are editable by super_admin only. Managers/accountants can
+// read the configuration; financial commission rows are limited to
+// super_admin/accountant, matching the existing commission ledger.
+
+businessRouter.get(
+  "/api/admin/mlm/3x3/settings",
+  requireAuth,
+  requireRole("super_admin", "manager", "accountant"),
+  (req, res) => {
+    res.json({
+      success: true,
+      settings: getMlm3x3Settings(),
+      audit: listMlm3x3SettingsAudit(100),
+    });
+  }
+);
+
+businessRouter.put(
+  "/api/admin/mlm/3x3/settings",
+  requireAuth,
+  requireRole("super_admin"),
+  (req, res) => {
+    try {
+      const actor = `staff:${req.user.username || req.user.role || "admin"}`;
+      const result = saveMlm3x3Settings(
+        req.body?.settings || req.body,
+        actor,
+        clean(req.body?.note)
+      );
+
+      res.json({
+        success: true,
+        changed: result.changed,
+        message: result.changed
+          ? "3×3 Family earning settings saved. Existing orders keep their saved rates."
+          : "No setting changed.",
+        settings: result.settings,
+        audit: listMlm3x3SettingsAudit(100),
+      });
+    } catch (error) {
+      console.error("ADMIN 3X3 SETTINGS ERROR:", error);
+      res.status(error.status || 500).json({
+        success: false,
+        message: error.message || "Failed to update 3×3 earning settings.",
+        errors: error.errors || undefined,
+      });
+    }
+  }
+);
+
+businessRouter.get(
+  "/api/admin/mlm/3x3/audit",
+  requireAuth,
+  requireRole("super_admin", "manager", "accountant"),
+  (req, res) => {
+    res.json({
+      success: true,
+      audit: listMlm3x3SettingsAudit(req.query.limit || 100),
+    });
+  }
+);
+
+businessRouter.get(
+  "/api/admin/mlm/3x3/commissions",
+  requireAuth,
+  requireRole("super_admin", "accountant"),
+  (req, res) => {
+    res.json({
+      success: true,
+      commissions: listMlm3x3Commissions({
+        type: clean(req.query.type),
+        status: clean(req.query.status),
+        from: clean(req.query.from),
+        to: clean(req.query.to),
+        limit: req.query.limit,
+      }),
+      summary: getMlm3x3Summary(),
+    });
   }
 );
 
@@ -7304,7 +7494,10 @@ businessRouter.post(
 // order stays visible in one place.
 
 export function initBusiness() {
-  console.log("Business tables ready (sellers, customers, orders, MLM).");
+  // Must run after mlm_commissions exists: the 3×3 engine adds its
+  // source columns and partial unique index to that existing ledger.
+  initMlm3x3();
+  console.log("Business tables ready (sellers, customers, orders, MLM, 3×3 Family earnings).");
 }
 
 export default businessRouter;

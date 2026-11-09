@@ -91,6 +91,9 @@ async function startServer() {
         PORT: String(PORT),
         // Deterministic test secret — never the production secret.
         JWT_SECRET: "jb-flow-test-secret-local-only",
+        // Legacy flow test registers its own root member. Public
+        // production registration still requires a sponsor.
+        MLM_ALLOW_ROOT_REGISTRATION: "1",
       },
     }
   );

@@ -84,6 +84,9 @@ async function startServer() {
       ...process.env,
       PORT: String(PORT),
       JWT_SECRET: "jb-spillover-test-secret-local-only",
+      // This suite creates the root of its own isolated tree. Public
+      // production registration still requires a sponsor.
+      MLM_ALLOW_ROOT_REGISTRATION: "1",
     },
   });
 

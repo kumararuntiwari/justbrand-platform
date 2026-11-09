@@ -5,13 +5,14 @@ import {
 } from "../api";
 
 function MLMRegister({ onBack, onRegistered }) {
-  const [form, setForm] = useState({
+  const [form, setForm] = useState(() => ({
     name: "",
     mobile: "",
     email: "",
     password: "",
-    referralCode: "",
-  });
+    // Existing referral links use /mlm-register?ref=MEMBER_ID.
+    referralCode: new URLSearchParams(window.location.search).get("ref") || "",
+  }));
 
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -74,6 +75,13 @@ function MLMRegister({ onBack, onRegistered }) {
       return;
     }
 
+    if (!referralCode) {
+      setError(
+        "Sponsor / Referral Member ID is required."
+      );
+      return;
+    }
+
     // ========================================
     // BACKEND REGISTRATION
     // ========================================
@@ -123,7 +131,7 @@ function MLMRegister({ onBack, onRegistered }) {
       );
 
       setMessage(
-        `Registration successful! Member ID: ${newMember.memberId} | Position: ${newMember.position || "ROOT"}`
+        `Registration successful! Member ID: ${newMember.memberId} | Placement: pending — confirmed automatically on your first eligible shopping`
       );
 
       // ========================================
@@ -452,7 +460,7 @@ function MLMRegister({ onBack, onRegistered }) {
               styles.label
             }
           >
-            Referral Code
+            Sponsor / Referral Member ID *
           </label>
 
           <input
@@ -464,7 +472,8 @@ function MLMRegister({ onBack, onRegistered }) {
             onChange={
               handleChange
             }
-            placeholder="Enter referral code"
+            placeholder="Enter sponsor Member ID (required)"
+            required
             style={
               styles.input
             }

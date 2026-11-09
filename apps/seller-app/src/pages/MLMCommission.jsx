@@ -152,6 +152,9 @@ function MLMCommission({ onBack }) {
       // Display-only labels — backend tokens stay unchanged.
       if (key === "shopping") return "Shopping Reward";
       if (key === "direct") return "Direct Reward";
+      if (key === "direct_introduce") return "Direct Introduce Reward";
+      if (key === "spillover") return "Spillover Reward";
+      if (key === "timewise") return "Time-wise Shopping Reward";
       if (key === "level") return "Level Reward";
       if (key === "binary") return "Binary Reward";
       return item.type;

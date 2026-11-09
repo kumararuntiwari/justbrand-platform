@@ -16,6 +16,7 @@ import ChargesTaxSettings from "./ChargesTaxSettings";
 import CourierPartners from "./CourierPartners";
 import PaymentSettings from "./PaymentSettings";
 import FamilyPlacementPanel from "./FamilyPlacementPanel";
+import FamilyEarningSettings from "./FamilyEarningSettings";
 
 import { API } from "./apiConfig";
 
@@ -849,6 +850,7 @@ function App() {
       items: [
         { key: "family", label: "👨‍👩‍👧 Family Overview", enabled: canUseSellers, crumb: "Family · Overview" },
         { key: "fam-commission", label: "💰 Reward Settings", enabled: canUseSellers, crumb: "Family · Reward Settings" },
+        { key: "fam-earning", label: "💎 3×3 Earning Settings", enabled: canUseSellers, crumb: "Family · 3×3 Earning Settings" },
         { key: "fam-levels", label: "📈 Level-wise Rewards", enabled: canUseSellers, crumb: "Family · Level Rewards" },
         { key: "fam-gifts", label: "🎁 Level-wise Gifts", enabled: canUseSellers, crumb: "Family · Gifts" },
         { key: "fam-rules", label: "📐 Family Rules", enabled: canUseSellers, crumb: "Family · Rules" },
@@ -1220,6 +1222,23 @@ function App() {
           />
         )}
 
+        {/* 3×3 DIRECT / SPILLOVER / TIME-WISE EARNING SETTINGS */}
+
+        {activeView === "fam-earning" && canUseSellers && (
+          <FamilyEarningSettings
+            token={token}
+            isSuper={staff.role === "super_admin"}
+            isFinance={
+              staff.role === "super_admin" || staff.role === "accountant"
+            }
+            onMessage={(msg) => {
+              setMessage(msg);
+
+              setTimeout(() => setMessage(""), 5000);
+            }}
+          />
+        )}
+
         {/* LEVEL-WISE COMMISSION MANAGER */}
 
         {activeView === "fam-levels" && canUseSellers && (
@@ -1307,6 +1326,7 @@ function App() {
             "cm-family",
             "cm-reward",
             "cm-categories",
+            "fam-earning",
             "fam-levels",
             "fam-gifts",
             "delivery",
