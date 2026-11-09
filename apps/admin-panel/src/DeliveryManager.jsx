@@ -6,9 +6,7 @@ import React, { useCallback, useEffect, useState } from "react";
 // Uses the existing staff token and role model: super_admin/manager
 // manage; accountant can view. Backend enforces all permissions.
 
-const API =
-  (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_API_URL) ||
-  "https://justbrand-in-144629.hostingersite.com";
+import { API } from "./apiConfig";
 
 const STATUS_META = {
   Assigned: { bg: "#fff7ed", fg: "#c2410c" },

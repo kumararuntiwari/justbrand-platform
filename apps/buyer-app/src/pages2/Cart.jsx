@@ -16,6 +16,19 @@ function parsePrice(value) {
   );
 }
 
+// FINAL-PRICE-ONLY UI (display-only): the customer always sees the
+// same final price the product card / PDP showed (customerPrice),
+// never the raw seller price. Backend totals are unaffected.
+function finalPriceOf(item) {
+  const raw =
+    item.customerPrice !== undefined &&
+    item.customerPrice !== null &&
+    item.customerPrice !== ""
+      ? item.customerPrice
+      : item.price;
+  return parsePrice(raw);
+}
+
 function Cart({
   cart,
   onBack,
@@ -50,7 +63,7 @@ function Cart({
 
   const subtotal = selectedItems.reduce(
     (sum, item) =>
-      sum + parsePrice(item.price) * (Number(item.quantity) || 1),
+      sum + finalPriceOf(item) * (Number(item.quantity) || 1),
     0
   );
 
@@ -198,7 +211,7 @@ function Cart({
           {/* ===== ITEMS ===== */}
           {cart.map((item) => {
             const qty = Number(item.quantity) || 1;
-            const price = parsePrice(item.price);
+            const price = finalPriceOf(item);
             const isSelected = selected.has(String(item.id));
 
             return (
@@ -221,6 +234,13 @@ function Cart({
                 <img
                   src={item.image}
                   alt={item.name}
+                  onError={(e) => {
+                    const fallback = "/images/product1.png";
+
+                    if (!e.currentTarget.src.endsWith(fallback)) {
+                      e.currentTarget.src = fallback;
+                    }
+                  }}
                   onClick={() => onSelectProduct && onSelectProduct(item)}
                   style={{
                     width: "76px",

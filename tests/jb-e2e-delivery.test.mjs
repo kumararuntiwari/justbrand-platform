@@ -11,6 +11,7 @@ import { spawn } from "node:child_process";
 import { rmSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { onboardGstSeller } from "./support/mandatory-gst.js";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const BACKEND_ENTRY = path.join(REPO_ROOT, "backend", "server.js");
@@ -129,6 +130,12 @@ async function main() {
     });
     const sellerToken = r.data?.token;
     ok("seller login (by mobile)", Boolean(sellerToken), JSON.stringify(r.data));
+
+    const taxReady = await onboardGstSeller(req, {
+      sellerToken,
+      staffToken: adminToken,
+    });
+    ok("seller KYC + PAN + GST approved", taxReady.ok, JSON.stringify(taxReady.response));
 
     // Product create + admin approve.
     r = await req("POST", "/api/sellers/products", {

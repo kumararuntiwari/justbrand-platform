@@ -9,7 +9,7 @@ import React, { useEffect, useRef, useState } from "react";
 // Contact info in messages is redacted on the backend before it is
 // ever delivered to this screen.
 
-const API_URL = "https://justbrand-in-144629.hostingersite.com";
+import { API_URL } from "../api.js";
 
 function getToken() {
   return localStorage.getItem("justbrand_seller_token") || "";

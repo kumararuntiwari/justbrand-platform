@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 
-const API_URL = "https://justbrand-in-144629.hostingersite.com";
+import { API_URL } from "../api.js";
 
 function SellerLogin({ onLogin, onRegister }) {
   const [loginId, setLoginId] = useState("");

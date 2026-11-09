@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import "../index.css";
 
-const API_URL = "https://justbrand-in-144629.hostingersite.com";
+import { API_URL } from "../api.js";
 
 function Orders({ onBack }) {
   const [orders, setOrders] = useState([]);
@@ -1059,6 +1059,22 @@ function OrderDetails({
   onClose,
   onUpdateStatus,
 }) {
+  const [invoices, setInvoices] = useState([]);
+
+  useEffect(() => {
+    const token = localStorage.getItem("justbrand_seller_token") || "";
+    if (!token || !order.id) return;
+
+    fetch(`${API_URL}/api/sellers/orders/${order.id}/invoices`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data?.success) setInvoices(data.invoices || []);
+      })
+      .catch((error) => console.error("Invoice load error:", error));
+  }, [order.id]);
+
   const buyerName =
     order.buyerName ||
     order.customerName ||
@@ -1480,6 +1496,45 @@ function OrderDetails({
                 delivery flow — assignment and reassignment are handled by the
                 JustBrand admin team.
               </div>
+          </DetailSection>
+
+          <DetailSection title="🧾 Your Invoice Snapshot">
+            {invoices.length === 0 ? (
+              <p style={{ color: "#777", fontSize: "13px" }}>
+                No invoice snapshot exists for this legacy order. Existing
+                records were not changed.
+              </p>
+            ) : (
+              invoices.map((invoice) => (
+                <div
+                  key={invoice.id}
+                  style={{
+                    border: "1px solid #eee",
+                    borderRadius: "8px",
+                    padding: "10px 12px",
+                    marginTop: "8px",
+                    background: invoice.invoiceType === "NON_GST_INVOICE" ? "#fff8e8" : "#f4fbf6",
+                  }}
+                >
+                  <div style={{ fontWeight: "bold", fontSize: "13px" }}>
+                    {invoice.invoiceNumber} ·{" "}
+                    {invoice.invoiceType === "NON_GST_INVOICE"
+                      ? "Non-GST invoice"
+                      : "GST tax invoice"}
+                  </div>
+                  <div style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}>
+                    Taxable ₹{invoice.taxableValue} · GST ₹{invoice.gstAmount}
+                    {Number(invoice.cgst) > 0 ? ` · CGST ₹${invoice.cgst} + SGST ₹${invoice.sgst}` : ""}
+                    {Number(invoice.igst) > 0 ? ` · IGST ₹${invoice.igst}` : ""}
+                    {" · Total ₹"}{invoice.total}
+                  </div>
+                  <div style={{ fontSize: "11px", color: "#888", marginTop: "4px" }}>
+                    {invoice.sellerGstin ? `GSTIN ${invoice.sellerGstin} · ` : "No GSTIN · "}
+                    Issued {new Date(invoice.issuedAt).toLocaleString("en-IN")}
+                  </div>
+                </div>
+              ))
+            )}
           </DetailSection>
 
           {/* CLOSE */}

@@ -1,7 +1,19 @@
 // JustBrand Delivery Partner Panel — API base follows the same convention
 // as the other panels: production origin by default, override in dev.
-export const API =
-  import.meta.env.VITE_API_URL || "https://justbrand-in-144629.hostingersite.com";
+// PREVIEW isolation: the preview server injects window.__JB_PREVIEW__ = true
+// AND window.__JB_API_BASE__ = "" (same-origin /api → isolated backend).
+// In preview the production URL is unreachable even if the base is missing;
+// a normal production build has NO injection → behaviour unchanged.
+const runtime = typeof window !== "undefined" ? window : undefined;
+const isPreview = Boolean(runtime && runtime.__JB_PREVIEW__ === true);
+const injectedApiBase =
+  runtime && typeof runtime.__JB_API_BASE__ === "string"
+    ? runtime.__JB_API_BASE__
+    : null;
+
+export const API = isPreview
+  ? injectedApiBase ?? ""
+  : import.meta.env.VITE_API_URL || "https://justbrand-in-144629.hostingersite.com";
 
 export const STATUS_META = {
   Assigned: { label: "Assigned", bg: "#fff7ed", fg: "#c2410c" },

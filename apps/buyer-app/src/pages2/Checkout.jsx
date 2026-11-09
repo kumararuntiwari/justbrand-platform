@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { api } from "../api";
 
 function Checkout({
@@ -24,15 +24,90 @@ function Checkout({
   const [placedOrder, setPlacedOrder] = useState(null);
   const [error, setError] = useState("");
 
-  const total = cart.reduce((sum, item) => {
-    const price = Number(
-      String(item.price || "0").replace(/[^0-9.]/g, "")
-    );
-    return sum + price * (Number(item.quantity) || 1);
-  }, 0);
+  // Backend quote: THE authoritative breakdown (delivery, platform fee,
+  // GST breakup) from the same calculator the order endpoint uses, so
+  // the amount shown here always equals the amount the server charges.
+  // DISPLAY-ONLY (final-price-only UI): the customer summary shows ONLY
+  // product price, discount on MRP and the payable Total. The delivery,
+  // platform and GST rows are hidden — the grand total still includes
+  // them. The quote itself (and every calculation) is untouched.
+  const [quote, setQuote] = useState(null);
+
+  // Final customer price of one unit — exactly what the product card /
+  // PDP displayed (customerPrice), never the raw seller price.
+  const itemFinalPrice = (item) => {
+    const raw =
+      item.customerPrice !== undefined &&
+      item.customerPrice !== null &&
+      item.customerPrice !== ""
+        ? item.customerPrice
+        : item.price;
+    return Number(String(raw || "0").replace(/[^0-9.]/g, "")) || 0;
+  };
+
+  const total = cart.reduce(
+    (sum, item) =>
+      sum + itemFinalPrice(item) * (Number(item.quantity) || 1),
+    0
+  );
+
+  useEffect(() => {
+    if (!token || !cart.length) {
+      setQuote(null);
+      return undefined;
+    }
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const data = await api("/api/orders/quote", {
+          method: "POST",
+          token,
+          body: {
+            items: cart.map((item) => ({
+              productId: item.id,
+              quantity: Number(item.quantity) || 1,
+            })),
+            state: stateName,
+            deliveryMethod: "Standard",
+          },
+        });
+
+        if (!cancelled && data.success && data.quote) {
+          setQuote(data.quote);
+        }
+      } catch {
+        // Quote unavailable (older backend / offline): fall back to the
+        // local item total; the server still computes its own total.
+        if (!cancelled) setQuote(null);
+      }
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [token, cart, stateName]);
+
+  const displayTotal = quote ? quote.grandTotal : total;
+
+  // Products whose GST classification still needs admin review must not
+  // be ordered. The server flags them in the quote; block placement here
+  // (and show which product needs the fix) until an admin approves the
+  // mapping/classification.
+  const gstPending = quote?.needsReview || [];
 
   async function handlePlaceOrder() {
     setError("");
+
+    if (gstPending.length > 0) {
+      setError(
+        `GST verification pending: ${gstPending
+          .map((item) => item.name)
+          .join(", ")}. Admin approval के बाद ही order हो सकता है।`
+      );
+      return;
+    }
 
     if (!customer || !token) {
       alert("Please login to place an order.");
@@ -82,6 +157,9 @@ function Checkout({
           email: email.trim(),
           phone: phone.replace(/\D/g, ""),
           paymentMethod,
+          // Echo the exact total the buyer saw — the backend re-validates
+          // it and rejects with PRICE_MISMATCH on any difference.
+          ...(quote ? { clientGrandTotal: quote.grandTotal } : {}),
         },
       });
 
@@ -227,8 +305,10 @@ function Checkout({
           <h1 style={styles.title}>Checkout</h1>
 
           <p style={styles.subtitle}>
-            {cart.length} item{cart.length === 1 ? "" : "s"} ·{" "}
-            Total ₹{total.toLocaleString("en-IN")}
+            {cart.length} item{cart.length === 1 ? "" : "s"}
+            {quote
+              ? ` · Total ₹${displayTotal.toLocaleString("en-IN")}`
+              : ""}
           </p>
 
           {/* ITEM LIST */}
@@ -240,10 +320,9 @@ function Checkout({
                 </span>
                 <span style={styles.itemPrice}>
                   ₹
-                  {(
-                    Number(String(item.price || "0").replace(/[^0-9.]/g, "")) *
-                    (Number(item.quantity) || 1)
-                  ).toLocaleString("en-IN")}
+                  {(itemFinalPrice(item) * (Number(item.quantity) || 1)).toLocaleString(
+                    "en-IN"
+                  )}
                 </span>
               </div>
             ))}
@@ -372,22 +451,81 @@ function Checkout({
             </div>
           </div>
 
+          {quote && (
+            <div style={styles.summaryBox} className="jb-quote-breakdown">
+              <div style={styles.summaryRow}>
+                <span>
+                  Product price (
+                  {quote.items.reduce((sum, item) => sum + item.quantity, 0)} items)
+                </span>
+                <strong>₹{quote.itemsTotal.toLocaleString("en-IN")}</strong>
+              </div>
+
+              {quote.discountTotal > 0 && (
+                <div style={styles.summaryRow}>
+                  <span>Discount on MRP</span>
+                  <strong style={{ color: "#137a13" }}>
+                    −₹{quote.discountTotal.toLocaleString("en-IN")}
+                  </strong>
+                </div>
+              )}
+
+              {/* DISPLAY-ONLY (final-price-only UI): the Platform fee,
+                  Delivery charge and GST (IGST/CGST/SGST) rows are
+                  intentionally NOT shown to customers. The grand total
+                  below still includes all of them — nothing in the
+                  quote or the order calculation changed. */}
+
+              <div
+                style={{
+                  ...styles.summaryRow,
+                  borderTop: "1px solid #eee",
+                  marginTop: "6px",
+                  paddingTop: "8px",
+                }}
+              >
+                <span>
+                  <strong>Total</strong>
+                </span>
+                <strong>₹{quote.grandTotal.toLocaleString("en-IN")}</strong>
+              </div>
+            </div>
+          )}
+
+          {gstPending.length > 0 && (
+            <div
+              style={{
+                ...styles.errorBox,
+                background: "#fff8e1",
+                border: "1px solid #f0d48a",
+                color: "#7a5200",
+              }}
+            >
+              ⚠️ <b>GST verification pending</b> —{" "}
+              {gstPending.map((item) => item.name).join(", ")}. यह product
+              तब तक order नहीं हो सकता जब तक Admin इसे approve न करे।
+            </div>
+          )}
+
           {error && (
             <div style={styles.errorBox}>⚠️ {error}</div>
           )}
 
           <button
             type="button"
-            disabled={placing}
+            disabled={placing || gstPending.length > 0}
             onClick={handlePlaceOrder}
             style={{
               ...styles.placeOrderButton,
-              opacity: placing ? 0.7 : 1,
+              opacity: placing || gstPending.length > 0 ? 0.7 : 1,
+              cursor: gstPending.length > 0 ? "not-allowed" : "pointer",
             }}
           >
             {placing
               ? "Placing Order..."
-              : `✅ Place Order · ₹${total.toLocaleString("en-IN")}`}
+              : gstPending.length > 0
+              ? "⛔ GST verification pending"
+              : `✅ Place Order · ₹${displayTotal.toLocaleString("en-IN")}`}
           </button>
 
           <div style={styles.infoBox}>

@@ -26,6 +26,7 @@ import { spawn } from "node:child_process";
 import { rmSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { onboardGstSeller } from "./support/mandatory-gst.js";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const BACKEND_ENTRY = path.join(REPO_ROOT, "backend", "server.js");
@@ -176,6 +177,9 @@ async function runFlow() {
     body: { kycStatus: "Approved" },
   });
   ok("admin approves flow seller KYC (pre product-add)", kycApproveEarly.status === 200);
+
+  const taxReady = await onboardGstSeller(req, { sellerToken: seller, staffToken: staff });
+  ok("flow seller PAN + GST approved", taxReady.ok, JSON.stringify(taxReady.response));
 
   // ===== 3. SELLER: add products =====
   console.log("\n— Seller product submission");
@@ -585,35 +589,87 @@ async function runFlow() {
       Number(rivalSummary.data.summary?.orders) === 0
   );
 
-  // ===== 16. MAX 3 DIRECT MEMBERS + SPILLOVER =====
-  // Root already has 1 direct (mChild, slot A). Fill B and C, then the
-  // next referred member must spill over instead of becoming a 4th direct.
-  console.log("\n— Max 3 direct members (A/B/C) + spillover");
+  // ===== 16. MAX 3 DIRECT MEMBERS + SPILLOVER (eligibility-driven) =====
+  // JOINING FLOW CHANGE: registration no longer places members. A new
+  // member records the sponsor and stays unplaced until their first
+  // shopping eligibility is CONFIRMED (order Delivered). Root already
+  // has 1 placed direct (mChild, slot A). Fill B and C via confirmed
+  // eligibility, then the next eligible member must spill over into
+  // the next free slot of the subtree instead of a 4th direct.
+  console.log("\n— Max 3 direct members (A/B/C) + spillover (eligibility-driven)");
   const m3 = await req("POST", "/api/mlm/register", {
     body: { name: "Direct Three", mobile: "9000000011", password: "member123", referralCode: rootId },
   });
-  ok("2nd direct member registers (slot B)", m3.status === 201);
+  ok("2nd direct member registers (unplaced until eligible)",
+    m3.status === 201 && !m3.data.member?.parentId);
 
   const m4 = await req("POST", "/api/mlm/register", {
     body: { name: "Direct Four", mobile: "9000000012", password: "member123", referralCode: rootId },
   });
-  ok("3rd direct member registers (slot C)", m4.status === 201);
-  ok(
-    "3rd direct member IS a direct child of the referrer",
-    m4.data.member?.parentId === rootId
-  );
+  ok("3rd direct member registers (unplaced until eligible)",
+    m4.status === 201 && !m4.data.member?.parentId);
 
   const m5 = await req("POST", "/api/mlm/register", {
     body: { name: "Spill Five", mobile: "9000000013", password: "member123", referralCode: rootId },
   });
   ok("4th referred member still registers (no rejection)", m5.status === 201);
+
+  // Helper: a qualifying order (approved product, COD) delivered for
+  // the given phone — this is what CONFIRMS shopping eligibility.
+  const deliverOrderFor = async (phone) => {
+    const o = await req("POST", "/api/orders", {
+      token: customer,
+      body: {
+        items: [{ productId: webId, quantity: 1, price: "₹1" }],
+        address: "Pan India delivery address",
+        phone,
+        paymentMethod: "COD",
+      },
+    });
+    await req("PUT", `/api/admin/orders/${o.data.order?.id}/status`, {
+      token: staff,
+      body: { status: "Delivered" },
+    });
+    return o.data.order?.id;
+  };
+
+  const m3Id = m3.data.member?.memberId;
+  const m4Id = m4.data.member?.memberId;
+  const m5Id = m5.data.member?.memberId;
+
+  await deliverOrderFor("9000000011"); // m3 eligible → slot B
+  await deliverOrderFor("9000000012"); // m4 eligible → slot C
+  await deliverOrderFor("9000000013"); // m5 eligible → spillover
+
+  const placeOf = async (memberId) => {
+    const r = await req("GET", `/api/admin/mlm/members/${memberId}/placement`, { token: staff });
+    return r.data;
+  };
+
+  const p3 = await placeOf(m3Id);
+  const p4 = await placeOf(m4Id);
+  const p5 = await placeOf(m5Id);
+
   ok(
-    "4th referred member is NOT a direct child of the referrer (spillover)",
-    m5.data.member?.parentId !== rootId && Boolean(m5.data.member?.parentId)
+    "3rd direct member IS a direct child of the referrer (after eligibility)",
+    p3?.member?.parentId === rootId && p3?.member?.position === "B"
+  );
+  ok(
+    "4th referred member fills the last direct slot (C), never a 4th",
+    p4?.member?.parentId === rootId && p4?.member?.position === "C"
+  );
+  ok(
+    "4th eligible member is NOT a direct child of the referrer (spillover)",
+    p5?.member?.parentId !== rootId && Boolean(p5?.member?.parentId)
   );
   ok(
     "spilled member got a valid placement position",
-    ["A", "B", "C"].includes(String(m5.data.member?.position || "").toUpperCase())
+    ["A", "B", "C"].includes(String(p5?.member?.position || "").toUpperCase())
+  );
+  ok(
+    "placement records the qualifying order + eligibility timestamp",
+    Boolean(p5?.placements?.[0]?.qualifyingOrderId) &&
+      Boolean(p5?.placements?.[0]?.eligibilityAt)
   );
 
   const meAfter = await req("GET", "/api/mlm/me", { token: mRoot.data.token });

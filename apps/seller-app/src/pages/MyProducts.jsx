@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import EditProduct from "../components/EditProduct";
 import "../index.css";
 
-const API_URL = "https://justbrand-in-144629.hostingersite.com";
+import { API_URL } from "../api.js";
 
 function MyProducts({ onBack, onAddProduct, onOpenChats }) {
   const [products, setProducts] = useState([]);
@@ -897,6 +897,26 @@ function ProductItem({
               "Pending"}
           </span>
         </div>
+
+        {String(product.status || "").toLowerCase() ===
+          "rejected" &&
+          product.rejectionReason && (
+            <p
+              style={{
+                margin: "8px 0 0",
+                padding: "8px 10px",
+                background: "#fff5f5",
+                border: "1px solid #f3c6c6",
+                borderRadius: "7px",
+                color: "#b00000",
+                fontSize: "12px",
+                lineHeight: 1.45,
+              }}
+            >
+              <b>Admin note:</b>{" "}
+              {product.rejectionReason}
+            </p>
+          )}
 
         {/* NAME */}
 

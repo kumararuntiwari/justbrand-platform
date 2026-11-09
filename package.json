@@ -1,0 +1,13 @@
+{
+  "name": "justbrand-platform",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "build": "npm run build --prefix apps/buyer-app"
+  },
+  "devDependencies": {
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "vite": "^8.1.1"
+  }
+}

@@ -2,10 +2,27 @@
 // JUSTBRAND BACKEND API (BUYER APP)
 // ==========================================
 // Single place for backend calls + auth token storage.
-// The backend URL is the existing live JustBrand backend.
+// The backend URL defaults to the existing live JustBrand backend.
+// The Freebuff PREVIEW server injects window.__JB_API_BASE__ = ""
+// (same origin) before the bundle, so the preview talks ONLY to an
+// isolated local backend and never to production. A normal build
+// (production dist) has no such injection and keeps the live URL —
+// zero production behaviour change.
 
-export const API_URL =
+// NOTE: the injected value is an EMPTY STRING for "same origin" —
+// it must be honoured with ?? (NOT ||, which would treat "" as
+// missing and wrongly fall back to the production URL).
+const injectedApiBase =
+  typeof window !== "undefined" &&
+  typeof window.__JB_API_BASE__ === "string"
+    ? window.__JB_API_BASE__
+    : null;
+
+export const API_BASE =
+  injectedApiBase ??
   "https://justbrand-in-144629.hostingersite.com";
+
+export const API_URL = API_BASE;
 
 const MLM_TOKEN_KEY = "justbrand_mlm_token";
 const CUSTOMER_TOKEN_KEY = "justbrand_customer_token";

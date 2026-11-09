@@ -252,9 +252,18 @@ console.log("COMPARE IMAGE URL:", productImage);
   // PRICE
   // =====================================
 
+  // FINAL-PRICE-ONLY UI (display-only): compare shows the same final
+  // customer price the cards/PDP show (customerPrice) — never the raw
+  // seller price. Backend pricing is untouched.
   const justBrandPrice =
     Number(
-      String(product.price || "0")
+      String(
+        product.customerPrice !== undefined &&
+        product.customerPrice !== null &&
+        product.customerPrice !== ""
+          ? product.customerPrice
+          : product.price || "0"
+      )
         .replace("₹", "")
         .replace(/,/g, "")
         .trim()

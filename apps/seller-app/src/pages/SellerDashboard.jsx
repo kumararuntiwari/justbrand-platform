@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from "react";
 import "../index.css";
+import { API_URL } from "../api.js";
 
 function SellerDashboard({
   seller,
   onLogout,
   onAddProduct,
   onMyProducts,
+  onImportSync,
+  onMySchemes,
   onKYC,
   onOrders,
   onEarnings,
@@ -73,7 +76,7 @@ function SellerDashboard({
       if (!token) return;
 
       const response = await fetch(
-        "https://justbrand-in-144629.hostingersite.com/api/sellers/summary",
+        `${API_URL}/api/sellers/summary`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -141,6 +144,15 @@ function SellerDashboard({
     if (menu === "products") {
       if (onMyProducts) {
         onMyProducts();
+      }
+      return;
+    }
+
+    if (menu === "schemes") {
+      if (onMySchemes) {
+        onMySchemes();
+      } else {
+        alert("My Schemes connection pending.");
       }
       return;
     }
@@ -420,6 +432,32 @@ function SellerDashboard({
             active={activeMenu === "products"}
             onClick={() =>
               menuClick("products")
+            }
+          />
+
+          {/* Import & Supplier Sync */}
+
+          <MenuButton
+            icon="📥"
+            text="Import & Sync"
+            active={activeMenu === "import-sync"}
+            onClick={() => {
+              if (onImportSync) {
+                onImportSync();
+              } else {
+                alert("Import page connection pending.");
+              }
+            }}
+          />
+
+          {/* My Schemes */}
+
+          <MenuButton
+            icon="🏷️"
+            text="My Schemes"
+            active={activeMenu === "schemes"}
+            onClick={() =>
+              menuClick("schemes")
             }
           />
 
@@ -722,6 +760,19 @@ function SellerDashboard({
                 title="My Products"
                 description="Manage your products"
                 onClick={onMyProducts}
+              />
+
+              <QuickAction
+                icon="📥"
+                title="Import & Sync"
+                description="Bulk upload or supplier API"
+                onClick={() => {
+                  if (onImportSync) {
+                    onImportSync();
+                  } else {
+                    alert("Import page connection pending.");
+                  }
+                }}
               />
 
               <QuickAction

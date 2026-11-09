@@ -660,7 +660,15 @@ body {
   }
 
   .admin-content {
+    /* Sidebar is docked here, so the content must only take the REMAINING
+       viewport width. The base rule's width:100% plus this 248px left
+       margin totalled more than the viewport (e.g. 248 + 1200 > 1440),
+       and overflow-x:clip then clipped the right edge of every page.
+       width:auto lets the flex stretch supply exactly (100% - 248px);
+       margin-right must not stay auto or the item would shrink-to-fit. */
+    width: auto;
     margin-left: 248px;
+    margin-right: 0;
     padding: 24px 28px 40px;
   }
 
@@ -1464,5 +1472,617 @@ button.reject {
 
   .drawer-lg {
     width: 100%;
+  }
+}
+
+/* ==================================================
+   CONTENT MANAGER / SETTINGS CONTROLS (cm-*)
+   Shared by Header Appearance, Homepage Banners, Footer,
+   Policies and every Content Manager section.
+   ================================================== */
+
+.cm-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.cm-field-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #444;
+}
+
+.cm-field-hint {
+  font-size: 11px;
+  color: #7b8494;
+  line-height: 1.45;
+}
+
+.cm-input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  color: #1f2733;
+  background: #fff;
+}
+
+.cm-input:focus {
+  outline: none;
+  border-color: #ff7a00;
+  box-shadow: 0 0 0 3px rgba(255, 122, 0, 0.16);
+}
+
+textarea.cm-input {
+  resize: vertical;
+  /* Long Hindi/English paragraphs stay readable: generous body,
+     relaxed line-height, and roomy default height (still resizable). */
+  min-height: 108px;
+  font-size: 14px;
+  line-height: 1.65;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.cm-numinput {
+  max-width: 130px;
+}
+
+.cm-select {
+  cursor: pointer;
+}
+
+.cm-grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.cm-grid4 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.cm-checkline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #333;
+  cursor: pointer;
+}
+
+.cm-checkline-inline {
+  margin-top: 20px;
+}
+
+.cm-checkline input {
+  accent-color: #ff6b00;
+}
+
+.cm-subhead {
+  font-size: 13px;
+  font-weight: 800;
+  color: #1f2733;
+  margin: 18px 0 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed #e2e7ef;
+}
+
+.cm-error {
+  background: #fff1f1;
+  border: 1px solid #ffd4d4;
+  color: #b42318;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.cm-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 14px;
+}
+
+.cm-dirtytag {
+  font-size: 12px;
+  color: #b54708;
+  font-weight: 700;
+}
+
+.cm-preview {
+  background: #f7f9fc;
+  border: 1px solid #e6ebf3;
+  border-radius: 10px;
+  padding: 16px;
+}
+
+/* Preview mirrors how the saved text renders: paragraphs and manual
+   line breaks are preserved instead of collapsing into one line. */
+.cm-preview p,
+.cm-preview li {
+  white-space: pre-line;
+  line-height: 1.65;
+  font-size: 14px;
+}
+
+.cm-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.cm-legend span {
+  background: #f1f4f9;
+  border: 1px solid #e2e7f0;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #3a4557;
+}
+
+/* ---- Scheme Approvals section ---- */
+
+/* ---- Charges & Tax tiles ---- */
+.chg-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.chg-tile {
+  background: #f8fafc;
+  border: 1px solid #e2e7ef;
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chg-tile span {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #6b7383;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.chg-tile strong {
+  font-size: 20px;
+  color: #1f2733;
+}
+
+@media (width <= 900px) {
+  .chg-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.sch-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.sch-tab {
+  cursor: pointer;
+  border: 1px solid #e2e7ef;
+  background: #f1f4f9;
+  color: #3a4557;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 12.5px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.sch-tab:hover {
+  background: #e8edf5;
+}
+
+.sch-tab-on {
+  background: #fff3e8;
+  border-color: #ffb877;
+  color: #b35300;
+}
+
+.sch-tab-count {
+  background: #ffffff;
+  border: 1px solid #e2e7ef;
+  border-radius: 999px;
+  min-width: 20px;
+  padding: 0 6px;
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+  color: #5b6576;
+}
+
+.sch-cell {
+  max-width: 240px;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+.sch-cell small {
+  color: #6b7383;
+  display: block;
+  line-height: 1.5;
+}
+
+.sch-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.sch-chip {
+  background: #f1f4f9;
+  border: 1px solid #e2e7f0;
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #3a4557;
+}
+
+.sch-notice {
+  background: #fff8ec;
+  border: 1px solid #f4d9a8;
+  border-radius: 10px;
+  padding: 14px 16px;
+  color: #7a4a00;
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
+.sch-notice strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #5b3300;
+}
+
+.sch-notice code {
+  background: #fdf0dc;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 12.5px;
+}
+
+.sch-dialogrow td {
+  background: #fbfcfe;
+}
+
+.sch-dialog {
+  border: 1px solid #e2e7ef;
+  background: #fff;
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 640px;
+}
+
+.sch-note {
+  min-height: 72px;
+}
+
+.cm-summarylist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.cm-summarylist span {
+  background: #f1f4f9;
+  border: 1px solid #e2e7f0;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #3a4557;
+}
+
+/* ---- Image picker: Fit to Cell preview ---- */
+
+.cm-imagepicker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.cm-imagepicker-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.cm-imagepreview {
+  position: relative;
+  width: 150px;
+  height: 96px;
+  flex: 0 0 150px;
+  border: 1px dashed #c9d2e0;
+  border-radius: 8px;
+  background: repeating-conic-gradient(#f3f5f9 0% 25%, #ffffff 0% 50%)
+    50% / 16px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.cm-imagepreview img {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
+}
+
+.cm-imagepreview-empty {
+  font-size: 11px;
+  color: #98a2b3;
+}
+
+.cm-fitchip {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  z-index: 1;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  background: rgba(31, 39, 51, 0.82);
+  color: #fff !important;
+  border-radius: 5px;
+  padding: 2px 6px;
+  pointer-events: none;
+}
+
+.cm-imagepicker-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.cm-imagepicker-actions .cm-input {
+  max-width: 300px;
+  flex: 1 1 200px;
+}
+
+/* ---- Banner thumbnails + buyer homepage preview ---- */
+
+.cm-bannerthumb {
+  width: 104px;
+  height: 56px;
+  object-fit: contain;
+  object-position: center;
+  background: #f7f9fc;
+  border: 1px solid #e4e9f1;
+  border-radius: 6px;
+  display: block;
+}
+
+.cm-bannerthumb-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #98a2b3;
+  font-size: 14px;
+}
+
+.cm-bannerpreview {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  aspect-ratio: 1200 / 250;
+  border: 1px solid #e4e9f1;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #f2f2f2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cm-bannerpreview img {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.cm-bannerpreview-empty {
+  font-size: 12px;
+  color: #98a2b3;
+}
+
+.cm-bannerpreview-caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 8px 10px;
+  background: linear-gradient(
+    180deg,
+    rgba(0, 31, 84, 0) 0%,
+    rgba(0, 31, 84, 0.68) 100%
+  );
+  color: #fff;
+  font-size: 12px;
+}
+
+.cm-bannerpreview-caption strong {
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+.cm-bannerpreview-caption em {
+  font-style: normal;
+  font-weight: 700;
+  font-size: 11px;
+  background: linear-gradient(90deg, #ff6b00, #ff1493);
+  border-radius: 20px;
+  padding: 3px 9px;
+  flex-shrink: 0;
+}
+
+/* ---- Fit-mode bar + slider reorder ---- */
+
+.cm-fitbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 12px 0;
+  padding: 10px 12px;
+  background: #f7f9fc;
+  border: 1px solid #e6ebf3;
+  border-radius: 10px;
+}
+
+.cm-fitbar .cm-select {
+  max-width: 300px;
+}
+
+.cm-ordercell {
+  white-space: nowrap;
+}
+
+.cm-orderbtns {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.cm-orderbtns button {
+  padding: 2px 7px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+/* ---- Header Appearance live preview ---- */
+
+.cm-headerpreview {
+  margin: 6px 0 14px;
+}
+
+.cm-hp-bar {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 13px 18px;
+  border-radius: 12px;
+  background: linear-gradient(90deg, #ff7a00, #ff4d8d);
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
+  overflow: hidden;
+}
+
+.cm-hp-menu {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.18);
+  font-size: 20px;
+}
+
+.cm-hp-logo {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  overflow: hidden;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #ff6b00;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.cm-hp-name {
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cm-hp-action {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  white-space: nowrap;
+}
+
+.cm-hp-cart {
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* ---- Admin product cards: show the Fit to Cell mode ---- */
+
+.product-image {
+  position: relative;
+}
+
+.product-image .cm-fitchip {
+  top: 6px;
+  left: 6px;
+}
+
+@media (max-width: 1100px) {
+  .cm-grid4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .cm-grid2,
+  .cm-grid4 {
+    grid-template-columns: 1fr;
+  }
+
+  .cm-numinput {
+    max-width: none;
+  }
+
+  .cm-imagepreview {
+    width: 100%;
+    flex: 1 1 100%;
   }
 }

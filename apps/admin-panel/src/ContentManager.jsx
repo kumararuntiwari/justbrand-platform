@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-const API = "https://justbrand-in-144629.hostingersite.com";
+import { API } from "./apiConfig";
 
 const PAGE_SIZE = 8;
 
@@ -116,6 +116,59 @@ const REWARD_DEFAULTS = {
   active: true,
 };
 
+// ---------------------------------------------------------
+// HEADER APPEARANCE (additive)
+// Geometry of the Buyer app header — logo, JustBrand name, cart
+// and the other header buttons. Every default mirrors the Buyer
+// header's built-in CSS, so an untouched section renders exactly
+// like today's header (no visual change until an admin saves).
+// ---------------------------------------------------------
+
+const HEADER_DEFAULTS = {
+  enabled: true,
+  logo: {
+    width: 46,
+    height: 46,
+    ratio: 1, // height / width — kept by "Lock aspect ratio"
+    lockAspect: true,
+    position: "left", // left | center | right
+    marginTop: 0,
+    marginBottom: 0,
+    marginLeft: 0,
+    marginRight: 0,
+  },
+  name: {
+    text: "JustBrand",
+    fontSize: 22,
+    height: 26,
+    width: 0, // 0 = auto
+    position: "right", // left (before logo) | right (after) | center (stacked)
+    marginTop: 0,
+    marginBottom: 0,
+  },
+  cart: {
+    iconSize: 20,
+    position: "right", // left | center | right
+    marginTop: 0,
+    marginBottom: 0,
+    marginLeft: 0,
+    marginRight: 0,
+  },
+  actions: {
+    iconSize: 20,
+    position: "left", // left = current behaviour
+    gap: 8,
+    marginTop: 0,
+    marginBottom: 0,
+  },
+};
+
+const POSITION_OPTIONS = [
+  { value: "left", label: "Left" },
+  { value: "center", label: "Center" },
+  { value: "right", label: "Right" },
+];
+
 function Field({ label, hint, children }) {
   return (
     <label className="cm-field">
@@ -168,6 +221,48 @@ function TextArea({ value, onChange, rows = 3, placeholder }) {
   );
 }
 
+// Numeric + select helpers (Header Appearance uses these heavily) ----
+
+function NumberInput({ value, onChange, min = 0, max = 200, step = 1 }) {
+  return (
+    <input
+      type="number"
+      className="cm-input cm-numinput"
+      value={value}
+      min={min}
+      max={max}
+      step={step}
+      onChange={(e) => {
+        const n = Number(e.target.value);
+
+        if (!Number.isFinite(n)) {
+          onChange(min);
+          return;
+        }
+
+        onChange(Math.min(max, Math.max(min, n)));
+      }}
+    />
+  );
+}
+
+function SelectInput({ value, onChange, options, disabled }) {
+  return (
+    <select
+      className="cm-input cm-select"
+      value={value}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.value)}
+    >
+      {options.map((opt) => (
+        <option key={opt.value} value={opt.value}>
+          {opt.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 // Image picker with real validation (type + size) ------------
 
 function ImagePicker({ value, onChange, label }) {
@@ -201,7 +296,8 @@ function ImagePicker({ value, onChange, label }) {
     <div className="cm-imagepicker">
       <span className="cm-field-label">{label}</span>
       <div className="cm-imagepicker-row">
-        <div className="cm-imagepreview">
+        <div className="cm-imagepreview" title="Fit to Cell — full image, no crop, no stretch">
+          <span className="cm-fitchip">Fit to Cell</span>
           {value ? (
             <img
               src={value}
@@ -825,7 +921,469 @@ function RewardEditor({ value, setValue, preview }) {
   );
 }
 
+// ---------------------------------------------------------
+// HEADER APPEARANCE EDITOR
+// ---------------------------------------------------------
+
+function HeaderStylePreview({ logo, name, cart, actions }) {
+  const stacked = name.position === "center";
+  const nameFirst = name.position === "left";
+
+  const leftStyle = {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+    flex: logo.position === "left" ? "0 0 auto" : "1 1 auto",
+    minWidth: 0,
+    justifyContent:
+      logo.position === "center"
+        ? "center"
+        : logo.position === "right"
+        ? "flex-end"
+        : "flex-start",
+  };
+
+  const logoStyle = {
+    display: "flex",
+    flexDirection: stacked ? "column" : nameFirst ? "row-reverse" : "row",
+    alignItems: "center",
+    justifyContent: stacked ? "center" : "flex-start",
+    gap: stacked ? "2px" : "7px",
+    margin: `${logo.marginTop}px ${logo.marginRight}px ${logo.marginBottom}px ${logo.marginLeft}px`,
+  };
+
+  const rightStyle = {
+    display: "flex",
+    alignItems: "center",
+    gap: `${actions.gap}px`,
+    flex: actions.position === "left" ? "0 0 auto" : "1 1 auto",
+    minWidth: 0,
+    justifyContent:
+      actions.position === "center"
+        ? "center"
+        : actions.position === "right"
+        ? "flex-end"
+        : "flex-start",
+  };
+
+  const actionStyle = {
+    fontSize: `${actions.iconSize}px`,
+    marginTop: `${actions.marginTop}px`,
+    marginBottom: `${actions.marginBottom}px`,
+  };
+
+  return (
+    <div className="cm-headerpreview" aria-label="Buyer header preview">
+      <div className="cm-hp-bar">
+        <div style={leftStyle}>
+          <span className="cm-hp-menu">☰</span>
+          <div style={logoStyle}>
+            <span
+              className="cm-hp-logo"
+              style={{ width: `${logo.width}px`, height: `${logo.height}px` }}
+            >
+              JB
+            </span>
+            <span
+              className="cm-hp-name"
+              style={{
+                fontSize: `${name.fontSize}px`,
+                lineHeight: `${name.height}px`,
+                width: name.width > 0 ? `${name.width}px` : undefined,
+                marginTop: `${name.marginTop}px`,
+                marginBottom: `${name.marginBottom}px`,
+              }}
+            >
+              {(name.text || "JustBrand").trim() || "JustBrand"}
+            </span>
+          </div>
+        </div>
+
+        <div style={rightStyle}>
+          <span className="cm-hp-action" style={actionStyle}>
+            👤
+          </span>
+          <span
+            className="cm-hp-action"
+            style={{
+              ...actionStyle,
+              order: cart.position === "center" ? 1 : 0,
+            }}
+          >
+            ❤️
+          </span>
+          <span
+            className="cm-hp-action cm-hp-cart"
+            style={{
+              fontSize: `${cart.iconSize}px`,
+              order: cart.position === "left" ? -1 : 0,
+              margin: `${cart.marginTop}px ${cart.marginRight}px ${cart.marginBottom}px ${cart.marginLeft}px`,
+            }}
+          >
+            🛒
+          </span>
+        </div>
+      </div>
+      <div className="cm-legend" aria-hidden="true">
+        <span>👤 Account</span>
+        <span>❤️ Wishlist</span>
+        <span>🛒 Cart</span>
+      </div>
+      <small className="cm-field-hint">
+        Live preview of the Buyer header (desktop proportions) — 👤 Account and
+        ❤️ Wishlist share one geometry, 🛒 Cart has its own. Defaults are
+        identical to the header buyers see today.
+      </small>
+    </div>
+  );
+}
+
+function HeaderEditor({ value, setValue, preview }) {
+  const logo = { ...HEADER_DEFAULTS.logo, ...(value.logo || {}) };
+  const name = { ...HEADER_DEFAULTS.name, ...(value.name || {}) };
+  const cart = { ...HEADER_DEFAULTS.cart, ...(value.cart || {}) };
+  const actions = { ...HEADER_DEFAULTS.actions, ...(value.actions || {}) };
+
+  const setPart = (part, next) =>
+    setValue({
+      ...value,
+      enabled: value.enabled !== false,
+      [part]: next,
+    });
+
+  // Logo width/height stay in ratio while "Lock aspect ratio" is on,
+  // so the saved pair can never distort the image (Buyer also renders
+  // it with object-fit: contain — double protection).
+  function updateLogo(patch) {
+    const next = { ...logo, ...patch };
+
+    if (patch.lockAspect === true) {
+      next.ratio = logo.width > 0 ? logo.height / logo.width : 1;
+    } else if (
+      next.lockAspect &&
+      (patch.width !== undefined || patch.height !== undefined)
+    ) {
+      const ratio =
+        Number(logo.ratio) > 0
+          ? Number(logo.ratio)
+          : logo.width > 0
+          ? logo.height / logo.width
+          : 1;
+
+      if (patch.width !== undefined) {
+        next.height = Math.max(16, Math.round(patch.width * ratio));
+      } else {
+        next.width = Math.max(16, Math.round(patch.height / ratio));
+      }
+
+      next.ratio = ratio;
+    } else if (patch.width !== undefined || patch.height !== undefined) {
+      next.ratio = next.width > 0 ? next.height / next.width : 1;
+    }
+
+    setPart("logo", next);
+  }
+
+  if (preview) {
+    return (
+      <>
+        <HeaderStylePreview logo={logo} name={name} cart={cart} actions={actions} />
+        <div className="cm-summarylist">
+          <span>
+            Logo {logo.width}×{logo.height}px · {logo.position}
+          </span>
+          <span>
+            “{(name.text || "JustBrand").trim() || "JustBrand"}” {name.fontSize}px ·{" "}
+            {name.position}
+          </span>
+        <span>
+          Cart 🛒 {cart.iconSize}px · {cart.position}
+        </span>
+        <span>
+          Account/Wishlist 👤❤️ {actions.iconSize}px · {actions.position}
+        </span>
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <label className="cm-checkline">
+        <input
+          type="checkbox"
+          checked={value.enabled !== false}
+          onChange={(e) => setValue({ ...value, enabled: e.target.checked })}
+        />
+        Apply these settings to the Buyer header
+      </label>
+
+      <HeaderStylePreview logo={logo} name={name} cart={cart} actions={actions} />
+
+      <div className="cm-subhead">A. Logo</div>
+      <div className="cm-grid4">
+        <Field label="Logo Width (px)">
+          <NumberInput
+            value={logo.width}
+            min={16}
+            max={96}
+            onChange={(v) => updateLogo({ width: v })}
+          />
+        </Field>
+        <Field label="Logo Height (px)">
+          <NumberInput
+            value={logo.height}
+            min={16}
+            max={96}
+            onChange={(v) => updateLogo({ height: v })}
+          />
+        </Field>
+        <Field label="Logo Position">
+          <SelectInput
+            value={logo.position}
+            options={POSITION_OPTIONS}
+            onChange={(v) => setPart("logo", { ...logo, position: v })}
+          />
+        </Field>
+        <Field label="Lock Aspect Ratio" hint="Width/height stay proportional.">
+          <label className="cm-checkline cm-checkline-inline">
+            <input
+              type="checkbox"
+              checked={logo.lockAspect !== false}
+              onChange={(e) => updateLogo({ lockAspect: e.target.checked })}
+            />
+            {logo.lockAspect !== false ? "Locked (no distortion)" : "Unlocked"}
+          </label>
+        </Field>
+      </div>
+      <div className="cm-grid4">
+        <Field label="Logo Top Spacing (px)">
+          <NumberInput
+            value={logo.marginTop}
+            min={-16}
+            max={40}
+            onChange={(v) => setPart("logo", { ...logo, marginTop: v })}
+          />
+        </Field>
+        <Field label="Logo Bottom Spacing (px)">
+          <NumberInput
+            value={logo.marginBottom}
+            min={-16}
+            max={40}
+            onChange={(v) => setPart("logo", { ...logo, marginBottom: v })}
+          />
+        </Field>
+        <Field label="Logo Left Spacing (px)">
+          <NumberInput
+            value={logo.marginLeft}
+            min={-16}
+            max={40}
+            onChange={(v) => setPart("logo", { ...logo, marginLeft: v })}
+          />
+        </Field>
+        <Field label="Logo Right Spacing (px)">
+          <NumberInput
+            value={logo.marginRight}
+            min={-16}
+            max={40}
+            onChange={(v) => setPart("logo", { ...logo, marginRight: v })}
+          />
+        </Field>
+      </div>
+
+      <div className="cm-subhead">B. Brand name (JustBrand)</div>
+      <div className="cm-grid4">
+        <Field label="Brand name text">
+          <TextInput
+            value={name.text}
+            maxLength={30}
+            onChange={(v) => setPart("name", { ...name, text: v })}
+          />
+        </Field>
+        <Field label="Brand name font size (px)">
+          <NumberInput
+            value={name.fontSize}
+            min={10}
+            max={40}
+            onChange={(v) => setPart("name", { ...name, fontSize: v })}
+          />
+        </Field>
+        <Field label="Name Height / line-height (px)">
+          <NumberInput
+            value={name.height}
+            min={10}
+            max={60}
+            onChange={(v) => setPart("name", { ...name, height: v })}
+          />
+        </Field>
+        <Field label="Name Width (px)" hint="0 = auto">
+          <NumberInput
+            value={name.width}
+            min={0}
+            max={320}
+            onChange={(v) => setPart("name", { ...name, width: v })}
+          />
+        </Field>
+      </div>
+      <div className="cm-grid4">
+        <Field label="Brand name position" hint="Relative to the logo.">
+          <SelectInput
+            value={name.position}
+            options={[
+              { value: "left", label: "Left of logo" },
+              { value: "right", label: "Right of logo (default)" },
+              { value: "center", label: "Centered under logo" },
+            ]}
+            onChange={(v) => setPart("name", { ...name, position: v })}
+          />
+        </Field>
+        <Field label="Name Top Spacing (px)">
+          <NumberInput
+            value={name.marginTop}
+            min={-16}
+            max={40}
+            onChange={(v) => setPart("name", { ...name, marginTop: v })}
+          />
+        </Field>
+        <Field label="Name Bottom Spacing (px)">
+          <NumberInput
+            value={name.marginBottom}
+            min={-16}
+            max={40}
+            onChange={(v) => setPart("name", { ...name, marginBottom: v })}
+          />
+        </Field>
+        <div />
+      </div>
+
+      <div className="cm-subhead">C. Cart icon</div>
+      <div className="cm-grid4">
+        <Field label="Cart Size (px)">
+          <NumberInput
+            value={cart.iconSize}
+            min={12}
+            max={40}
+            onChange={(v) => setPart("cart", { ...cart, iconSize: v })}
+          />
+        </Field>
+        <Field label="Cart Position">
+          <SelectInput
+            value={cart.position}
+            options={POSITION_OPTIONS}
+            onChange={(v) => setPart("cart", { ...cart, position: v })}
+          />
+        </Field>
+        <Field label="Cart Top Spacing (px)">
+          <NumberInput
+            value={cart.marginTop}
+            min={-16}
+            max={40}
+            onChange={(v) => setPart("cart", { ...cart, marginTop: v })}
+          />
+        </Field>
+        <Field label="Cart Bottom Spacing (px)">
+          <NumberInput
+            value={cart.marginBottom}
+            min={-16}
+            max={40}
+            onChange={(v) => setPart("cart", { ...cart, marginBottom: v })}
+          />
+        </Field>
+      </div>
+      <div className="cm-grid4">
+        <Field label="Cart Left Spacing (px)">
+          <NumberInput
+            value={cart.marginLeft}
+            min={-16}
+            max={40}
+            onChange={(v) => setPart("cart", { ...cart, marginLeft: v })}
+          />
+        </Field>
+        <Field label="Cart Right Spacing (px)">
+          <NumberInput
+            value={cart.marginRight}
+            min={-16}
+            max={40}
+            onChange={(v) => setPart("cart", { ...cart, marginRight: v })}
+          />
+        </Field>
+        <div />
+        <div />
+      </div>
+
+      <div className="cm-subhead">D. Account &amp; Wishlist buttons</div>
+      <div className="cm-grid4">
+        <Field
+          label="Account &amp; Wishlist icon size (px)"
+          hint="Applies to both 👤 and ❤️ buttons (shared geometry in the Buyer header)."
+        >
+          <NumberInput
+            value={actions.iconSize}
+            min={12}
+            max={40}
+            onChange={(v) => setPart("actions", { ...actions, iconSize: v })}
+          />
+        </Field>
+        <Field
+          label="Account &amp; Wishlist position"
+          hint="Placement of the 👤 ❤️ pair in the header."
+        >
+          <SelectInput
+            value={actions.position}
+            options={POSITION_OPTIONS}
+            onChange={(v) => setPart("actions", { ...actions, position: v })}
+          />
+        </Field>
+        <Field label="Gap between header buttons (px)" hint="Space separating 👤 ❤️ and 🛒.">
+          <NumberInput
+            value={actions.gap}
+            min={0}
+            max={40}
+            onChange={(v) => setPart("actions", { ...actions, gap: v })}
+          />
+        </Field>
+        <div />
+      </div>
+      <div className="cm-grid4">
+        <Field label="Account/Wishlist top spacing (px)">
+          <NumberInput
+            value={actions.marginTop}
+            min={-16}
+            max={40}
+            onChange={(v) => setPart("actions", { ...actions, marginTop: v })}
+          />
+        </Field>
+        <Field label="Account/Wishlist bottom spacing (px)">
+          <NumberInput
+            value={actions.marginBottom}
+            min={-16}
+            max={40}
+            onChange={(v) => setPart("actions", { ...actions, marginBottom: v })}
+          />
+        </Field>
+        <div />
+        <div />
+      </div>
+
+      <p className="ov-note">
+        <strong>Account &amp; Wishlist</strong> (shared icon size, position and
+        gap) and <strong>Cart</strong> (own size, position and margins) keep
+        every existing behaviour — search, drawer and counts are untouched,
+        only geometry changes. The saved payload keeps the exact same shape the
+        Buyer header already reads. Values are clamped so no button or icon can
+        be hidden or pushed out of the viewport on desktop or mobile.
+      </p>
+    </>
+  );
+}
+
 const SECTION_CONFIG = {
+  header: {    title: "🧭 Header Appearance",
+    description: "Logo, brand name, Account, Wishlist and Cart geometry for the Buyer app header (desktop + mobile). Defaults match the header buyers see today — nothing changes until you save.",
+    storageKey: "header",
+    defaults: HEADER_DEFAULTS,
+    Editor: HeaderEditor,
+  },
   footer: {
     title: "🦶 Footer Content",
     description:
@@ -915,7 +1473,7 @@ const BANNER_EMPTY = {
   sortOrder: 0,
 };
 
-function BannerForm({ initial, onSave, onCancel, saving }) {
+function BannerForm({ initial, onSave, onCancel, saving, fitMode }) {
   const [draft, setDraft] = useState(clone(initial) || { ...BANNER_EMPTY });
   const [error, setError] = useState("");
 
@@ -972,6 +1530,33 @@ function BannerForm({ initial, onSave, onCancel, saving }) {
         value={draft.mobileImageUrl}
         onChange={(v) => setDraft({ ...draft, mobileImageUrl: v })}
       />
+
+      {/* How this banner will actually appear on the Buyer homepage */}
+      <div className="cm-field">
+        <span className="cm-field-label">Buyer homepage preview</span>
+        <div className="cm-bannerpreview">
+          {draft.imageUrl ? (
+            <img
+              src={draft.imageUrl}
+              alt="Banner preview"
+              style={{ objectFit: fitMode === "contain" ? "contain" : "cover" }}
+            />
+          ) : (
+            <span className="cm-bannerpreview-empty">No image yet</span>
+          )}
+          {draft.title || draft.ctaText ? (
+            <div className="cm-bannerpreview-caption">
+              <strong>{draft.title}</strong>
+              {draft.ctaText ? <em>{draft.ctaText} →</em> : null}
+            </div>
+          ) : null}
+        </div>
+        <small className="cm-field-hint">
+          {fitMode === "contain"
+            ? "Fit to Cell — the whole image is visible inside the strip, no crop, no stretch."
+            : "Cover — the image fills the strip and the edges are cropped. Switch to “Fit to Cell” in the toolbar if you see cropping."}
+        </small>
+      </div>
       <div className="cm-grid2">
         <Field label="Display order" hint="Lower numbers appear first.">
           <input
@@ -1007,7 +1592,7 @@ function BannerForm({ initial, onSave, onCancel, saving }) {
   );
 }
 
-function BannersManager({ banners, reload, token, onMessage }) {
+function BannersManager({ banners, reload, token, onMessage, fitMode }) {
   const [editing, setEditing] = useState(null); // null | "new" | banner id
   const [saving, setSaving] = useState(false);
   const [query, setQuery] = useState("");
@@ -1093,6 +1678,71 @@ function BannersManager({ banners, reload, token, onMessage }) {
     }
   }
 
+  // Slider order: swap with the neighbour, then rewrite a clean
+  // gap-free 0..n-1 order so two banners can never share a slot.
+  // Only banners whose number actually changed are sent.
+  async function moveBanner(banner, dir) {
+    const list = [...banners].sort(
+      (a, b) => a.sortOrder - b.sortOrder || a.id - b.id
+    );
+    const from = list.findIndex((b) => b.id === banner.id);
+    const to = from + dir;
+
+    if (from < 0 || to < 0 || to >= list.length) return;
+
+    [list[from], list[to]] = [list[to], list[from]];
+
+    const changes = list
+      .map((b, idx) => ({ id: b.id, sortOrder: idx }))
+      .filter((c) => {
+        const before = banners.find((b) => b.id === c.id);
+        return before && before.sortOrder !== c.sortOrder;
+      });
+
+    if (changes.length === 0) return;
+
+    setSaving(true);
+
+    try {
+      for (const change of changes) {
+        await api(`/api/admin/site/banners/${change.id}`, {
+          method: "PUT",
+          body: { sortOrder: change.sortOrder },
+        });
+      }
+      onMessage("✅ Slider order updated.");
+      reload();
+    } catch (error) {
+      onMessage(`❌ ${error.message}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Fit to Cell vs Cover for the Buyer homepage banner strip.
+  // Stored as an additive JSON field on the existing
+  // /api/admin/site/settings/display section — no migration.
+  async function setFitMode(mode) {
+    setSaving(true);
+
+    try {
+      await api("/api/admin/site/settings/display", {
+        method: "PUT",
+        body: { content: { bannerFit: mode } },
+      });
+      onMessage(
+        mode === "contain"
+          ? "✅ Fit to Cell on — buyers now see the whole banner image."
+          : "✅ Cover on — banners fill the strip (edges may crop)."
+      );
+      reload();
+    } catch (error) {
+      onMessage(`❌ ${error.message}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <>
       <div className="sec-toolbar">
@@ -1115,11 +1765,28 @@ function BannersManager({ banners, reload, token, onMessage }) {
         )}
       </div>
 
+      <div className="cm-fitbar">
+        <span className="cm-field-label">Buyer image fit</span>
+        <SelectInput
+          value={fitMode === "contain" ? "contain" : "cover"}
+          disabled={saving}
+          options={[
+            { value: "cover", label: "Cover — fill strip (may crop edges)" },
+            { value: "contain", label: "Fit to Cell — full image, no crop" },
+          ]}
+          onChange={setFitMode}
+        />
+        <small className="cm-field-hint">
+          Applies to every active banner on the Buyer homepage.
+        </small>
+      </div>
+
       {editing === "new" && (
         <SectionCard title="New banner" description="Fill the details and save.">
           <BannerForm
             initial={null}
             saving={saving}
+            fitMode={fitMode === "contain" ? "contain" : "cover"}
             onSave={(draft) => saveBanner(draft, null)}
             onCancel={() => setEditing(null)}
           />
@@ -1153,6 +1820,7 @@ function BannersManager({ banners, reload, token, onMessage }) {
                       <BannerForm
                         initial={banner}
                         saving={saving}
+                        fitMode={fitMode === "contain" ? "contain" : "cover"}
                         onSave={(draft) => saveBanner(draft, banner.id)}
                         onCancel={() => setEditing(null)}
                       />
@@ -1192,7 +1860,29 @@ function BannersManager({ banners, reload, token, onMessage }) {
                         </>
                       ) : null}
                     </td>
-                    <td>{banner.sortOrder}</td>
+                    <td className="cm-ordercell">
+                      <span>{banner.sortOrder}</span>
+                      <div className="cm-orderbtns">
+                        <button
+                          type="button"
+                          className="refresh-btn"
+                          title="Move up in the slider"
+                          disabled={saving}
+                          onClick={() => moveBanner(banner, -1)}
+                        >
+                          ▲
+                        </button>
+                        <button
+                          type="button"
+                          className="refresh-btn"
+                          title="Move down in the slider"
+                          disabled={saving}
+                          onClick={() => moveBanner(banner, 1)}
+                        >
+                          ▼
+                        </button>
+                      </div>
+                    </td>
                     <td>
                       <span
                         className={`sec-tag ${banner.active ? "sec-tag-good" : "sec-tag-bad"}`}
@@ -1613,7 +2303,7 @@ function CategoriesManager({ token, onMessage }) {
 // MAIN COMPONENT
 // ---------------------------------------------------------
 
-export default function ContentManager({ token, section, isSuper, onMessage }) {
+export default function ContentManager({ token, section, isSuper, onMessage, onDirtyChange }) {
   const [settings, setSettings] = useState(null);
   const [banners, setBanners] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1677,12 +2367,38 @@ export default function ContentManager({ token, section, isSuper, onMessage }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings, section]);
 
+  // Warn before the tab is closed/refreshed while a section still has
+  // unsaved draft edits — the same protection the section switch has,
+  // extended to leaving the page entirely.
+  useEffect(() => {
+    if (!dirty) return undefined;
+
+    function warnBeforeUnload(event) {
+      event.preventDefault();
+      event.returnValue = "";
+    }
+
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    return () => window.removeEventListener("beforeunload", warnBeforeUnload);
+  }, [dirty]);
+
   function guardDirty(action) {
     if (dirty && !window.confirm("You have unsaved changes. Discard them?")) {
       return;
     }
     action();
   }
+
+  // Report unsaved-draft state to the App shell so switching sections
+  // in the sidebar can warn BEFORE the draft is replaced (the section
+  // reload below would otherwise silently discard the editor's text).
+  // On unmount we clear the flag so a stale warning never blocks the
+  // next view.
+  useEffect(() => {
+    if (typeof onDirtyChange !== "function") return undefined;
+    onDirtyChange(dirty);
+    return () => onDirtyChange(false);
+  }, [dirty, onDirtyChange]);
 
   async function save() {
     if (!config || !draft) return;
@@ -1750,6 +2466,7 @@ export default function ContentManager({ token, section, isSuper, onMessage }) {
             banners={banners}
             reload={reload}
             token={token}
+            fitMode={settings?.display?.bannerFit || "cover"}
             onMessage={onMessage}
           />
         </SectionCard>

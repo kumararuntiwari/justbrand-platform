@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import "../index.css";
 
-const API_URL = "https://justbrand-in-144629.hostingersite.com";
+import { API_URL } from "../api.js";
 
 function SellerKYC({ seller, onBack }) {
   const STORAGE_KEY = "justbrand_seller_kyc";
@@ -41,6 +41,91 @@ function SellerKYC({ seller, onBack }) {
 
   const [message, setMessage] =
     useState("");
+
+  const [taxProfile, setTaxProfile] =
+    useState(null);
+
+  const [gstInput, setGstInput] =
+    useState("");
+
+  const [taxBusy, setTaxBusy] =
+    useState(false);
+
+  const [taxMessage, setTaxMessage] =
+    useState("");
+
+  // Authoritative KYC + tax statuses come from the backend, not the
+  // local cache. PAN/GST are separate statuses and nothing is verified
+  // unless an admin marked it so.
+  useEffect(() => {
+    const token = localStorage.getItem("justbrand_seller_token") || "";
+    if (!token) return;
+
+    fetch(`${API_URL}/api/sellers/tax-profile`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data?.success) {
+          setTaxProfile(data.taxProfile || null);
+          if (data.kycStatus) setKycStatus(data.kycStatus);
+        }
+      })
+      .catch((error) => console.error("Tax profile load error:", error));
+
+    fetch(`${API_URL}/api/sellers/kyc`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data?.success && data.kyc?.kycStatus) {
+          setKycStatus(data.kyc.kycStatus);
+        }
+      })
+      .catch((error) => console.error("KYC status load error:", error));
+  }, []);
+
+  async function handleAddGst(e) {
+    e.preventDefault();
+    const token = localStorage.getItem("justbrand_seller_token") || "";
+    const gstin = gstInput.trim().toUpperCase();
+
+    if (!gstin) {
+      setTaxMessage("Enter your 15-character GSTIN first.");
+      return;
+    }
+
+    setTaxBusy(true);
+    setTaxMessage("");
+
+    try {
+      const response = await fetch(`${API_URL}/api/sellers/gst`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ gstin }),
+      });
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        setTaxMessage(data.message || "GSTIN submission failed.");
+        return;
+      }
+
+      setTaxProfile(data.taxProfile || null);
+      setGstInput("");
+      setTaxMessage(
+        "GSTIN submitted. It stays GST Verification Pending until admin approval. No GST is charged before approval."
+      );
+    } catch (error) {
+      console.error("GST submit error:", error);
+      setTaxMessage("Could not reach the backend. Please try again.");
+    } finally {
+      setTaxBusy(false);
+    }
+  }
 
   // ==========================================
   // LOAD KYC DATA
@@ -255,6 +340,10 @@ function SellerKYC({ seller, onBack }) {
       })
         .then((response) => response.json())
         .then((result) => {
+          if (result?.taxProfile) {
+            setTaxProfile(result.taxProfile);
+          }
+
           if (result?.success && syncStatus) {
             // Backend stores approval state; reflect it locally.
             const backendStatus =
@@ -691,6 +780,140 @@ function SellerKYC({ seller, onBack }) {
           </div>
 
         </div>
+
+        {/* ====================================
+            PAN / GST TAX STATUS (separate statuses)
+        ==================================== */}
+
+        {taxProfile && (
+          <div style={styles.taxCard}>
+            <div style={styles.taxHeader}>
+              <div>
+                <div style={styles.taxTitle}>PAN & GST Tax Status</div>
+                <div style={styles.taxSub}>
+                  PAN and GST are verified separately. GSTIN can be added after
+                  registration, but selling requires KYC, PAN and Admin GSTIN
+                  approval. GST-unregistered selling is disabled.
+                </div>
+              </div>
+              <span
+                style={{
+                  ...styles.taxBadge,
+                  background: taxProfile.canSell ? "#e8f7ed" : "#fff3e0",
+                  color: taxProfile.canSell ? "#198754" : "#a15c00",
+                }}
+              >
+                {taxProfile.canSell ? "Eligible to sell" : "Selling blocked"}
+              </span>
+            </div>
+
+            <div style={styles.taxGrid}>
+              <div style={styles.taxItem}>
+                <div style={styles.taxLabel}>PAN NUMBER</div>
+                <div style={styles.taxValue}>
+                  {taxProfile.panNumberMasked || "Not provided"}
+                </div>
+                <div style={styles.taxMeta}>{taxProfile.panStatus}</div>
+              </div>
+
+              <div style={styles.taxItem}>
+                <div style={styles.taxLabel}>GST STATUS</div>
+                <div style={styles.taxValue}>{taxProfile.gstStatus}</div>
+                <div style={styles.taxMeta}>
+                  {taxProfile.gstNumberMasked
+                    ? `GSTIN ${taxProfile.gstNumberMasked}`
+                    : "No GSTIN on file"}
+                </div>
+                {taxProfile.gstStatus === "GST Rejected" &&
+                taxProfile.gstRejectionReason ? (
+                  <div style={{ ...styles.taxMeta, color: "#b91c1c", fontWeight: 600 }}>
+                    Reason: {taxProfile.gstRejectionReason}
+                  </div>
+                ) : null}
+              </div>
+
+              <div style={styles.taxItem}>
+                <div style={styles.taxLabel}>INVOICE TYPE</div>
+                <div style={styles.taxValue}>
+                  {taxProfile.invoiceType === "NON_GST_INVOICE"
+                    ? "Non-GST invoice"
+                    : taxProfile.invoiceType === "TAX_INVOICE"
+                    ? "GST tax invoice"
+                    : "Not active"}
+                </div>
+                <div style={styles.taxMeta}>
+                  {taxProfile.canSell
+                    ? "GST tax invoice enabled"
+                    : "Tax invoice available only after GSTIN approval"}
+                </div>
+              </div>
+            </div>
+
+            {taxProfile.legacy && (
+              <div style={styles.taxNotice}>
+                Your seller profile predates PAN/GST capture. Existing orders
+                and invoices are unchanged, but new product listing and selling
+                stay blocked until PAN and GSTIN are added and approved.
+              </div>
+            )}
+
+            {!taxProfile.canSell &&
+              Array.isArray(taxProfile.blockers) &&
+              taxProfile.blockers.length > 0 && (
+                <div style={styles.taxNotice}>
+                  <b>Pending before selling:</b>
+                  <ul style={{ margin: "6px 0 0", paddingLeft: "18px" }}>
+                    {taxProfile.blockers.map((blocker) => (
+                      <li key={blocker}>{blocker}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+            {taxProfile.gstStatus !== "GST Registered" &&
+              taxProfile.gstStatus !== "GST Verification Pending" && (
+                <form onSubmit={handleAddGst} style={styles.gstForm}>
+                  <div>
+                    <label style={styles.label}>Add GST Number</label>
+                    <input
+                      type="text"
+                      value={gstInput}
+                      onChange={(e) => setGstInput(e.target.value.toUpperCase())}
+                      placeholder="22AAAAA0000A1Z5"
+                      maxLength={15}
+                      style={styles.input}
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={taxBusy}
+                    style={{
+                      ...styles.submitButton,
+                      opacity: taxBusy ? 0.7 : 1,
+                      alignSelf: "flex-end",
+                    }}
+                  >
+                    {taxBusy ? "Submitting..." : "Submit GSTIN"}
+                  </button>
+                </form>
+              )}
+
+            {taxProfile.gstStatus === "GST Verification Pending" && (
+              <div style={styles.taxNotice}>
+                GSTIN is pending Admin approval. Product listing and selling
+                remain blocked until it is approved and products are re-approved.
+              </div>
+            )}
+
+            {taxProfile.gstApprovedAt && (
+              <div style={styles.taxMeta}>
+                GST approved on {new Date(taxProfile.gstApprovedAt).toLocaleString()}
+              </div>
+            )}
+
+            {taxMessage && <div style={styles.messageBox}>ℹ️ {taxMessage}</div>}
+          </div>
+        )}
 
         {/* ====================================
             MESSAGE
@@ -1525,6 +1748,93 @@ const styles = {
     fontSize: "12px",
     marginTop: "3px",
     opacity: 0.9,
+  },
+
+  taxCard: {
+    background: "#fff",
+    border: "1px solid #eee",
+    borderRadius: "14px",
+    padding: "18px",
+    marginBottom: "18px",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+  },
+
+  taxHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: "12px",
+    flexWrap: "wrap",
+  },
+
+  taxTitle: {
+    fontSize: "17px",
+    fontWeight: "bold",
+  },
+
+  taxSub: {
+    color: "#888",
+    fontSize: "12px",
+    marginTop: "3px",
+  },
+
+  taxBadge: {
+    borderRadius: "999px",
+    padding: "5px 10px",
+    fontSize: "11px",
+    fontWeight: "bold",
+  },
+
+  taxGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))",
+    gap: "12px",
+    marginTop: "16px",
+  },
+
+  taxItem: {
+    background: "#fafafa",
+    border: "1px solid #eee",
+    borderRadius: "10px",
+    padding: "12px",
+  },
+
+  taxLabel: {
+    color: "#999",
+    fontSize: "10px",
+    fontWeight: "bold",
+    letterSpacing: "0.6px",
+  },
+
+  taxValue: {
+    fontSize: "15px",
+    fontWeight: "bold",
+    marginTop: "4px",
+  },
+
+  taxMeta: {
+    color: "#777",
+    fontSize: "11px",
+    marginTop: "4px",
+  },
+
+  taxNotice: {
+    background: "#fff8e8",
+    border: "1px solid #f3dfb0",
+    color: "#7a5a10",
+    borderRadius: "8px",
+    padding: "10px 12px",
+    marginTop: "12px",
+    fontSize: "12px",
+    lineHeight: 1.5,
+  },
+
+  gstForm: {
+    display: "grid",
+    gridTemplateColumns: "minmax(180px,1fr) auto",
+    gap: "10px",
+    alignItems: "end",
+    marginTop: "14px",
   },
 
   messageBox: {

@@ -10,8 +10,14 @@ import {
 } from "./FamilyManagers";
 import BuyerSettingsPanel from "./BuyerSettingsPanel";
 import DeliveryManager from "./DeliveryManager";
+import SchemeApprovals from "./SchemeApprovals";
+import ImportSyncManager from "./ImportSyncManager";
+import ChargesTaxSettings from "./ChargesTaxSettings";
+import CourierPartners from "./CourierPartners";
+import PaymentSettings from "./PaymentSettings";
+import FamilyPlacementPanel from "./FamilyPlacementPanel";
 
-const API = "https://justbrand-in-144629.hostingersite.com";
+import { API } from "./apiConfig";
 
 function App() {
   const [token, setToken] = useState(
@@ -49,6 +55,10 @@ function App() {
   const [message, setMessage] = useState("");
 
   const [showStaffForm, setShowStaffForm] = useState(false);
+
+  // Content Manager reports unsaved draft edits here so openView can
+  // warn before navigating away. setState identity is stable.
+  const [contentDirty, setContentDirty] = useState(false);
 
   const [newStaff, setNewStaff] = useState({
     name: "",
@@ -495,14 +505,27 @@ function App() {
   // ==========================================
 
   const rejectProduct = async (id) => {
+    const reason = window.prompt(
+      "Rejection reason (seller को दिखेगा):"
+    );
+
+    if (reason === null) return;
+
+    if (!reason.trim()) {
+      setMessage("Rejection reason जरूरी है।");
+      return;
+    }
+
     try {
       const response = await fetch(
         `${API}/api/admin/products/${id}/reject`,
         {
           method: "PUT",
           headers: {
+            "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
+          body: JSON.stringify({ reason: reason.trim() }),
         }
       );
 
@@ -796,6 +819,7 @@ function App() {
     {
       label: "Buyer Experience",
       items: [
+        { key: "cm-header", label: "🧭 Header Appearance", enabled: canUseSellers, crumb: "Buyer Experience · Header Appearance" },
         { key: "cm-banners", label: "🖼️ Homepage Banners", enabled: canUseSellers, crumb: "Buyer Experience · Banners" },
         { key: "cm-homepage", label: "🏠 Homepage Content", enabled: canUseSellers, crumb: "Buyer Experience · Homepage" },
         { key: "cm-footer", label: "🦶 Footer Content", enabled: canUseSellers, crumb: "Buyer Experience · Footer" },
@@ -812,7 +836,12 @@ function App() {
         { key: "sellers", label: "🏪 Sellers", enabled: canUseSellers, crumb: "Sellers" },
         { key: "buyers", label: "🛒 Buyers", enabled: canUseCustomers, crumb: "Buyers" },
         { key: "kyc", label: "🪪 KYC", enabled: canUseSellers, crumb: "KYC" },
+        { key: "schemes", label: "🎟️ Scheme Approvals", enabled: canUseSellers, crumb: "Commerce · Scheme Approvals" },
+        { key: "import-sync", label: "📥 Import & Sync", enabled: canUseSellers, crumb: "Commerce · Import & Sync" },
         { key: "cm-categories", label: "📂 Categories", enabled: canUseSellers, crumb: "Commerce · Categories" },
+        { key: "charges-tax", label: "💰 Charges & Tax", enabled: canUseSellers, crumb: "Commerce · Charges & Tax" },
+        { key: "courier-partners", label: "📦 Courier Partners", enabled: canUseSellers, crumb: "Commerce · Courier Partners" },
+        { key: "payments", label: "💳 Payment Settings", enabled: canUseSellers, crumb: "Commerce · Payment Settings" },
       ],
     },
     {
@@ -826,6 +855,7 @@ function App() {
         { key: "cm-family", label: "👨‍👩‍👧 Family Info", enabled: canUseSellers, crumb: "Family · Family Info" },
         { key: "cm-reward", label: "🎁 Reward Info", enabled: canUseSellers, crumb: "Family · Reward Info" },
         { key: "tree", label: "🌳 Family Tree", enabled: canUseSellers, crumb: "Family Tree" },
+        { key: "spillover", label: "🧩 Placement (Spillover)", enabled: canUseSellers, crumb: "Family · Placement (Spillover)" },
       ],
     },
     {
@@ -854,6 +884,16 @@ function App() {
     // Family sub-views reuse the Family (mlm) tab.
     if (["sellers", "orders", "family", "kyc", "tree", "fam-commission", "fam-levels", "fam-gifts", "fam-rules"].includes(key)) {
       setBusinessTabKey(key === "family" || key.startsWith("fam-") ? "mlm" : key);
+    }
+
+    // Unsaved Content Manager edits must never be discarded silently
+    // when the admin switches sections (or leaves the panel).
+    if (
+      contentDirty &&
+      key !== activeView &&
+      !window.confirm("You have unsaved content changes. Discard them?")
+    ) {
+      return;
     }
 
     setActiveView(key);
@@ -1096,17 +1136,86 @@ function App() {
 
         {/* CONTENT MANAGER (About/Contact/Branding/Banners/Homepage) */}
 
-        {["cm-about", "cm-contact", "cm-branding", "cm-banners", "cm-homepage", "cm-footer", "cm-policies", "cm-delivery", "cm-family", "cm-reward", "cm-categories"].includes(
+        {        ["cm-about", "cm-contact", "cm-branding", "cm-header", "cm-banners", "cm-homepage", "cm-footer", "cm-policies", "cm-delivery", "cm-family", "cm-reward", "cm-categories"].includes(
           activeView
         ) && (
           <ContentManager
             token={token}
             section={activeView.replace("cm-", "")}
             isSuper={staff.role === "super_admin"}
+            onDirtyChange={setContentDirty}
             onMessage={(msg) => {
               setMessage(msg);
 
               setTimeout(() => setMessage(""), 4000);
+            }}
+          />
+        )}
+
+        {/* SELLER SCHEME APPROVALS (server-enforced super_admin/manager) */}
+
+        {activeView === "schemes" && canUseSellers && (
+          <SchemeApprovals
+            token={token}
+            sellers={sellers}
+            onMessage={(msg) => {
+              setMessage(msg);
+
+              setTimeout(() => setMessage(""), 4000);
+            }}
+          />
+        )}
+
+        {/* SELLER IMPORT & SUPPLIER SYNC (approvals, histories, limits) */}
+
+        {activeView === "import-sync" && canUseSellers && (
+          <ImportSyncManager
+            token={token}
+            onMessage={(msg) => {
+              setMessage(msg);
+
+              setTimeout(() => setMessage(""), 5000);
+            }}
+          />
+        )}
+
+        {/* CHARGES & TAX SETTINGS (delivery, platform fee, GST) */}
+
+        {activeView === "charges-tax" && canUseSellers && (
+          <ChargesTaxSettings
+            token={token}
+            onMessage={(msg) => {
+              setMessage(msg);
+
+              setTimeout(() => setMessage(""), 5000);
+            }}
+          />
+        )}
+
+        {/* COURIER / LOGISTICS PARTNERS (companies — separate from the
+            person-based delivery workflow) + per-order AWB booking */}
+
+        {activeView === "courier-partners" && canUseSellers && (
+          <CourierPartners
+            token={token}
+            canManage={staff.role === "super_admin" || staff.role === "manager"}
+            onMessage={(msg) => {
+              setMessage(msg);
+
+              setTimeout(() => setMessage(""), 5000);
+            }}
+          />
+        )}
+
+        {/* PAYMENT SETTINGS (COD/UPI/BankTransfer display data) */}
+
+        {activeView === "payments" && canUseSellers && (
+          <PaymentSettings
+            token={token}
+            onMessage={(msg) => {
+              setMessage(msg);
+
+              setTimeout(() => setMessage(""), 5000);
             }}
           />
         )}
@@ -1134,6 +1243,20 @@ function App() {
               setMessage(msg);
 
               setTimeout(() => setMessage(""), 4000);
+            }}
+          />
+        )}
+
+        {/* FAMILY PLACEMENT (PAN-INDIA SPILLOVER) — ADMIN INSPECTION */}
+
+        {activeView === "spillover" && canUseSellers && (
+          <FamilyPlacementPanel
+            token={token}
+            isSuper={staff.role === "super_admin"}
+            onMessage={(msg) => {
+              setMessage(msg);
+
+              setTimeout(() => setMessage(""), 5000);
             }}
           />
         )}
@@ -1175,6 +1298,7 @@ function App() {
             "cm-about",
             "cm-contact",
             "cm-branding",
+            "cm-header",
             "cm-banners",
             "cm-homepage",
             "cm-footer",
@@ -1186,6 +1310,10 @@ function App() {
             "fam-levels",
             "fam-gifts",
             "delivery",
+            "schemes",
+            "charges-tax",
+            "courier-partners",
+            "payments",
           ].includes(activeView) && (
             <Business
               token={token}
@@ -1518,6 +1646,10 @@ function App() {
 
                   <div className="product-image">
 
+                    {/* Fits with object-fit: contain — the whole
+                        product image is visible, never cropped. */}
+                    <span className="cm-fitchip">Fit to Cell</span>
+
                     {product.image ? (
                       <img
                         src={product.image}
@@ -1532,6 +1664,36 @@ function App() {
                     )}
 
                   </div>
+
+                  {Array.isArray(product.images) && product.images.length > 1 && (
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "6px",
+                        padding: "8px 10px 0",
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      {product.images.map((src, index) => (
+                        <img
+                          key={`${product.id}-${index}`}
+                          src={src}
+                          alt={`${product.name} ${index + 1}`}
+                          style={{
+                            width: "46px",
+                            height: "46px",
+                            objectFit: "contain",
+                            background: "#fff",
+                            border: "1px solid #eee",
+                            borderRadius: "6px",
+                          }}
+                          onError={(e) => {
+                            e.currentTarget.style.display = "none";
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
 
                   <div className="product-info">
 

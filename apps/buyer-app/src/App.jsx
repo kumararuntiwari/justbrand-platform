@@ -1,9 +1,11 @@
+import { useLocation, useNavigate } from "react-router-dom";
 import ProductCard from "./components/ProductCard";
 import ComparePriceSlider from "./components/ComparePriceSlider";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 import { useState, useEffect } from 'react';
 import ProductDetails from "./pages2/ProductDetails";
+import ProductDetailRoute from "./pages2/ProductDetailRoute";
 import ProductChat from "./pages2/ProductChat";
 import Cart from "./pages2/Cart";
 import InfoPages from "./pages2/InfoPages.jsx";
@@ -17,6 +19,7 @@ import CustomerOrders from "./pages2/CustomerOrders";
 import Checkout from "./pages2/Checkout";
 import Wishlist from "./pages2/Wishlist";
 import {
+  API_BASE,
   getCustomerToken,
   setCustomerToken,
   setMlmToken,
@@ -38,12 +41,14 @@ import MLMWallet from "./Pages/MLMWallet";
 // BACKEND
 // ==========================================
 
-const BACKEND_URL = "https://justbrand-in-144629.hostingersite.com/api/products";
+// API base is runtime-injectable (see src/api.js): the Freebuff
+// preview injects window.__JB_API_BASE__ = "" (same-origin, isolated
+// local backend); a production build keeps the live backend URL.
+const BACKEND_URL = `${API_BASE}/api/products`;
 
 // Phase 1: admin-managed category list. On any failure the Buyer
 // keeps showing the built-in fallback category chips below.
-const CATEGORIES_URL =
-  "https://justbrand-in-144629.hostingersite.com/api/categories";
+const CATEGORIES_URL = `${API_BASE}/api/categories`;
 
 const FALLBACK_CATEGORY_CHIPS = [
   "All",
@@ -55,9 +60,8 @@ const FALLBACK_CATEGORY_CHIPS = [
 ];
 
 // Admin-managed site content (logo, banners, About/Contact copy).
-// Same production origin as the products API — never localhost.
-const SITE_CONTENT_URL =
-  "https://justbrand-in-144629.hostingersite.com/api/site/content";
+// Same API origin as the products API (see API_BASE in src/api.js).
+const SITE_CONTENT_URL = `${API_BASE}/api/site/content`;
 
 // ==========================================
 // HOME HERO (admin-managed)
@@ -86,9 +90,21 @@ function useIsMobileViewport() {
   return isMobile;
 }
 
-function HomeHero({ banners, promo, onCta }) {
+function HomeHero({ banners, promo, onCta, fitMode }) {
   const isMobile = useIsMobileViewport();
   const [slide, setSlide] = useState(0);
+
+  // More prominent hero strip (was 230/250) while staying
+  // responsive: the same value drives the image slider and the
+  // promo-gradient fallback below, so the two states never jump in
+  // height. The title/subtitle/CTA overlay is pinned to the bottom
+  // edge and wraps, so it is never cropped at any viewport.
+  const bannerHeight = isMobile ? 300 : 380;
+  const bannerMargin = "18px auto 16px";
+
+  // "Fit to Cell" (contain) shows the whole image; "cover" keeps
+  // the original fill-the-strip behaviour.
+  const bannerFit = fitMode === "contain" ? "contain" : "cover";
 
   const slides = (banners || []).filter((b) => {
     if (!b || !b.active) return false;
@@ -126,7 +142,7 @@ function HomeHero({ banners, promo, onCta }) {
         style={{
           width: "100%",
           maxWidth: "1200px",
-          margin: "15px auto",
+          margin: bannerMargin,
           padding: "0 10px",
           boxSizing: "border-box",
         }}
@@ -135,7 +151,7 @@ function HomeHero({ banners, promo, onCta }) {
           style={{
             position: "relative",
             width: "100%",
-            height: "220px",
+            height: bannerHeight,
             borderRadius: "15px",
             overflow: "hidden",
             background: "#f2f2f2",
@@ -149,7 +165,7 @@ function HomeHero({ banners, promo, onCta }) {
               inset: 0,
               width: "100%",
               height: "100%",
-              objectFit: "cover",
+              objectFit: bannerFit,
               display: "block",
             }}
             onError={(e) => {
@@ -257,8 +273,8 @@ function HomeHero({ banners, promo, onCta }) {
       style={{
         width: "100%",
         maxWidth: "1200px",
-        height: "220px",
-        margin: "15px auto",
+        height: bannerHeight,
+        margin: bannerMargin,
         padding: "0 10px",
         boxSizing: "border-box",
       }}
@@ -353,6 +369,15 @@ function App() {
 
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  // True only when the backend ANSWERED with a real, empty catalog.
+  // The homepage then shows an honest "no products yet" state instead
+  // of the offline fallback items, so an empty shop is never masked by
+  // products that cannot actually be ordered.
+  const [catalogEmpty, setCatalogEmpty] = useState(false);
+  // True when a real (non-preview) build could not reach the backend
+  // at all — the homepage then shows an honest error state instead
+  // of inventing offline demo products.
+  const [backendDown, setBackendDown] = useState(false);
 
   // ==========================================
   // SITE CONTENT (admin-managed)
@@ -382,7 +407,21 @@ function App() {
   // ==========================================
 
   const [selectedProduct, setSelectedProduct] = useState(null);
+
+  // URL-Routed Product Detail Page (/product/:id). The URL is the
+  // source of truth so a PDP can be opened directly, bookmarked and
+  // refreshed; product cards navigate here. BrowserRouter already
+  // wraps App in main.jsx.
+  const location = useLocation();
+  const navigate = useNavigate();
+  const productRouteMatch = location.pathname.match(/^\/product\/(\d+)$/);
+  const routeProductId = productRouteMatch ? productRouteMatch[1] : null;
   const [showCart, setShowCart] = useState(false);
+
+  // Cart -> Checkout can hit the customer login gate. Remember that
+  // intent so a successful login resumes checkout instead of dropping
+  // the buyer on the account page (previously checkout was lost).
+  const [checkoutIntent, setCheckoutIntent] = useState(false);
 
   // ==========================================
   // COMPARE
@@ -525,9 +564,10 @@ function App() {
       JSON.stringify(authCustomer)
     );
 
-    // If the customer logged in from a Buy Now flow, resume checkout
-    // with the saved item; otherwise go to the normal account page.
-    setBuyerPage(buyNowItem ? "checkout" : "account");
+    // If the customer logged in from a Buy Now flow or from the cart's
+    // checkout button, resume checkout; otherwise go to the account page.
+    setBuyerPage(buyNowItem || checkoutIntent ? "checkout" : "account");
+    setCheckoutIntent(false);
   }
 
   function handleCustomerLogout() {
@@ -636,8 +676,22 @@ function App() {
 
   async function loadProducts() {
     setLoading(true);
+    setBackendDown(false);
+
+    // Preview builds (window.__JB_PREVIEW__ injected by the preview
+    // server) may fall back to offline demo data. A real published
+    // build must NEVER invent products — it shows the backendDown
+    // error state instead (see below).
+    const isPreview =
+      typeof window !== "undefined" &&
+      window.__JB_PREVIEW__ === true;
 
     let loadedProducts = [];
+    // Set when the backend returned a recognised catalog response,
+    // even an empty one. An ANSWERED catalog is authoritative: the
+    // localStorage / demo fallbacks below must not mask it, or real
+    // customers would see phantom products that fail at checkout.
+    let backendAnswered = false;
 
     // ========================================
     // BACKEND PRODUCTS
@@ -653,11 +707,13 @@ function App() {
 
         if (Array.isArray(data)) {
           loadedProducts = data;
+          backendAnswered = true;
         } else if (
           data &&
           Array.isArray(data.products)
         ) {
           loadedProducts = data.products;
+          backendAnswered = true;
         }
       } else {
         console.log(
@@ -673,10 +729,15 @@ function App() {
     }
 
     // ========================================
-    // LOCAL STORAGE FALLBACK
+    // LOCAL STORAGE FALLBACK (preview/offline only — never
+    // overrides an answered backend catalog)
     // ========================================
 
-    if (loadedProducts.length === 0) {
+    if (
+      !backendAnswered &&
+      loadedProducts.length === 0 &&
+      isPreview
+    ) {
       try {
         const savedProducts =
           localStorage.getItem(
@@ -700,10 +761,25 @@ function App() {
     }
 
     // ========================================
-    // DEMO PRODUCTS
+    // DEMO PRODUCTS (PREVIEW ONLY — an answered backend, including
+    // a valid empty catalog, always wins; a published build never
+    // invents products and shows the backendDown error state)
     // ========================================
 
-    if (loadedProducts.length === 0) {
+    if (
+      !backendAnswered &&
+      loadedProducts.length === 0 &&
+      !isPreview
+    ) {
+      // Published build + unreachable backend: honest error state.
+      setBackendDown(true);
+    }
+
+    if (
+      !backendAnswered &&
+      loadedProducts.length === 0 &&
+      isPreview
+    ) {
       loadedProducts = [
         {
           id: 1,
@@ -856,6 +932,9 @@ function App() {
       normalizedProducts
     );
 
+    setCatalogEmpty(
+      backendAnswered && normalizedProducts.length === 0
+    );
     setProducts(normalizedProducts);
     setLoading(false);
   }
@@ -864,7 +943,16 @@ function App() {
   // ADD TO CART
   // ==========================================
 
-  function addToCart(product) {
+  function addToCart(product, quantity = 1) {
+    // LIMITED STOCK TRACKING: never add an out-of-stock product —
+    // the server re-checks atomically at quote/order time regardless.
+    if (product && product.inStock === false) {
+      alert("Ye product abhi out of stock hai.");
+      return;
+    }
+
+    const qty = Math.max(1, Number(quantity) || 1);
+
     setCart((prevCart) => {
       const existingProduct =
         prevCart.find(
@@ -883,7 +971,7 @@ function App() {
               return {
                 ...item,
                 quantity:
-                  (item.quantity || 1) + 1,
+                  (item.quantity || 1) + qty,
               };
             }
 
@@ -894,7 +982,7 @@ function App() {
           ...prevCart,
           {
             ...product,
-            quantity: 1,
+            quantity: qty,
           },
         ];
       }
@@ -1190,8 +1278,10 @@ function App() {
     setSearch,
     filteredProducts,
     filteredCategories,
-    onProductSelect:
-      setSelectedProduct,
+    onProductSelect: (product) =>
+      navigate(
+        `/product/${product.id}`
+      ),
     onAccount: () =>
       setBuyerPage(
         customer && customerToken
@@ -1200,6 +1290,10 @@ function App() {
       ),
     onWishlist: () =>
       setBuyerPage("wishlist"),
+    // Header Compare entry — opens the existing Compare page with
+    // whatever the buyer has selected so far (works from any view).
+    onCompare: () => setShowCompare(true),
+    compareCount: compareProducts.length,
     onOrders: () =>
       setBuyerPage(
         customer && customerToken
@@ -1212,6 +1306,7 @@ function App() {
       ),
     logoUrl: siteContent?.branding?.logoUrl || "",
     logoAlt: siteContent?.branding?.logoAlt || "JustBrand",
+    headerSettings: siteContent?.header || null,
   };
 
   // ==========================================
@@ -1394,7 +1489,7 @@ function App() {
   }
 
   // ==========================================
-  // PRODUCT DETAILS
+  // PRODUCT DETAILS (legacy state flow)
   // ==========================================
 
   if (selectedProduct) {
@@ -1440,7 +1535,11 @@ function App() {
     return (
       <CustomerAuth
         onAuth={handleCustomerAuth}
-        onBack={() => setBuyerPage(null)}
+        onBack={() => {
+          // Backing out of the login gate abandons any checkout intent.
+          setCheckoutIntent(false);
+          setBuyerPage(null);
+        }}
       />
     );
   }
@@ -1631,6 +1730,23 @@ function App() {
           onToggleSelectAll={toggleCartSelectAll}
           onClearCart={clearCart}
           onCheckout={() => {
+            // LIMITED STOCK TRACKING: a cart item that went out of
+            // stock after it was added can never reach checkout —
+            // the server would reject the order anyway; stop it here
+            // with a clear message instead.
+            const outOfStockItems = cart.filter(
+              (item) => item.inStock === false
+            );
+
+            if (outOfStockItems.length > 0) {
+              alert(
+                `Out of stock: ${outOfStockItems
+                  .map((item) => item.name || item.id)
+                  .join(", ")}. Please remove it to continue.`
+              );
+              return;
+            }
+
             // Hand Checkout exactly the selected items only —
             // unselected products never reach checkout.
             const sel =
@@ -1645,6 +1761,10 @@ function App() {
             // Normal cart checkout — clear any leftover Buy Now item so
             // the checkout always shows exactly the cart contents.
             setBuyNowItem(null);
+
+            // Not logged in? The login gate opens next — keep the
+            // checkout intent so login resumes here (see handleCustomerAuth).
+            setCheckoutIntent(!(customer && customerToken));
 
             setBuyerPage(
               customer && customerToken
@@ -1693,6 +1813,65 @@ function App() {
                 : "auth"
             );
           }}
+        />
+      </>
+    );
+  }
+
+  // ==========================================
+  // PRODUCT DETAILS — URL ROUTE (/product/:id)
+  // ==========================================
+  // Rendered for direct URLs / refreshes, and only when NO other
+  // state-based page (cart / checkout / auth / account / orders /
+  // wishlist / info / compare / chat / MLM) is active. Uses the same
+  // App-level cart, wishlist, buy-now and chat handlers as the
+  // state-based PDP — no second cart, no second checkout.
+  //
+  // ORDERING FIX: this branch used to sit ABOVE all the state-based
+  // pages. Because it returned first, none of those flows could open
+  // while the URL was /product/:id — the cart button, Buy Now and
+  // login all appeared dead (blank-looking PDP). It now renders last
+  // (just before the home page), so every other flow wins.
+
+  if (routeProductId) {
+    return (
+      <>
+        <Header
+          {...commonHeaderProps}
+          onCart={() =>
+            setShowCart(true)
+          }
+        />
+
+        <ProductDetailRoute
+          productId={routeProductId}
+          products={products}
+          addToCart={addToCart}
+          addToWishlist={addToWishlist}
+          isWishlisted={(product) =>
+            wishlist.some(
+              (item) => item.id === product.id
+            )
+          }
+          onBuyNow={(product, quantity) => {
+            setBuyNowItem({
+              ...product,
+              quantity: Math.max(1, Number(quantity) || 1),
+            });
+
+            setBuyerPage(
+              customer && customerToken
+                ? "checkout"
+                : "auth"
+            );
+          }}
+          onChat={(product) => {
+            setSelectedProduct(product);
+            setBuyerPage("chat");
+          }}
+          onHome={() =>
+            navigate("/")
+          }
         />
       </>
     );
@@ -1752,6 +1931,7 @@ function App() {
       <HomeHero
         banners={adminBanners}
         promo={homepagePromo}
+        fitMode={siteContent?.display?.bannerFit || "cover"}
         onCta={(link) => {
           // In-app paths navigate inside JustBrand; external https
           // links open safely in a new tab.
@@ -1943,13 +2123,7 @@ function App() {
         ==================================== */}
 
         {loading && (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-              gap: "20px",
-            }}
-          >
+          <div className="jb-product-grid">
             {Array.from({ length: 8 }).map((_, i) => (
               <div
                 key={i}
@@ -2005,16 +2179,7 @@ function App() {
 
         {!loading &&
           filteredProducts.length >
-            0 && (
-            <div
-              style={{
-                display:
-                  "grid",
-                gridTemplateColumns:
-                  "repeat(auto-fit,minmax(220px,1fr))",
-                gap: "20px",
-              }}
-            >
+            0 && (            <div className="jb-product-grid">
               {filteredProducts.map(
                 (product) => (
                   <ProductCard
@@ -2030,8 +2195,13 @@ function App() {
                     addToWishlist={
                       addToWishlist
                     }
-                    onSelect={
-                      setSelectedProduct
+                    isWishlisted={wishlist.some(
+                      (item) => item.id === product.id
+                    )}
+                    onSelect={(product) =>
+                      navigate(
+                        `/product/${product.id}`
+                      )
                     }
                     onCompare={
                       onCompare
@@ -2063,14 +2233,13 @@ function App() {
                   "20px",
                 border: "1px solid #eee",
               }}
-            >
-              <div
+            >              <div
                 style={{
                   fontSize: "44px",
                   marginBottom: "10px",
                 }}
               >
-                🔍
+                {backendDown ? "⚠️" : catalogEmpty ? "🛍️" : "🔍"}
               </div>
               <h3
                 style={{
@@ -2078,7 +2247,11 @@ function App() {
                   color: "#222",
                 }}
               >
-                No products found
+                {backendDown
+                  ? "Unable to load products"
+                  : catalogEmpty
+                    ? "No products available yet"
+                    : "No products found"}
               </h3>
 
               <p
@@ -2088,16 +2261,21 @@ function App() {
                   fontSize: "14.5px",
                 }}
               >
-                Please try another
-                search or category.
+                {backendDown
+                  ? "The store server is not responding right now. Please refresh in a while."
+                  : catalogEmpty
+                    ? "Please check back soon — new products are added regularly."
+                    : "Please try another search or category."}
               </p>
 
               <button
                 onClick={() => {
+                  if (catalogEmpty || backendDown) {
+                    loadProducts();
+                    return;
+                  }
                   setSearch("");
-                  setCategory(
-                    "All"
-                  );
+                  setCategory("All");
                 }}
                 style={{
                   background:
@@ -2118,7 +2296,9 @@ function App() {
                     "0 4px 12px rgba(255,20,147,0.25)",
                 }}
               >
-                Show All Products
+                {catalogEmpty || backendDown
+                  ? "Refresh"
+                  : "Show All Products"}
               </button>
             </div>
           )}

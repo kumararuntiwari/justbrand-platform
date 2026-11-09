@@ -25,6 +25,7 @@ import { rmSync, mkdirSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { onboardGstSeller } from "./support/mandatory-gst.js";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const BACKEND_ENTRY = path.join(REPO_ROOT, "backend", "server.js");
@@ -322,6 +323,9 @@ async function runChatChecks() {
     token: admin,
     body: { kycStatus: "Approved" },
   });
+
+  const taxReady = await onboardGstSeller(req, { sellerToken: sellerA, staffToken: admin });
+  ok("seller A PAN + GST approved", taxReady.ok, JSON.stringify(taxReady.response));
 
   const prodA = await req("POST", "/api/sellers/products", {
     token: sellerA,

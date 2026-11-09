@@ -183,6 +183,7 @@ select {
 
 /* ---------- shared page wrapper (all Buyer screens) ---------- */
 .jb-page {
+
   position: relative;
   z-index: 1;
   background: transparent;
@@ -221,4 +222,46 @@ select {
   .jb-tree-direct {
     grid-template-columns: 1fr !important;
   }
+}
+
+/* ============================================================
+   PRODUCT GRID + CARD (Flipkart/Meesho-style density,
+   JustBrand tokens — no third-party assets)
+   - 2 columns on phones, 3 on tablets, 4 on desktops
+   - .jb-pcard keeps the hover lift + keyboard focus ring in CSS
+     (the card itself stays inline-styled like the rest of the app)
+   ============================================================ */
+
+.jb-product-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (min-width: 640px) {
+  .jb-product-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .jb-product-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 20px;
+  }
+}
+
+.jb-pcard {
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.jb-pcard:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 22px rgba(20, 20, 40, 0.14);
+}
+
+.jb-pcard:focus-visible {
+  outline: 3px solid var(--jb-saffron);
+  outline-offset: 2px;
 }

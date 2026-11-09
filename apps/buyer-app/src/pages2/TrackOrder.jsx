@@ -99,6 +99,79 @@ function statusBadgeStyle(status) {
   return { background: "#fff2e8", color: "#c2410c" };
 }
 
+// VERIFIED COURIER TRACKING (logistics company)
+// Renders the real courier status + tracking history the backend
+// recorded for this order. Shows nothing until the backend actually
+// carries courier data — no fake or estimated tracking is fabricated.
+function CourierTracking({ tracking }) {
+  const history = Array.isArray(tracking.history) ? tracking.history : [];
+
+  return (
+    <div style={styles.card}>
+      <div style={styles.timelineTitle}>Courier Tracking</div>
+      <div style={styles.detailsGrid}>
+        <div style={styles.detailCell}>
+          <div style={styles.detailLabel}>Courier</div>
+          <div style={styles.detailValue}>{tracking.courierPartnerName || "—"}</div>
+        </div>
+        <div style={styles.detailCell}>
+          <div style={styles.detailLabel}>AWB / Tracking No.</div>
+          <div style={styles.detailValue}>{tracking.awbNumber || "Not assigned yet"}</div>
+        </div>
+        <div style={styles.detailCell}>
+          <div style={styles.detailLabel}>Status</div>
+          <div style={styles.detailValue}>{tracking.courierStatus || "—"}</div>
+        </div>
+        <div style={styles.detailCell}>
+          <div style={styles.detailLabel}>Last Updated</div>
+          <div style={styles.detailValue}>{fmtDate(tracking.courierStatusUpdatedAt)}</div>
+        </div>
+      </div>
+
+      {tracking.trackingUrl ? (
+        <div style={{ marginTop: 10 }}>
+          <a
+            href={tracking.trackingUrl}
+            target="_blank"
+            rel="noreferrer"
+            style={{ color: "#1d4ed8", fontSize: 13, fontWeight: 600 }}
+          >
+            Open courier tracking page ↗
+          </a>
+        </div>
+      ) : null}
+
+      {history.length > 0 ? (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ ...styles.detailLabel, marginBottom: 6 }}>Tracking history</div>
+          <div style={styles.timeline}>
+            {history.map((h, index) => {
+              const isLast = index === history.length - 1;
+              return (
+                <div key={`${h.at}-${index}`} style={styles.stepRow}>
+                  <div style={styles.stepRail}>
+                    <div style={{ ...styles.stepDot, ...styles.stepDotDone }}>✓</div>
+                    {!isLast ? <div style={{ ...styles.stepLine, ...styles.stepLineDone }} /> : null}
+                  </div>
+                  <div style={styles.stepBody}>
+                    <div style={styles.stepLabel}>{h.status}</div>
+                    {h.note ? <div style={styles.stepTime}>{h.note}</div> : null}
+                    <div style={styles.stepTime}>{fmtDate(h.at)}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div style={{ marginTop: 12, fontSize: 13, color: "#6b7280" }}>
+          No courier scan events recorded yet — tracking appears once the courier records an update.
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TrackOrder({ order, onBack }) {
   const steps = buildSteps(order);
   const current = currentStepLabel(steps, order);
@@ -190,9 +263,20 @@ function TrackOrder({ order, onBack }) {
               <div style={styles.detailCell}>
                 <div style={styles.detailLabel}>Delivery Partner</div>
                 <div style={styles.detailValue}>
-                  {order.deliveryPartnerName || "Will be assigned soon"}
+                  {/* Courier COMPANY (manual booking) takes display priority;
+                      the local delivery-partner (person) name remains the
+                      fallback — both workflows coexist. */}
+                  {order.courierPartnerName ||
+                    order.deliveryPartnerName ||
+                    "Will be assigned soon"}
                 </div>
               </div>
+              {order.awbNumber ? (
+                <div style={styles.detailCell}>
+                  <div style={styles.detailLabel}>Courier Tracking No.</div>
+                  <div style={styles.detailValue}>{order.awbNumber}</div>
+                </div>
+              ) : null}
               <div style={styles.detailCell}>
                 <div style={styles.detailLabel}>
                   {isDone ? "Delivered On" : "Expected Delivery"}
@@ -210,6 +294,13 @@ function TrackOrder({ order, onBack }) {
               </div>
             </div>
           </div>
+
+          {/* VERIFIED COURIER TRACKING (additive) — real status +
+              history recorded by the backend. Rendered only when the
+              backend actually carries courier data; never fabricated. */}
+          {order.courierTracking ? (
+            <CourierTracking tracking={order.courierTracking} />
+          ) : null}
 
           {/* 8-step vertical timeline */}
           <div style={styles.card}>

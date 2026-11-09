@@ -1,6 +1,224 @@
 
 import React, { useState } from "react";
 
+// ==========================================================
+// HEADER APPEARANCE (admin-configured)
+// ==========================================================
+// Geometry overrides saved by Admin → Buyer Experience → Header
+// Appearance (site_settings.site_header). Defaults mirror the
+// built-in CSS in this file and a rule is only emitted when an
+// admin actually changed that value — an untouched section
+// renders exactly like today's header.
+
+const HEADER_DEFAULTS = {
+  logo: {
+    width: 46,
+    height: 46,
+    ratio: 1,
+    lockAspect: true,
+    position: "left",
+    marginTop: 0,
+    marginBottom: 0,
+    marginLeft: 0,
+    marginRight: 0,
+  },
+  name: {
+    text: "JustBrand",
+    fontSize: 22,
+    height: 26,
+    width: 0,
+    position: "right",
+    marginTop: 0,
+    marginBottom: 0,
+  },
+  cart: {
+    iconSize: 20,
+    position: "right",
+    marginTop: 0,
+    marginBottom: 0,
+    marginLeft: 0,
+    marginRight: 0,
+  },
+  actions: {
+    iconSize: 20,
+    position: "left",
+    gap: 8,
+    marginTop: 0,
+    marginBottom: 0,
+  },
+};
+
+function headerNumber(value, min, max, fallback) {
+  const n = Number(value);
+
+  if (!Number.isFinite(n)) return fallback;
+
+  return Math.min(max, Math.max(min, n));
+}
+
+function headerOverridesCss(settings) {
+  if (!settings || settings.enabled === false) return "";
+
+  const part = (key) => ({ ...HEADER_DEFAULTS[key], ...(settings[key] || {}) });
+  const logo = part("logo");
+  const name = part("name");
+  const cart = part("cart");
+  const actions = part("actions");
+  const rules = [];
+
+  // ---- LOGO -------------------------------------------------
+  const lw = headerNumber(logo.width, 16, 96, 46);
+  let lh = headerNumber(logo.height, 16, 96, 46);
+
+  if (logo.lockAspect !== false) {
+    const ratio = Number(logo.ratio);
+
+    if (Number.isFinite(ratio) && ratio > 0) {
+      lh = Math.min(96, Math.max(16, Math.round(lw * ratio)));
+    }
+  }
+
+  if (lw !== 46 || lh !== 46) {
+    rules.push(`.jb-logo img{width:${lw}px;height:${lh}px;}`);
+    // Mobile keeps a safe 40px cap so an oversized desktop logo can
+    // never push the header actions out of the viewport. The cap is
+    // applied by scaling BOTH sides with the same factor, so the
+    // locked aspect ratio survives on mobile too (no distortion).
+    const mobileScale = Math.min(1, 40 / Math.max(lw, lh));
+    const mw = Math.max(16, Math.round(lw * mobileScale));
+    const mh = Math.max(16, Math.round(lh * mobileScale));
+
+    if (mw !== lw || mh !== lh) {
+      rules.push(
+        `@media (max-width:700px){.jb-logo img{width:${mw}px;height:${mh}px;}}`
+      );
+    }
+  }
+
+  const logoSp = [
+    headerNumber(logo.marginTop, -16, 40, 0),
+    headerNumber(logo.marginRight, -16, 40, 0),
+    headerNumber(logo.marginBottom, -16, 40, 0),
+    headerNumber(logo.marginLeft, -16, 40, 0),
+  ];
+
+  if (logoSp.some((v) => v !== 0)) {
+    rules.push(
+      `.jb-logo img{margin:${logoSp[0]}px ${logoSp[1]}px ${logoSp[2]}px ${logoSp[3]}px;}`
+    );
+  }
+
+  if (logo.position === "center" || logo.position === "right") {
+    rules.push(
+      `.jb-header-left{flex:1 1 auto;min-width:0;justify-content:${
+        logo.position === "center" ? "center" : "flex-end"
+      };}`
+    );
+  }
+
+  // ---- JUSTBRAND NAME --------------------------------------
+  const nf = headerNumber(name.fontSize, 10, 40, 22);
+  const nh = headerNumber(name.height, 10, 60, 26);
+
+  if (nf !== 22 || nh !== 26) {
+    rules.push(`.jb-logo span.jb-logo-name{font-size:${nf}px;line-height:${nh}px;}`);
+    rules.push(
+      `@media (max-width:700px){.jb-logo span.jb-logo-name{font-size:min(${nf}px,18px);line-height:normal;}}`
+    );
+  }
+
+  const nw = headerNumber(name.width, 0, 320, 0);
+
+  if (nw > 0) {
+    rules.push(
+      `.jb-logo span.jb-logo-name{display:inline-block;width:${nw}px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}`
+    );
+  }
+
+  const nameSp = [
+    headerNumber(name.marginTop, -16, 40, 0),
+    headerNumber(name.marginBottom, -16, 40, 0),
+  ];
+
+  if (nameSp[0] !== 0 || nameSp[1] !== 0) {
+    rules.push(
+      `.jb-logo span.jb-logo-name{margin:${nameSp[0]}px 0 ${nameSp[1]}px;}`
+    );
+  }
+
+  if (name.position === "left") {
+    rules.push(`.jb-logo{flex-direction:row-reverse;justify-content:flex-end;}`);
+  } else if (name.position === "center") {
+    rules.push(
+      `.jb-logo{flex-direction:column;align-items:center;justify-content:center;gap:2px;}`
+    );
+  }
+
+  // ---- OTHER HEADER BUTTONS --------------------------------
+  const ai = headerNumber(actions.iconSize, 12, 40, 20);
+
+  if (ai !== 20) {
+    rules.push(`.jb-action-icon{font-size:${ai}px;}`);
+    rules.push(`@media (max-width:700px){.jb-action-icon{font-size:min(${ai}px,22px);}}`);
+  }
+
+  const ag = headerNumber(actions.gap, 0, 40, 8);
+
+  if (ag !== 8) {
+    rules.push(`.jb-header-right{gap:${ag}px;}`);
+    rules.push(`@media (max-width:700px){.jb-header-right{gap:min(${ag}px,10px);}}`);
+  }
+
+  if (actions.position === "center" || actions.position === "right") {
+    rules.push(
+      `.jb-header-right{flex:1 1 auto;min-width:0;justify-content:${
+        actions.position === "center" ? "center" : "flex-end"
+      };}`
+    );
+  }
+
+  const actionSp = [
+    headerNumber(actions.marginTop, -16, 40, 0),
+    headerNumber(actions.marginBottom, -16, 40, 0),
+  ];
+
+  if (actionSp[0] !== 0 || actionSp[1] !== 0) {
+    rules.push(`.jb-header-action{margin:${actionSp[0]}px 0 ${actionSp[1]}px;}`);
+  }
+
+  // ---- CART -------------------------------------------------
+  const ci = headerNumber(cart.iconSize, 12, 40, 20);
+
+  if (ci !== 20) {
+    rules.push(`.jb-cart-icon{font-size:${ci}px;}`);
+    rules.push(`@media (max-width:700px){.jb-cart-icon{font-size:min(${ci}px,24px);}}`);
+  }
+
+  if (cart.position === "left") {
+    rules.push(`.jb-cart-btn{order:-1;}`);
+  } else if (cart.position === "center") {
+    // Keep every button visible — only reorder Account / Cart /
+    // Wishlist so the cart lands in the middle of the cluster.
+    rules.push(`.jb-cart-btn{order:0;}`);
+    rules.push(`.jb-header-right .jb-header-action:nth-of-type(2){order:1;}`);
+  }
+
+  const cartSp = [
+    headerNumber(cart.marginTop, -16, 40, 0),
+    headerNumber(cart.marginRight, -16, 40, 0),
+    headerNumber(cart.marginBottom, -16, 40, 0),
+    headerNumber(cart.marginLeft, -16, 40, 0),
+  ];
+
+  if (cartSp.some((v) => v !== 0)) {
+    rules.push(
+      `.jb-cart-btn{margin:${cartSp[0]}px ${cartSp[1]}px ${cartSp[2]}px ${cartSp[3]}px;}`
+    );
+  }
+
+  return rules.join("\n");
+}
+
 function Header({
   cartCount,
   onCart,
@@ -11,12 +229,26 @@ function Header({
   onProductSelect,
   onAccount,
   onWishlist,
+  onCompare,
+  compareCount = 0,
   onOrders,
   onFamily,
   logoUrl,
   logoAlt = "JustBrand",
+  headerSettings = null,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // Header Appearance overrides — empty string when nothing is
+  // configured, so the built-in CSS is the only thing applied.
+  const headerCss = headerOverridesCss(headerSettings);
+  const brandName =
+    headerSettings &&
+    headerSettings.enabled !== false &&
+    typeof headerSettings.name?.text === "string" &&
+    headerSettings.name.text.trim()
+      ? headerSettings.name.text.trim()
+      : "JustBrand";
 
   // Logo fallback safety: admin-uploaded logo first, built-in default
   // JustBrand logo if none is configured — and if a custom logo fails
@@ -56,6 +288,14 @@ function Header({
   const handleProductSelect = (product) => {
     if (onProductSelect) {
       onProductSelect(product);
+    }
+
+    // Close the search suggestions immediately: the dropdown renders
+    // only while `search` is non-empty, so clearing the existing
+    // search state closes it — no new state or refactoring. (The
+    // nav-backs below already use the same setSearch("") pattern.)
+    if (setSearch) {
+      setSearch("");
     }
 
     closeMenu();
@@ -114,6 +354,21 @@ function Header({
   };
 
   // ==================================================
+  // COMPARE PRODUCTS
+  // ==================================================
+
+  const handleCompare = () => {
+    closeMenu();
+
+    if (onCompare) {
+      onCompare();
+      return;
+    }
+
+    alert("Compare page coming soon.");
+  };
+
+  // ==================================================
   // ORDERS
   // ==================================================
 
@@ -168,7 +423,7 @@ function Header({
               }}
             />
 
-            <span className="jb-logo-name">JustBrand</span>
+            <span className="jb-logo-name">{brandName}</span>
           </div>
         </div>
 
@@ -216,6 +471,31 @@ function Header({
             <span className="jb-action-text">
               Wishlist
             </span>
+          </button>
+
+
+          {/* COMPARE PRODUCTS — visible header entry to the
+              existing Compare page (same flow as the product-card
+              Compare buttons). Badge shows the selected count. */}
+
+          <button
+            className="jb-header-action jb-header-compare"
+            onClick={handleCompare}
+            aria-label="Compare products"
+          >
+            <span className="jb-action-icon">
+              ⚖️
+            </span>
+
+            <span className="jb-action-text">
+              Compare
+            </span>
+
+            {compareCount > 0 && (
+              <span className="jb-cart-count">
+                {compareCount}
+              </span>
+            )}
           </button>
 
 
@@ -407,8 +687,29 @@ function Header({
                                 {product.name}
                               </div>
 
+                              {/* FINAL-PRICE-ONLY UI: search
+                                  suggestions show the same final
+                                  customer price the cards/PDP show
+                                  (customerPrice). The raw price field
+                                  may already carry "₹" — render the
+                                  symbol exactly once. Amounts come
+                                  straight from the API; nothing is
+                                  calculated or invented here. */}
                               <div className="jb-suggestion-product-price">
-                                ₹{product.price}
+                                {(() => {
+                                  const finalPrice =
+                                    product.customerPrice !== undefined &&
+                                    product.customerPrice !== null &&
+                                    product.customerPrice !== ""
+                                      ? product.customerPrice
+                                      : product.price;
+                                  const priceText =
+                                    String(finalPrice ?? "").trim();
+                                  if (!priceText) return null;
+                                  return priceText.includes("₹")
+                                    ? priceText
+                                    : `₹${priceText}`;
+                                })()}
                               </div>
                             </div>
 
@@ -1117,6 +1418,15 @@ function Header({
 
 
         /* ==================================================
+           HEADER COMPARE ENTRY
+        ================================================== */
+
+        .jb-header-compare {
+          position: relative;
+        }
+
+
+        /* ==================================================
            SECOND NAV
         ================================================== */
 
@@ -1678,6 +1988,10 @@ function Header({
         }
 
       `}</style>
+
+      {/* Header Appearance overrides — rendered after the base
+          stylesheet so admin-saved geometry wins at every width. */}
+      {headerCss ? <style>{headerCss}</style> : null}
     </>
   );
 }

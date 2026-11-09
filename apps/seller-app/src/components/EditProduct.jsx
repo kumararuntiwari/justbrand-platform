@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import "../index.css";
 import ProductImageManager from "./ProductImageManager";
 
-const API_URL = "https://justbrand-in-144629.hostingersite.com";
+import { API_URL } from "../api.js";
 
 // Existing hardcoded options kept as fallback so this select works
 // exactly as before if the categories API is unavailable.
@@ -125,8 +125,16 @@ function EditProduct({
       return;
     }
 
-    if (form.stock === "") {
-      alert("Please enter Stock Quantity.");
+    // LIMITED STOCK TRACKING: blank = unlimited (untracked). When a
+    // value is entered it must be a whole number ≥ 0 — negative or
+    // fractional quantities are rejected here AND again on the server.
+    if (form.stock !== "" && !Number.isInteger(Number(form.stock))) {
+      alert("Stock quantity whole number 0 ya usse zyada honi chahiye (0 = out of stock). Blank chhodne par unlimited mana jayega.");
+      return;
+    }
+
+    if (form.stock !== "" && Number(form.stock) < 0) {
+      alert("Stock quantity negative nahi ho sakti.");
       return;
     }
 
@@ -211,6 +219,9 @@ function EditProduct({
             images: updatedProduct.images,
             description: updatedProduct.description,
             shortDetails: updatedProduct.shortDetails,
+            // Blank → null = unlimited (untracked); otherwise the
+            // validated non-negative integer.
+            stock: form.stock === "" ? null : Number(form.stock),
           }),
         }
       );

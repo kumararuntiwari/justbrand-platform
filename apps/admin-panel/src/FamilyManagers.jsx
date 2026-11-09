@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const API = "https://justbrand-in-144629.hostingersite.com";
+import { API } from "./apiConfig";
 
 // ---------------------------------------------------------
 // LEVEL-WISE COMMISSION EDITOR

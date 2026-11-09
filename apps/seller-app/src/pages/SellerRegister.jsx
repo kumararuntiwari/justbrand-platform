@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 
-const API_URL = "https://justbrand-in-144629.hostingersite.com";
+import { API_URL } from "../api.js";
 
 function SellerRegister({ onRegister, onLogin }) {
   const [form, setForm] = useState({
@@ -10,6 +10,13 @@ function SellerRegister({ onRegister, onLogin }) {
     email: "",
     password: "",
     confirmPassword: "",
+    panNumber: "",
+    gstNumber: "",
+    businessType: "goods",
+    address: "",
+    city: "",
+    state: "",
+    pincode: "",
   });
 
   const [error, setError] = useState("");
@@ -32,11 +39,19 @@ function SellerRegister({ onRegister, onLogin }) {
       !form.shopName ||
       !form.mobile ||
       !form.email ||
-      !form.password
+      !form.password ||
+      !form.panNumber ||
+      !form.address ||
+      !form.state
     ) {
       setError(
-        "Please fill all required details."
+        "Name, shop, mobile, email, password, PAN, business address and State are required."
       );
+      return;
+    }
+
+    if (!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(form.panNumber.toUpperCase())) {
+      setError("PAN must be in the format ABCDE1234F.");
       return;
     }
 
@@ -76,6 +91,13 @@ function SellerRegister({ onRegister, onLogin }) {
             mobile: form.mobile,
             email: form.email,
             password: form.password,
+            panNumber: form.panNumber.toUpperCase(),
+            gstNumber: form.gstNumber.toUpperCase(),
+            businessType: form.businessType,
+            address: form.address,
+            city: form.city,
+            state: form.state,
+            pincode: form.pincode,
           }),
         }
       );
@@ -176,6 +198,112 @@ function SellerRegister({ onRegister, onLogin }) {
             placeholder="Enter shop or business name"
             style={styles.input}
           />
+
+          {/* PAN */}
+
+          <label style={styles.label}>
+            PAN Number * <span style={styles.hint}>(required — verification is manual)</span>
+          </label>
+
+          <input
+            type="text"
+            name="panNumber"
+            value={form.panNumber}
+            onChange={(e) =>
+              setForm({ ...form, panNumber: e.target.value.toUpperCase() })
+            }
+            placeholder="ABCDE1234F"
+            maxLength={10}
+            style={styles.input}
+          />
+
+          <label style={styles.label}>
+            Business Type *
+          </label>
+
+          <select
+            name="businessType"
+            value={form.businessType}
+            onChange={handleChange}
+            style={styles.input}
+          >
+            <option value="goods">Goods (physical products)</option>
+            <option value="services">Services (requires GST review)</option>
+          </select>
+
+          <label style={styles.label}>
+            Business Address *
+          </label>
+
+          <textarea
+            name="address"
+            value={form.address}
+            onChange={handleChange}
+            placeholder="Complete place of business address"
+            rows={3}
+            style={{ ...styles.input, resize: "vertical" }}
+          />
+
+          <div style={styles.twoCol}>
+            <div>
+              <label style={styles.label}>City</label>
+              <input
+                type="text"
+                name="city"
+                value={form.city}
+                onChange={handleChange}
+                style={styles.input}
+              />
+            </div>
+            <div>
+              <label style={styles.label}>State *</label>
+              <input
+                type="text"
+                name="state"
+                value={form.state}
+                onChange={handleChange}
+                placeholder="e.g. Rajasthan"
+                style={styles.input}
+              />
+            </div>
+          </div>
+
+          <label style={styles.label}>PIN Code</label>
+
+          <input
+            type="tel"
+            name="pincode"
+            value={form.pincode}
+            onChange={handleChange}
+            placeholder="6-digit PIN code"
+            maxLength={6}
+            style={styles.input}
+          />
+
+          <div style={styles.taxNote}>
+            PAN is mandatory and stays <b>Pending Verification</b> until a
+            JustBrand admin verifies it. GSTIN may be added now or later, but
+            <b> product listing and selling stay disabled until KYC, PAN and
+            Admin GSTIN approval are complete.</b> GST-unregistered selling is
+            not available.
+          </div>
+
+          <label style={styles.label}>
+            GSTIN <span style={styles.hint}>(optional now — required before selling)</span>
+          </label>
+
+          <input
+            type="text"
+            name="gstNumber"
+            value={form.gstNumber}
+            onChange={(e) =>
+              setForm({ ...form, gstNumber: e.target.value.toUpperCase() })
+            }
+            placeholder="22AAAAA0000A1Z5"
+            maxLength={15}
+            style={styles.input}
+          />
+
 
           {/* MOBILE */}
 
@@ -308,7 +436,7 @@ const styles = {
 
   card: {
     width: "100%",
-    maxWidth: "470px",
+    maxWidth: "560px",
     background: "#fff",
     padding: "30px",
     borderRadius: "16px",
@@ -373,6 +501,39 @@ const styles = {
     fontSize: "14px",
     outline: "none",
     boxSizing: "border-box",
+  },
+
+  hint: {
+    color: "#999",
+    fontWeight: "400",
+    fontSize: "11px",
+  },
+
+  twoCol: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "12px",
+  },
+
+  taxNote: {
+    marginTop: "14px",
+    background: "#fff8e8",
+    border: "1px solid #f3dfb0",
+    color: "#7a5a10",
+    borderRadius: "8px",
+    padding: "10px 12px",
+    fontSize: "12px",
+    lineHeight: 1.5,
+  },
+
+  checkRow: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: "8px",
+    marginTop: "14px",
+    color: "#555",
+    fontSize: "12px",
+    lineHeight: 1.4,
   },
 
   registerButton: {

@@ -114,6 +114,46 @@ export default function ProductImageManager({ images, onChange, onError }) {
   };
 
   // -------------------------------------
+  // REPLACE one thumbnail in place (same
+  // type/size/duplicate rules as upload)
+  // -------------------------------------
+  const handleReplace = async (index, file) => {
+    clearErrors();
+    if (!file) return;
+
+    const mime = String(file.type || "").toLowerCase();
+    const ext = String(file.name || "").split(".").pop()?.toLowerCase() || "";
+    const typeOk =
+      ALLOWED_TYPES.includes(mime) ||
+      ["jpg", "jpeg", "png", "webp"].includes(ext);
+
+    if (!typeOk) {
+      showError(`${file.name}: Only JPG, JPEG, PNG and WebP images are allowed.`);
+      return;
+    }
+
+    if (file.size > MAX_IMAGE_SIZE_MB * 1024 * 1024) {
+      showError(`${file.name}: Image must be under ${MAX_IMAGE_SIZE_MB} MB.`);
+      return;
+    }
+
+    try {
+      const dataUrl = await readAsDataURL(file);
+
+      if (images.some((src, i) => i !== index && src === dataUrl)) {
+        showError(`${file.name}: This image is already added.`);
+        return;
+      }
+
+      const next = [...images];
+      next[index] = dataUrl;
+      onChange(next);
+    } catch {
+      showError(`${file.name}: Image could not be read.`);
+    }
+  };
+
+  // -------------------------------------
   // DRAG-AND-DROP REORDER (pointer events → works on touch too)
   // -------------------------------------
   const handlePointerDown = (index) => (event) => {
@@ -255,59 +295,74 @@ export default function ProductImageManager({ images, onChange, onError }) {
                   background: "#fff",
                   display: "block",
                 }}
-              />
+              />                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "4px", marginTop: "4px", flexWrap: "wrap" }}>
+                  <span
+                    title="Drag to reorder"
+                    style={{ cursor: "grab", fontSize: "13px", lineHeight: 1 }}
+                  >
+                    ⇅
+                  </span>
 
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: "4px",
-                  marginTop: "4px",
-                }}
-              >
-                <span
-                  title="Drag to reorder"
-                  style={{ cursor: "grab", fontSize: "13px", lineHeight: 1 }}
-                >
-                  ⇅
-                </span>
+                  {index !== 0 && (
+                    <button
+                      type="button"
+                      onClick={() => handleSetMain(index)}
+                      style={{
+                        border: "none",
+                        background: "none",
+                        color: "#ff6b00",
+                        fontSize: "11px",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        padding: "2px",
+                      }}
+                    >
+                      Set as Main
+                    </button>
+                  )}
 
-                {index !== 0 && (
+                  <label
+                    title="Replace this image"
+                    style={{
+                      color: "#2563eb",
+                      fontSize: "13px",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      padding: "2px",
+                      lineHeight: 1,
+                    }}
+                  >
+                    ↻
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/jpg,image/png,image/webp"
+                      aria-label={`Replace image ${index + 1}`}
+                      disabled={uploading}
+                      onChange={(e) => {
+                        handleReplace(index, e.target.files?.[0]);
+                        e.target.value = "";
+                      }}
+                      style={{ display: "none" }}
+                    />
+                  </label>
+
                   <button
                     type="button"
-                    onClick={() => handleSetMain(index)}
+                    onClick={() => handleRemove(index)}
                     style={{
                       border: "none",
                       background: "none",
-                      color: "#ff6b00",
-                      fontSize: "11px",
+                      color: "#d32f2f",
+                      fontSize: "13px",
                       fontWeight: 700,
                       cursor: "pointer",
                       padding: "2px",
                     }}
+                    title="Remove image"
                   >
-                    Set as Main
+                    ✕
                   </button>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => handleRemove(index)}
-                  style={{
-                    border: "none",
-                    background: "none",
-                    color: "#d32f2f",
-                    fontSize: "13px",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    padding: "2px",
-                  }}
-                  title="Remove image"
-                >
-                  ✕
-                </button>
-              </div>
+                </div>
             </div>
           ))}
         </div>

@@ -30,12 +30,26 @@ function Wishlist({ wishlist, onBack, onRemove, onAddToCart }) {
                 <img
                   src={item.image}
                   alt={item.name}
+                  onError={(e) => {
+                    const fallback = "/images/product1.png";
+
+                    if (!e.currentTarget.src.endsWith(fallback)) {
+                      e.currentTarget.src = fallback;
+                    }
+                  }}
                   style={styles.image}
                 />
 
                 <div style={styles.info}>
                   <div style={styles.name}>{item.name}</div>
-                  <div style={styles.price}>{item.price}</div>
+                  {/* FINAL-PRICE-ONLY UI: same final price as cards/PDP */}
+                  <div style={styles.price}>
+                    {item.customerPrice !== undefined &&
+                    item.customerPrice !== null &&
+                    item.customerPrice !== ""
+                      ? `₹${Number(item.customerPrice).toLocaleString("en-IN")}`
+                      : item.price}
+                  </div>
 
                   <div style={styles.actions}>
                     {onAddToCart && (

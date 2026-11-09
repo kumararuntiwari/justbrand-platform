@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-const API = "https://justbrand-in-144629.hostingersite.com";
+import { API } from "./apiConfig";
 
 const EMPTY_DAILY = () => {
   const days = [];

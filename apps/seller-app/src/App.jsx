@@ -9,6 +9,8 @@ import SellerLogin from "./pages/SellerLogin";
 import SellerDashboard from "./pages/SellerDashboard";
 import AddProduct from "./pages/AddProduct";
 import MyProducts from "./pages/MyProducts";
+import ImportCenter from "./pages/ImportCenter";
+import MySchemes from "./pages/MySchemes";
 import ProductChat from "./pages/ProductChat";
 import SellerKYC from "./pages/SellerKYC";
 import Orders from "./pages/Orders";
@@ -173,9 +175,19 @@ function App() {
 
   function handleLogout() {
 
+    // Clear the full local session, not just the UI flag: a leftover
+    // token would otherwise stay usable after the seller logs out.
     localStorage.removeItem(
       "justbrand_seller_logged_in"
     );
+    localStorage.removeItem(
+      "justbrand_seller_token"
+    );
+    localStorage.removeItem(
+      "justbrand_seller"
+    );
+    localStorage.removeItem("sellerId");
+    localStorage.removeItem("sellerName");
 
     setSeller(null);
 
@@ -207,6 +219,24 @@ function App() {
   function handleMyProducts() {
 
     setPage("my-products");
+  }
+
+  // ==========================================
+  // IMPORT & SUPPLIER SYNC
+  // ==========================================
+
+  function handleImportSync() {
+
+    setPage("import-sync");
+  }
+
+  // ==========================================
+  // MY SCHEMES
+  // ==========================================
+
+  function handleMySchemes() {
+
+    setPage("my-schemes");
   }
 
   // ==========================================
@@ -515,6 +545,28 @@ function App() {
   }
 
   // ==========================================
+  // IMPORT & SUPPLIER SYNC
+  // ==========================================
+
+  if (page === "import-sync") {
+
+    return (
+      <ImportCenter onBack={handleDashboard} />
+    );
+  }
+
+  // ==========================================
+  // MY SCHEMES (Admin-approval discount schemes)
+  // ==========================================
+
+  if (page === "my-schemes") {
+
+    return (
+      <MySchemes onBack={handleDashboard} />
+    );
+  }
+
+  // ==========================================
   // BUYER CHATS (protected product chat)
   // ==========================================
 
@@ -644,6 +696,10 @@ function App() {
         onAddProduct={handleAddProduct}
 
         onMyProducts={handleMyProducts}
+
+        onImportSync={handleImportSync}
+
+        onMySchemes={handleMySchemes}
 
         onKYC={handleKYC}
 

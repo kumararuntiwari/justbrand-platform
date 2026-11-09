@@ -443,9 +443,18 @@ deliveryRouter.post("/api/delivery/login", loginRateLimit(10, 5 * 60 * 1000), as
       });
     }
 
+    // The login screen accepts "Mobile Number / Delivery ID"; keep the
+    // legacy username login and additionally resolve the registered mobile
+    // or partner code (DP-XXXX) to the same account.
     const partner = db
-      .prepare(`SELECT * FROM delivery_partners WHERE LOWER(username) = LOWER(?)`)
-      .get(username);
+      .prepare(
+        `SELECT * FROM delivery_partners
+         WHERE LOWER(username) = LOWER(?)
+            OR mobile = ?
+            OR LOWER(partnerCode) = LOWER(?)
+         ORDER BY id DESC LIMIT 1`
+      )
+      .get(username, username, username);
 
     if (!partner || !(await comparePassword(password, partner.passwordHash))) {
       return res.status(401).json({

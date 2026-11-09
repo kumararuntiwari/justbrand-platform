@@ -1,0 +1,11 @@
+# JustBrand Buyer — SPA fallback (Feature 4: /product/:id deep links)
+# React Router owns the URL; the server must serve index.html for any
+# path that is not a real file or directory. Real assets and the /admin/
+# subfolder (a real directory with its own index.html) are untouched.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule . /index.html [L]
+</IfModule>

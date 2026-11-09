@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-const API = "https://justbrand-in-144629.hostingersite.com";
+import { API } from "./apiConfig";
 
 const PAGE_SIZE = 8;
 
@@ -106,7 +106,7 @@ function Business({
     setLoading(true);
 
     try {
-      if (which === "sellers" || which === "kyc") {
+      if (which === "sellers" || which === "kyc" || which === "tax") {
         const data = await apiCall("/api/admin/sellers");
         setSellers(data.sellers || []);
       } else if (which === "orders") {
@@ -164,14 +164,61 @@ function Business({
   }
 
   async function setSellerKyc(seller, kycStatus) {
+    const body = { kycStatus };
+    if (kycStatus === "Rejected") {
+      const reason = window.prompt("Reason for KYC rejection?");
+      if (!reason) return;
+      body.rejectionReason = reason;
+    }
+
     try {
       const data = await apiCall(`/api/admin/sellers/${seller.id}/kyc`, {
         method: "PUT",
-        body: { kycStatus },
+        body,
       });
 
       onMessage(`✅ ${data.message}`);
-      loadTab("sellers");
+      loadTab(tab);
+      if (sellerDetail) openSellerDetail(seller.id);
+    } catch (error) {
+      onMessage(`❌ ${error.message}`);
+    }
+  }
+
+  async function verifyPan(seller, panStatus) {
+    let reason = "";
+    if (panStatus === "Rejected") {
+      reason = window.prompt("Reason for PAN rejection?") || "";
+      if (!reason) return;
+    }
+
+    try {
+      const data = await apiCall(`/api/admin/sellers/${seller.id}/pan`, {
+        method: "PUT",
+        body: { panStatus, reason },
+      });
+      onMessage(`✅ ${data.message}`);
+      loadTab(tab);
+      if (sellerDetail) openSellerDetail(seller.id);
+    } catch (error) {
+      onMessage(`❌ ${error.message}`);
+    }
+  }
+
+  async function reviewGst(seller, gstStatus) {
+    let reason = "";
+    if (gstStatus === "Rejected") {
+      reason = window.prompt("Reason for GSTIN rejection?") || "";
+      if (!reason) return;
+    }
+
+    try {
+      const data = await apiCall(`/api/admin/sellers/${seller.id}/gst`, {
+        method: "PUT",
+        body: { gstStatus, reason },
+      });
+      onMessage(`✅ ${data.message}`);
+      loadTab(tab);
       if (sellerDetail) openSellerDetail(seller.id);
     } catch (error) {
       onMessage(`❌ ${error.message}`);
@@ -302,7 +349,20 @@ function Business({
     setDetailLoading(true);
     try {
       const data = await apiCall(`/api/admin/sellers/${sellerId}`);
-      setSellerDetail({ seller: data.seller, kyc: data.kyc, bank: data.bank });
+      let audit = [];
+      try {
+        const auditData = await apiCall(`/api/admin/sellers/${sellerId}/audit`);
+        audit = auditData.logs || [];
+      } catch {
+        /* audit is additive; never block the drawer on it */
+      }
+      setSellerDetail({
+        seller: data.seller,
+        kyc: data.kyc,
+        bank: data.bank,
+        taxProfile: data.taxProfile,
+        audit,
+      });
     } catch (error) {
       onMessage(`❌ ${error.message}`);
     } finally {
@@ -356,6 +416,15 @@ function Business({
         }
         if (tab === "kyc") {
           if (sellerStatusFilter !== "all" && (s.kycStatus || "Pending") !== sellerStatusFilter) return false;
+        } else if (tab === "tax") {
+          const tax = s.taxProfile || {};
+          if (sellerStatusFilter === "gst_registered" && tax.gstStatus !== "GST Registered") return false;
+          if (sellerStatusFilter === "gst_unregistered" && tax.gstStatus !== "GST Unregistered") return false;
+          if (sellerStatusFilter === "pan_pending" && !String(tax.panStatus || "").includes("Pending")) return false;
+          if (sellerStatusFilter === "gst_pending" && tax.gstStatus !== "GST Verification Pending") return false;
+          if (sellerStatusFilter === "kyc_pending" && (s.kycStatus || "Pending") !== "Pending") return false;
+          if (sellerStatusFilter === "approved" && (s.kycStatus || "Pending") !== "Approved") return false;
+          if (sellerStatusFilter === "rejected" && (s.kycStatus || "Pending") !== "Rejected") return false;
         } else if (sellerStatusFilter !== "all" && (s.status || "active") !== sellerStatusFilter) {
           return false;
         }
@@ -448,6 +517,7 @@ function Business({
     { key: "orders", label: "📦 Orders" },
     { key: "mlm", label: "👨‍👩‍👧 JustBrand Family" },
     { key: "kyc", label: "🪪 KYC" },
+    { key: "tax", label: "🧾 PAN / GST" },
     { key: "tree", label: "🌳 Family Tree" },
   ];
 
@@ -492,7 +562,7 @@ function Business({
 
       {/* ============ SELLERS ============ */}
 
-      {(tab === "sellers" || tab === "kyc") && !loading && (
+      {(tab === "sellers" || tab === "kyc" || tab === "tax") && !loading && (
         <>
           <div className="sec-toolbar">
             <input
@@ -518,6 +588,17 @@ function Business({
                   <option value="Pending">KYC Pending</option>
                   <option value="Approved">KYC Approved</option>
                   <option value="Rejected">KYC Rejected</option>
+                </>
+              ) : tab === "tax" ? (
+                <>
+                  <option value="all">All tax statuses</option>
+                  <option value="gst_registered">GST Registered</option>
+                  <option value="gst_unregistered">GST Unregistered</option>
+                  <option value="pan_pending">PAN Verification Pending</option>
+                  <option value="gst_pending">GST Verification Pending</option>
+                  <option value="kyc_pending">KYC Pending</option>
+                  <option value="approved">KYC Approved</option>
+                  <option value="rejected">KYC Rejected</option>
                 </>
               ) : (
                 <>
@@ -545,6 +626,8 @@ function Business({
                     <th>Status</th>
                     {tab !== "kyc" && <th>Products (A/P/R)</th>}
                     <th>KYC</th>
+                    <th>PAN</th>
+                    <th>GST</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
@@ -576,6 +659,16 @@ function Business({
                       )}
                       <td>
                         <StatusPill value={seller.kycStatus} good="Approved" bad="Rejected" />
+                      </td>
+                      <td>
+                        <StatusPill
+                          value={seller.taxProfile?.panStatus || "Not captured"}
+                          good="Verified"
+                          bad="Rejected"
+                        />
+                      </td>
+                      <td>
+                        <small>{seller.taxProfile?.gstStatus || "Not captured"}</small>
                       </td>
                       <td>
                         <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
@@ -725,12 +818,21 @@ function Business({
                               good="Delivered"
                               bad="Delivery Failed"
                             />
-                            {order.deliveryPartnerName ? (
-                              <small className="ov-note">🛵 {order.deliveryPartnerName}</small>
-                            ) : null}
-                            {order.deliveryStatus === "Delivery Failed" && order.deliveryFailureReason ? (
-                              <small style={{ color: "#b91c1c" }}>{order.deliveryFailureReason}</small>
-                            ) : null}
+                        {order.deliveryPartnerName ? (
+                          <small className="ov-note">🛵 {order.deliveryPartnerName}</small>
+                        ) : null}
+                        {order.deliveryStatus === "Delivery Failed" && order.deliveryFailureReason ? (
+                          <small style={{ color: "#b91c1c" }}>{order.deliveryFailureReason}</small>
+                        ) : null}
+                        {/* Courier (logistics company) booking — Manual Mode,
+                            managed in Commerce → Courier Partners. */}
+                        {order.courierPartnerName ? (
+                          <small className="ov-note" style={{ display: "block" }}>
+                            📦 {order.courierPartnerName}
+                            {order.awbNumber ? ` · AWB ${order.awbNumber}` : ""}
+                            {order.courierStatus ? ` · ${order.courierStatus}` : ""}
+                          </small>
+                        ) : null}
                           </div>
                         ) : (
                           <small className="ov-note">Not assigned</small>
@@ -1143,7 +1245,7 @@ function Business({
                   <p><b>KYC status:</b> {sellerDetail.kyc?.kycStatus || "Pending"}</p>
                   <p><b>PAN:</b> {maskPan(sellerDetail.kyc?.panNumber)}</p>
                   <p><b>Aadhaar:</b> {maskAadhaar(sellerDetail.kyc?.aadhaarNumber)}</p>
-                  <p><b>GST:</b> {sellerDetail.kyc?.gstNumber || "—"}</p>
+                  <p><b>GST:</b> {maskPan(sellerDetail.kyc?.gstNumber)}</p>
                   <p>
                     <b>Address:</b>{" "}
                     {[sellerDetail.kyc?.address, sellerDetail.kyc?.city, sellerDetail.kyc?.state, sellerDetail.kyc?.pincode]
@@ -1154,6 +1256,54 @@ function Business({
                     <p><b>Rejection reason:</b> {sellerDetail.kyc.rejectionReason}</p>
                   )}
                   <p className="ov-note">Full PAN/Aadhaar are never displayed in the admin UI.</p>
+                </div>
+
+                <div className="drawer-card">
+                  <h4>PAN / GST controls</h4>
+                  {(() => {
+                    const tax = sellerDetail.taxProfile || {};
+                    return (
+                      <>
+                        <p><b>PAN:</b> {tax.panNumberMasked || maskPan(sellerDetail.kyc?.panNumber)} · {tax.panStatus || "Not captured"}</p>
+                        <p><b>GSTIN:</b> {tax.gstNumberMasked || "—"} · {tax.gstStatus || "Not captured"}</p>
+                        <p><b>Tax treatment:</b> {tax.taxTreatment || "—"} · {tax.invoiceType || "No invoice"}</p>
+                        <p><b>State / type:</b> {tax.state || "—"} / {tax.businessType || "—"}</p>
+                        <p><b>Unregistered selling:</b> Disabled by policy</p>
+                        <p><b>Can sell:</b> {tax.canSell ? "Yes" : "No — KYC + PAN + GSTIN approval required"}</p>
+                        {tax.gstApprovedAt && (
+                          <p><b>GST approved:</b> {String(tax.gstApprovedAt).slice(0, 19).replace("T", " ")}</p>
+                        )}
+                        {Array.isArray(tax.blockers) && tax.blockers.length > 0 && (
+                          <p className="ov-note"><b>Pending:</b> {tax.blockers.join(" ")}</p>
+                        )}
+                        {tax.gstRejectionReason && (
+                          <p><b>GST rejection reason:</b> {tax.gstRejectionReason}</p>
+                        )}
+
+                        {canModerate && (
+                          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "10px" }}>
+                            {String(tax.panStatus || "").includes("Pending") && (
+                              <>
+                                <button className="refresh-btn" onClick={() => verifyPan(sellerDetail.seller, "Verified")}>PAN ✓</button>
+                                <button className="refresh-btn" onClick={() => verifyPan(sellerDetail.seller, "Rejected")}>PAN ✗</button>
+                              </>
+                            )}
+                            {tax.gstStatus === "GST Verification Pending" && (
+                              <>
+                                <button className="refresh-btn" onClick={() => reviewGst(sellerDetail.seller, "Approved")}>GSTIN ✓</button>
+                                <button className="refresh-btn" onClick={() => reviewGst(sellerDetail.seller, "Rejected")}>GSTIN ✗</button>
+                              </>
+                            )}
+                            {tax.gstStatus === "GST Unregistered" && (
+                              <span className="ov-note">
+                                GSTIN required — unregistered selling is disabled.
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
 
                 <div className="drawer-card">
@@ -1193,6 +1343,31 @@ function Business({
                       </div>
                     );
                   })()}
+                </div>
+
+                <div className="drawer-card drawer-wide">
+                  <h4>Tax / KYC audit log</h4>
+                  {(!sellerDetail.audit || sellerDetail.audit.length === 0) ? (
+                    <p className="ov-note">No audit entries yet.</p>
+                  ) : (
+                    <div className="sec-tablewrap">
+                      <table className="sec-table">
+                        <thead>
+                          <tr><th>When</th><th>Action</th><th>Actor</th><th>Note</th></tr>
+                        </thead>
+                        <tbody>
+                          {sellerDetail.audit.slice(0, 25).map((entry) => (
+                            <tr key={entry.id}>
+                              <td><small>{String(entry.createdAt || "").slice(0, 19).replace("T", " ")}</small></td>
+                              <td><small>{entry.action}</small></td>
+                              <td><small>{entry.actorType}{entry.actorId ? ` #${entry.actorId}` : ""}</small></td>
+                              <td><small>{entry.note || "—"}</small></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

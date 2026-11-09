@@ -1,9 +1,12 @@
+import { useState } from "react";
+
 function ProductCard({
   product,
   addToCart,
   onSelect,
   onCompare,
   addToWishlist,
+  isWishlisted,
 }) {
   const fallbackImages = [
     "/images/product1.png",
@@ -45,20 +48,54 @@ function ProductCard({
         product?.image4,
       ];
 
-  const productImages = rawImages
-    .filter(Boolean)
-    .slice(0, 4)
-    .map((image, index) =>
-      normalizeImage(image, fallbackImages[index])
-    );
+  // IMAGE FALLBACK CHAIN: try the product's own images in order
+  // (deduped so a dead URL is never retried in a loop); only when
+  // every own image failed do we swap to the generic local
+  // placeholder — never silently on the first broken URL.
+  const ownImages = [
+    ...new Set(
+      rawImages
+        .filter(Boolean)
+        .slice(0, 4)
+        .map((image, index) =>
+          normalizeImage(image, fallbackImages[index])
+        )
+    ),
+  ];
 
-  while (productImages.length < 4) {
-    productImages.push(
-      productImages[0] || fallbackImages[productImages.length]
-    );
-  }
+  const imagePool = ownImages.length
+    ? ownImages
+    : [fallbackImages[0]];
+
+  const [imageIndex, setImageIndex] = useState(0);
+  const [useGenericFallback, setUseGenericFallback] =
+    useState(false);
+
+  const safeImageIndex = Math.min(
+    imageIndex,
+    imagePool.length - 1
+  );
+
+  const cardImageSrc = useGenericFallback
+    ? fallbackImages[0]
+    : imagePool[safeImageIndex];
+
+  const handleImageError = () => {
+    // Last-resort image failed too — stop, never loop.
+    if (useGenericFallback) return;
+
+    if (safeImageIndex < imagePool.length - 1) {
+      setImageIndex(safeImageIndex + 1);
+    } else {
+      setUseGenericFallback(true);
+    }
+  };
 
   const productName = product?.name || "Product";
+  // LIMITED STOCK TRACKING: only the backend's explicit
+  // `inStock === false` marks a product unavailable — products
+  // without stock data (untracked/unlimited) stay fully buyable.
+  const outOfStock = product?.inStock === false;
   const sellerPrice = product?.price !== undefined ? product.price : 0;
   const price = product?.customerPrice !== undefined && product?.customerPrice !== null && product?.customerPrice !== ""
     ? product.customerPrice
@@ -72,14 +109,18 @@ function ProductCard({
       : product?.comparePrice;
   const priceNum = Number(String(price).replace(/[^0-9.]/g, "")) || 0;
   const mrpNum = Number(String(mrp).replace(/[^0-9.]/g, "")) || 0;
-  const rating = product?.rating || 4.5;
+  // REAL DATA ONLY: show a rating chip only when the backend
+  // actually provides a numeric rating — never a default/fake value.
+  const ratingNum = Number(product?.rating);
+  const hasRating = Number.isFinite(ratingNum) && ratingNum > 0;
   const discount =
     product?.discount !== undefined
       ? product.discount
       : mrpNum > priceNum && mrpNum > 0
       ? Math.round(((mrpNum - priceNum) / mrpNum) * 100)
       : 0;
-  const trustedSeller = product?.trustedSeller !== false;
+  // Trusted-Seller badge only when the data explicitly says so.
+  const trustedSeller = product?.trustedSeller === true;
 
   const formatPrice = (value) => {
     if (value === undefined || value === null || value === "") return "₹0";
@@ -87,34 +128,39 @@ function ProductCard({
     return text.includes("₹") ? text : `₹${text}`;
   };
 
+  // FINAL-PRICE-ONLY UI (display-only): cards render exactly MRP,
+  // final price and discount — no fee, GST, seller-price or charge
+  // details ever show. All backend calculations stay as-is.
+
   const openDetails = () => {
     if (onSelect) onSelect(product);
   };
 
   return (
     <div
+      className="jb-pcard"
+      role="button"
+      tabIndex={0}
+      aria-label={`View details of ${productName}`}
       style={{
         background: "#ffffff",
         borderRadius: "14px",
         padding: "12px",
         boxShadow: "0 2px 10px rgba(0,0,0,0.10)",
         cursor: "pointer",
-        transition: "transform 0.2s ease, box-shadow 0.2s ease",
         display: "flex",
         flexDirection: "column",
         height: "100%",
         boxSizing: "border-box",
         border: "1px solid #eeeeee",
       }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.transform = "translateY(-4px)";
-        e.currentTarget.style.boxShadow = "0 7px 20px rgba(0,0,0,0.16)";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.transform = "translateY(0)";
-        e.currentTarget.style.boxShadow = "0 2px 10px rgba(0,0,0,0.10)";
-      }}
       onClick={openDetails}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          openDetails();
+        }
+      }}
     >
       {/* PRODUCT IMAGE — clean marketplace-style box with a
           consistent aspect ratio; contain keeps the full product
@@ -132,7 +178,7 @@ function ProductCard({
           justifyContent: "center",
         }}
       >
-        {discount > 0 && (
+        {discount > 0 && !outOfStock && (
           <span
             style={{
               position: "absolute",
@@ -151,10 +197,35 @@ function ProductCard({
           </span>
         )}
 
+        {outOfStock && (
+          <span
+            aria-label="Out of stock"
+            style={{
+              position: "absolute",
+              top: "8px",
+              left: "8px",
+              background: "rgba(30,30,30,0.82)",
+              color: "white",
+              padding: "5px 9px",
+              borderRadius: "6px",
+              fontSize: "11px",
+              fontWeight: "bold",
+              zIndex: 3,
+            }}
+          >
+            ❌ Out of Stock
+          </span>
+        )}
+
         {addToWishlist && (
           <button
             type="button"
-            aria-label="Add to wishlist"
+            aria-label={
+              isWishlisted
+                ? "Already in wishlist"
+                : "Add to wishlist"
+            }
+            aria-pressed={Boolean(isWishlisted)}
             onClick={(e) => {
               e.stopPropagation();
               addToWishlist(product);
@@ -167,9 +238,10 @@ function ProductCard({
               height: "34px",
               borderRadius: "50%",
               border: "1px solid #eeeeee",
-              background: "white",
+              background: isWishlisted ? "#ffe4f0" : "white",
               color: "#ff1493",
               fontSize: "18px",
+              lineHeight: "1",
               cursor: "pointer",
               zIndex: 3,
               display: "flex",
@@ -178,16 +250,14 @@ function ProductCard({
               boxShadow: "0 2px 6px rgba(0,0,0,0.10)",
             }}
           >
-            ♡
+            {isWishlisted ? "♥" : "♡"}
           </button>
         )}
 
         <img
-          src={productImages[0]}
+          src={cardImageSrc}
           alt={productName}
-          onError={(e) => {
-            e.currentTarget.src = fallbackImages[0];
-          }}
+          onError={handleImageError}
           style={{
             width: "100%",
             height: "100%",
@@ -225,39 +295,41 @@ function ProductCard({
           {productName}
         </h3>
 
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "7px",
-            marginBottom: "7px",
-          }}
-        >
-          <span
+        {hasRating && (
+          <div
             style={{
-              background: "#f5a623",
-              color: "white",
-              padding: "3px 7px",
-              borderRadius: "5px",
-              fontSize: "12px",
-              fontWeight: "bold",
+              display: "flex",
+              alignItems: "center",
+              gap: "7px",
+              marginBottom: "7px",
             }}
           >
-            ★ {rating}
-          </span>
-          <span style={{ fontSize: "12px", color: "#777" }}>Rating</span>
-        </div>
+            <span
+              aria-label={`Rated ${ratingNum} out of 5`}
+              style={{
+                background: "#f5a623",
+                color: "white",
+                padding: "3px 7px",
+                borderRadius: "5px",
+                fontSize: "12px",
+                fontWeight: "bold",
+              }}
+            >
+              ★ {ratingNum}
+            </span>
+          </div>
+        )}
 
         <div
           style={{
             display: "flex",
-            alignItems: "center",
+            alignItems: "baseline",
             gap: "8px",
             flexWrap: "wrap",
-            marginBottom: "5px",
+            margin: "0 0 4px",
           }}
         >
-          <span style={{ fontSize: "22px", fontWeight: "700", color: "#111" }}>
+          <span style={{ fontSize: "21px", fontWeight: "700", color: "#111" }}>
             {formatPrice(price)}
           </span>
 
@@ -266,19 +338,13 @@ function ProductCard({
               {formatPrice(mrp)}
             </span>
           )}
+
+          {discount > 0 && (
+            <span style={{ fontSize: "13px", color: "#128807", fontWeight: "700" }}>
+              {discount}% off
+            </span>
+          )}
         </div>
-
-        {discount > 0 && (
-          <p style={{ margin: "3px 0 7px", color: "#d32f2f", fontSize: "13px", fontWeight: "600" }}>
-            🔥 {discount}% off
-          </p>
-        )}
-
-        {product?.customerPrice !== undefined && (
-          <p style={{ margin: "0 0 7px", color: "#666", fontSize: "11px" }}>
-            Final price includes delivery, platform charges, JustBrand Family commission & GST
-          </p>
-        )}
 
         {trustedSeller && (
           <p style={{ margin: "0 0 10px", color: "#168a3a", fontSize: "13px", fontWeight: "600" }}>
@@ -297,15 +363,15 @@ function ProductCard({
             minHeight: "40px",
             marginBottom: "7px",
             background: "white",
-            color: "#ff6b00",
-            border: "1px solid #ff6b00",
+            color: outOfStock ? "#999" : "#ff6b00",
+            border: `1px solid ${outOfStock ? "#ddd" : "#ff6b00"}`,
             borderRadius: "8px",
             cursor: "pointer",
             fontWeight: "700",
             fontSize: "13px",
           }}
         >
-          👁️ View Details
+          {outOfStock ? "Unavailable" : "Checkout"}
         </button>
 
         <div style={{ display: "flex", gap: "7px", marginTop: "auto" }}>
@@ -320,9 +386,9 @@ function ProductCard({
                 flex: 1,
                 minHeight: "42px",
                 padding: "8px 5px",
-                background: "#ff6b00",
-                color: "white",
-                border: "none",
+                background: "white",
+                color: "#444",
+                border: "1px solid #d9d9e0",
                 borderRadius: "8px",
                 cursor: "pointer",
                 fontWeight: "700",
@@ -336,24 +402,29 @@ function ProductCard({
           {addToCart && (
             <button
               type="button"
+              disabled={outOfStock}
+              aria-label={outOfStock ? "Out of stock — cannot add to cart" : "Add to cart"}
               onClick={(e) => {
                 e.stopPropagation();
+                if (outOfStock) return;
                 addToCart(product);
               }}
               style={{
                 flex: 1,
                 minHeight: "42px",
                 padding: "8px 5px",
-                background: "linear-gradient(135deg, #ff8a00, #ff1493)",
-                color: "white",
+                background: outOfStock
+                  ? "#e4e4e7"
+                  : "linear-gradient(135deg, #ff8a00, #ff1493)",
+                color: outOfStock ? "#8a8a92" : "white",
                 border: "none",
                 borderRadius: "8px",
-                cursor: "pointer",
+                cursor: outOfStock ? "not-allowed" : "pointer",
                 fontWeight: "700",
                 fontSize: "13px",
               }}
             >
-              🛒 Add Cart
+              {outOfStock ? "Sold Out" : "🛒 Add Cart"}
             </button>
           )}
         </div>

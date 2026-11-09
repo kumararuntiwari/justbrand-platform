@@ -9,11 +9,27 @@ import db from "./db.js";
 import businessRouter, {
   initBusiness,
   mapPublicProduct,
+  approveProductGstClassification,
+  applyProductSellerTax,
+  filterSellableProducts,
+  isProductSellable,
 } from "./business.js";
 import deliveryRouter, {
   initDelivery,
 } from "./delivery.js";
+import courierRouter, {
+  initCourier,
+} from "./courier.js";
+import paymentAdminRouter from "./payment-admin.js";
 import chatRouter from "./chat.js";
+import sellerImportsRouter, {
+  initSellerImports,
+  supplierCheckoutStockGuard,
+} from "./seller-imports.js";
+import marketplacesRouter, {
+  initMarketplaces,
+  marketplaceCheckoutStockGuard,
+} from "./marketplaces.js";
 import {
   hashPassword,
   comparePassword,
@@ -40,6 +56,22 @@ app.use(
       ? { origin: ALLOWED_ORIGINS }
       : {}
   )
+);
+
+// Seller bulk-import uploads arrive as a raw file body (CSV/XLSX) on
+// this one path only. Mounted BEFORE the JSON parser because base64 /
+// JSON wrapping would inflate a multi-thousand-row workbook past the
+// global 10 MB JSON limit. All other requests are untouched.
+app.use(
+  "/api/sellers/imports/preview",
+  express.raw({ type: "application/octet-stream", limit: "15mb" })
+);
+
+// GST rate CSV/XLSX uploads (admin GST Manager) use the same raw-body
+// contract, with a smaller ceiling because a rate sheet is tiny.
+app.use(
+  "/api/admin/gst/import",
+  express.raw({ type: "application/octet-stream", limit: "5mb" })
 );
 
 app.use(express.json({ limit: "10mb" }));
@@ -244,12 +276,26 @@ function ensureProductPricingColumns() {
   const existing = new Set(columns.map((column) => column.name));
   const additions = [
     ["hsnCode", "TEXT"],
+    ["subCategory", "TEXT DEFAULT ''"],
     ["gstRate", "REAL DEFAULT 0"],
+    ["gstSource", "TEXT"],
+    ["gstType", "TEXT"],
+    // 1 = admin explicitly approved the product-level rate; seller-entered
+    // rates stay 0 until an admin approves the classification.
+    ["gstApproved", "INTEGER DEFAULT 0"],
     ["deliveryCharge", "REAL DEFAULT 0"],
     ["platformCharge", "REAL DEFAULT 0"],
     ["mlmCommission", "REAL DEFAULT 0"],
     ["customerPrice", "REAL DEFAULT 0"],
     ["pricingUpdatedAt", "TEXT"],
+    // Admin's rejection note, shown back to the seller. Cleared when the
+    // product is approved or resubmitted after an edit.
+    ["rejectionReason", "TEXT"],
+    // PAN/GST seller tax treatment snapshot (null = legacy product).
+    ["taxTreatment", "TEXT"],
+    ["gstInvoiceAllowed", "INTEGER"],
+    ["sellerTaxSnapshot", "TEXT"],
+    ["taxTreatmentReason", "TEXT"],
   ];
 
   for (const [name, type] of additions) {
@@ -260,6 +306,31 @@ function ensureProductPricingColumns() {
 }
 
 ensureProductPricingColumns();
+
+// Grandfather existing approved product-level rates: they were reviewed
+// with the product before this flag existed. Nothing else is changed.
+db.prepare(`
+  UPDATE products
+  SET gstApproved = 1
+  WHERE status = 'Approved' AND gstSource = 'product' AND COALESCE(gstApproved, 0) = 0
+`).run();
+
+// ======================================
+// ADDITIVE PRODUCT STOCK FIELD
+// ======================================
+// Limited stock tracking (business rule): `stock` is NULL by default
+// = NOT tracked (unlimited, exactly today's behaviour — no existing
+// product silently becomes unbuyable). A seller-entered non-negative
+// INTEGER enables tracking; 0 means out of stock and blocks checkout.
+function ensureProductStockColumn() {
+  const columns = db.prepare("PRAGMA table_info(products)").all();
+  const hasStockColumn = columns.some((column) => column.name === "stock");
+  if (!hasStockColumn) {
+    db.prepare("ALTER TABLE products ADD COLUMN stock INTEGER").run();
+  }
+}
+
+ensureProductStockColumn();
 
 // =====================================
 // SITE CONTENT TABLES (additive)
@@ -396,6 +467,14 @@ const SITE_SETTING_DEFAULTS = {
   site_delivery_info: null,
   site_family_info: null,
   site_reward_info: null,
+  // Header Appearance (additive): logo / JustBrand name / cart /
+  // header button geometry for the Buyer header. null = not
+  // configured → the Buyer header keeps its built-in CSS values.
+  site_header: null,
+  // Image display preferences (additive): e.g. how the Buyer
+  // homepage banner strip fits its images. null = built-in
+  // behaviour (cover) so nothing changes until an admin sets it.
+  site_display: null,
 };
 
 function getSiteSetting(key) {
@@ -457,6 +536,8 @@ app.get("/api/site/content", (req, res) => {
         deliveryInfo: getSiteSetting("site_delivery_info"),
         familyInfo: getSiteSetting("site_family_info"),
         rewardInfo: getSiteSetting("site_reward_info"),
+        header: getSiteSetting("site_header"),
+        display: getSiteSetting("site_display"),
         banners,
       },
     });
@@ -477,6 +558,8 @@ app.get("/api/site/content", (req, res) => {
         deliveryInfo: null,
         familyInfo: null,
         rewardInfo: null,
+        header: null,
+        display: null,
         banners: [],
       },
     });
@@ -508,6 +591,8 @@ app.get(
           delivery: getSiteSetting("site_delivery_info"),
           family: getSiteSetting("site_family_info"),
           reward: getSiteSetting("site_reward_info"),
+          header: getSiteSetting("site_header"),
+          display: getSiteSetting("site_display"),
         },
         banners,
       });
@@ -611,6 +696,10 @@ const SITE_SETTING_KEYS = {
   delivery: "site_delivery_info",
   family: "site_family_info",
   reward: "site_reward_info",
+  // Header Appearance (additive) — new admin-editable section.
+  header: "site_header",
+  // Image display preferences (additive).
+  display: "site_display",
 };
 
 app.put(
@@ -1918,17 +2007,20 @@ app.delete(
 
 app.get("/api/products", withTimeout((req, res) => {
   try {
-    const products = db.prepare(`
-      SELECT *
-      FROM products
-      WHERE status = 'Approved'
-      ORDER BY id DESC
-      LIMIT ?
-    `).all(RUNTIME_LIMITS.maxProducts);
+    const products = filterSellableProducts(
+      db.prepare(`
+        SELECT *
+        FROM products
+        WHERE status = 'Approved'
+        ORDER BY id DESC
+        LIMIT ?
+      `).all(RUNTIME_LIMITS.maxProducts)
+    );
 
     // mapPublicProduct keeps every existing field, syncs the legacy
     // `image` field to the primary image, and adds the ordered
-    // `images` array for the buyer gallery.
+    // `images` array for the buyer gallery. filterSellableProducts
+    // enforces live KYC + PAN + Admin GST approval without rewriting rows.
     res.json(products.map((product) => mapPublicProduct(product)));
   } catch (error) {
     console.error(error);
@@ -1962,7 +2054,16 @@ app.get(
 
     res.json({
       success: true,
-      products: products.map((product) => mapPublicProduct(product)),
+      products: products.map((product) => ({
+        ...mapPublicProduct(product),
+        // ADMIN-ONLY commercial split. Buyer / seller payloads never
+        // include these fields (mapPublicProduct strips them).
+        supplierPrice: product.supplierPrice ?? null,
+        markupType: product.markupType ?? null,
+        markupValue: product.markupValue ?? null,
+        markupAmount: product.markupAmount ?? null,
+        priceSource: product.priceSource ?? null,
+      })),
     });
     } catch (error) {
       console.error(error);
@@ -2141,9 +2242,23 @@ app.put(
         }
       }
 
+      // PAN/GST gate: a product cannot be approved while its seller's
+      // tax eligibility is pending/blocked. This is what prevents a
+      // non-GST seller from silently going live.
+      const taxCheck = applyProductSellerTax(id);
+      if (!taxCheck.ok) {
+        return res.status(taxCheck.code === "NOT_FOUND" ? 404 : 409).json({
+          success: false,
+          code: taxCheck.code,
+          message: taxCheck.message,
+          blockers: taxCheck.blockers || [],
+          taxProfile: taxCheck.taxProfile || null,
+        });
+      }
+
       const result = db.prepare(`
         UPDATE products
-        SET status = 'Approved'
+        SET status = 'Approved', rejectionReason = NULL
         WHERE id = ?
       `).run(id);
 
@@ -2154,6 +2269,14 @@ app.put(
             "Product not found.",
         });
       }
+
+      // Seller-entered GST rate becomes binding only here, and only when
+      // no approved mapping covers the product (mapping always wins).
+      approveProductGstClassification(id);
+
+      // Re-apply the seller's tax treatment after classification approval
+      // so a non-GST seller can never inherit a GST rate from a mapping.
+      const finalTax = applyProductSellerTax(id);
 
       const product = db.prepare(`
         SELECT *
@@ -2166,6 +2289,7 @@ app.put(
         message:
           "Product approved successfully.",
         product,
+        taxProfile: finalTax.ok ? finalTax.taxProfile : taxCheck.taxProfile,
       });
     } catch (error) {
       console.error(error);
@@ -2195,11 +2319,15 @@ app.put(
     try {
       const id = Number(req.params.id);
 
+      const reason = String(req.body?.reason || req.body?.rejectionReason || "")
+        .trim()
+        .slice(0, 500);
+
       const result = db.prepare(`
         UPDATE products
-        SET status = 'Rejected'
+        SET status = 'Rejected', rejectionReason = ?
         WHERE id = ?
-      `).run(id);
+      `).run(reason || "Rejected by admin.", id);
 
       if (result.changes === 0) {
         return res.status(404).json({
@@ -2290,22 +2418,24 @@ app.get(
         .toLowerCase()
         .slice(0, MAX_SEARCH_LENGTH);
 
-      const products = db.prepare(`
-        SELECT *
-        FROM products
-        WHERE status = 'Approved'
-        AND (
-          LOWER(name) LIKE ?
-          OR LOWER(category) LIKE ?
-          OR LOWER(description) LIKE ?
-          OR LOWER(shortDetails) LIKE ?
+      const products = filterSellableProducts(
+        db.prepare(`
+          SELECT *
+          FROM products
+          WHERE status = 'Approved'
+          AND (
+            LOWER(name) LIKE ?
+            OR LOWER(category) LIKE ?
+            OR LOWER(description) LIKE ?
+            OR LOWER(shortDetails) LIKE ?
+          )
+          ORDER BY id DESC
+        `).all(
+          `%${search}%`,
+          `%${search}%`,
+          `%${search}%`,
+          `%${search}%`
         )
-        ORDER BY id DESC
-      `).all(
-        `%${search}%`,
-        `%${search}%`,
-        `%${search}%`,
-        `%${search}%`
       );
 
       res.json({
@@ -2318,6 +2448,54 @@ app.get(
       res.status(500).json({
         success: false,
         message: "Search failed.",
+      });
+    }
+  })
+);
+
+// =====================================================
+// GET APPROVED PRODUCT BY ID
+// BUYER APP (Product Detail Page — ADDITIVE)
+// =====================================================
+// Registered AFTER /api/products/search so the literal search path
+// is never shadowed by this :id pattern. Only Approved products are
+// visible — the same marketplace rule the list/search feeds apply.
+// Unapproved, deleted and malformed ids all return 404 so the Buyer
+// PDP can render a useful "not found / no longer available" state.
+
+app.get(
+  "/api/products/:id",
+  withTimeout((req, res) => {
+    const idParam = String(req.params.id || "");
+
+    if (!/^\d+$/.test(idParam)) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found.",
+      });
+    }
+
+    try {
+      const product = db
+        .prepare(`SELECT * FROM products WHERE id = ?`)
+        .get(Number(idParam));
+
+      if (!product || !isProductSellable(product)) {
+        return res.status(404).json({
+          success: false,
+          message: "Product not found or no longer available.",
+        });
+      }
+
+      // Same public mapping as the list feed: keeps every existing
+      // field and syncs the ordered `images` array + primary image.
+      res.json(mapPublicProduct(product));
+    } catch (error) {
+      console.error(error);
+
+      res.status(500).json({
+        success: false,
+        message: "Failed to load product.",
       });
     }
   })
@@ -2344,7 +2522,7 @@ app.get(
         });
       }
 
-      const product = db.prepare(`
+      let product = db.prepare(`
         SELECT *
         FROM products
         WHERE status = 'Approved'
@@ -2354,6 +2532,8 @@ app.get(
       `).get(
         `%${search.toLowerCase()}%`
       );
+
+      if (product && !isProductSellable(product)) product = null;
 
       const productName =
         product?.name || search;
@@ -2478,13 +2658,41 @@ app.get(
 
 initBusiness();
 initDelivery();
+// Seller bulk import + supplier sync tables (additive) and the
+// scheduled-sync timer. Runs after initBusiness() so the products /
+// sellers tables already exist.
+initSellerImports();
+// Amazon / Flipkart / Meesho / GlowRoad connectors (additive tables) and
+// their scheduled sync timer — same admin schedule as supplier sync.
+initMarketplaces();
+// Courier order columns migrate AFTER initBusiness() creates the
+// orders table (business.js imports courier.js at module level).
+initCourier();
+
+// Supplier-linked cart items are refreshed against LIVE supplier stock
+// before an order is created (fails closed when the supplier cannot
+// confirm). Mounted before the order routes; all other requests pass
+// straight through.
+app.use(supplierCheckoutStockGuard);
+// Marketplace-linked cart items are re-checked live against Amazon /
+// Flipkart / GlowRoad before the order is created (fails closed).
+app.use(marketplaceCheckoutStockGuard);
 
 app.use(businessRouter);
 // Delivery module (partners, assignment, OTP delivery, earnings) —
 // mounted additively; all of its routes live under distinct paths.
 app.use(deliveryRouter);
+// Courier/logistics COMPANY partners (India Post, Ekart, Shiprocket,
+// DTDC) — admin-configurable + per-order AWB/label/status. Additive,
+// distinct paths; the person-based delivery workflow above is untouched.
+app.use(courierRouter);
+// Admin-configurable payment settings (COD/UPI/BankTransfer display
+// data; DB-backed with env fallback). Additive, distinct paths.
+app.use(paymentAdminRouter);
 // Protected product chat (buyer ↔ seller) — additive, distinct paths.
 app.use(chatRouter);
+app.use(sellerImportsRouter);
+app.use(marketplacesRouter);
 
 async function startServer() {
   // Safe now: staff/products tables were created at module level
