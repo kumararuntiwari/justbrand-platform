@@ -4,7 +4,7 @@
 > **Read fully before executing. No step here overwrites the production
 > database or environment variables.**
 
-## 0. Current production state (verified by smoke test)
+## 0. Current production state (read-only smoke, 2026-11-12)
 
 Production backend: `https://justbrand-in-144629.hostingersite.com`
 
@@ -12,21 +12,16 @@ Production backend: `https://justbrand-in-144629.hostingersite.com`
 |---|---|---|
 | `GET /api/health` | 200 | Server + DB alive |
 | `GET /api/products` | 200 | Product feed OK |
-| `GET /api/site/content` | 200 | Admin-controlled content OK |
-| `GET /api/payment/config` | 200 | COD/UPI config OK |
-| `GET /api/family/gifts` | 200 | JustBrand Family catalog OK |
-| `GET /api/mlm/level-commissions` | 200 | Level config OK |
-| `GET /api/categories` | **404** | **Backend on server is STALE (route exists in this repo)** |
-| `GET /api/customer/orders` | **404** | **Stale backend** |
-| `GET /api/sellers/orders` | **404** | **Stale backend** |
-| `GET /api/mlm/me` | **404** | **Stale backend** |
-| `GET /api/chat/threads` (anon) | **404** | **Stale backend (chat module not deployed)** |
-| `PUT /api/admin/orders/1/payment` (anon) | 401 | Auth gate OK |
-| `GET /api/customers/me` (anon) | 401 | Auth gate OK |
+| `GET /api/categories` | 200 | Categories route is deployed |
+| `GET /api/admin/courier/api-status` (anon) | 401 | Auth gate; route exists on the current backend |
+| `GET /api/admin/supplier-integrations` (anon) | **404** | **Supplier integration backend not deployed yet** |
+| `GET /api/admin/launch-status` (anon) | **404** | **Launch Control backend not deployed yet** |
+| `POST /api/courier/serviceability` | **404** | **Courier serviceability backend not deployed yet** |
 
-Conclusion: **frontends are production-ready; the Node backend on Hostinger
-must be updated to this repo's `backend/` source.** That is exactly what
-steps 2–3 below do — nothing else needs to change.
+Conclusion: **production is running an older backend. The new courier,
+supplier and launch-control modules in this package are not live yet.**
+Steps 2–3 below deploy the package; no production database or `.env` is
+overwritten.
 
 ## 1. Build the package (local machine, repo root)
 
