@@ -10,6 +10,7 @@ import SellerDashboard from "./pages/SellerDashboard";
 import AddProduct from "./pages/AddProduct";
 import MyProducts from "./pages/MyProducts";
 import ImportCenter from "./pages/ImportCenter";
+import MyScheme from "./pages/MyScheme";
 import MySchemes from "./pages/MySchemes";
 import ProductChat from "./pages/ProductChat";
 import SellerKYC from "./pages/SellerKYC";
@@ -231,7 +232,16 @@ function App() {
   }
 
   // ==========================================
-  // MY SCHEMES
+  // MY SCHEME (Family earning view)
+  // ==========================================
+
+  function handleMyScheme() {
+
+    setPage("my-scheme");
+  }
+
+  // ==========================================
+  // DISCOUNT SCHEMES
   // ==========================================
 
   function handleMySchemes() {
@@ -556,7 +566,15 @@ function App() {
   }
 
   // ==========================================
-  // MY SCHEMES (Admin-approval discount schemes)
+  // MY SCHEME (read-only Family earning view)
+  // ==========================================
+
+  if (page === "my-scheme") {
+    return <MyScheme onBack={handleDashboard} />;
+  }
+
+  // ==========================================
+  // DISCOUNT SCHEMES (Admin-approval)
   // ==========================================
 
   if (page === "my-schemes") {
@@ -698,6 +716,8 @@ function App() {
         onMyProducts={handleMyProducts}
 
         onImportSync={handleImportSync}
+
+        onMyScheme={handleMyScheme}
 
         onMySchemes={handleMySchemes}
 

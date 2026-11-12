@@ -8,6 +8,7 @@ function SellerDashboard({
   onAddProduct,
   onMyProducts,
   onImportSync,
+  onMyScheme,
   onMySchemes,
   onKYC,
   onOrders,
@@ -148,11 +149,20 @@ function SellerDashboard({
       return;
     }
 
+    if (menu === "my-scheme") {
+      if (onMyScheme) {
+        onMyScheme();
+      } else {
+        alert("My Scheme connection pending.");
+      }
+      return;
+    }
+
     if (menu === "schemes") {
       if (onMySchemes) {
         onMySchemes();
       } else {
-        alert("My Schemes connection pending.");
+        alert("Discount Schemes connection pending.");
       }
       return;
     }
@@ -435,11 +445,11 @@ function SellerDashboard({
             }
           />
 
-          {/* Import & Supplier Sync */}
+          {/* Import / Supplier Sync */}
 
           <MenuButton
             icon="📥"
-            text="Import & Sync"
+            text="Import / Sync"
             active={activeMenu === "import-sync"}
             onClick={() => {
               if (onImportSync) {
@@ -450,11 +460,22 @@ function SellerDashboard({
             }}
           />
 
-          {/* My Schemes */}
+          {/* Family earning scheme (read-only) */}
+
+          <MenuButton
+            icon="🪙"
+            text="My Scheme"
+            active={activeMenu === "my-scheme"}
+            onClick={() =>
+              menuClick("my-scheme")
+            }
+          />
+
+          {/* Seller discount schemes */}
 
           <MenuButton
             icon="🏷️"
-            text="My Schemes"
+            text="Discount Schemes"
             active={activeMenu === "schemes"}
             onClick={() =>
               menuClick("schemes")
@@ -764,7 +785,7 @@ function SellerDashboard({
 
               <QuickAction
                 icon="📥"
-                title="Import & Sync"
+                title="Import / Sync"
                 description="Bulk upload or supplier API"
                 onClick={() => {
                   if (onImportSync) {
@@ -773,6 +794,15 @@ function SellerDashboard({
                     alert("Import page connection pending.");
                   }
                 }}
+              />
+
+              <QuickAction
+                icon="🪙"
+                title="My Scheme"
+                description="Family ID, schemes and earnings"
+                onClick={() =>
+                  menuClick("my-scheme")
+                }
               />
 
               <QuickAction

@@ -6,12 +6,14 @@
 // `vite preview`, intercepting every production API call so
 // production is never contacted.
 //
-// Verifies (FINAL-PRICE-ONLY customer display contract):
-//   - PDP, product cards and checkout show ONLY MRP / final price /
-//     discount — no seller price, delivery/platform/Family charge,
-//     GST/IGST/CGST/SGST or "Price includes"/"Incl." text
+// Verifies (CUSTOMER-SAFE display contract):
+//   - PDP and product cards show ONLY MRP / final price / discount —
+//     no seller price, internal platform/Family charge or GST text
+//   - Checkout shows the customer-facing delivery charge and final
+//     payable total, but never platform fee, Family commission or
+//     GST/IGST/CGST/SGST breakdown
 //   - Displayed payable total == backend quote == order charged total
-//     (the hidden charges are still INCLUDED in every total)
+//     (internal charges remain INCLUDED in every total)
 //   - Backend still CALCULATES platform fee, delivery and GST — the
 //     admin revenue endpoint carries the exact fee/GST snapshot
 //
@@ -323,8 +325,10 @@ ok(
   { text: interText.slice(0, 300), fee: qInter.platformFee, basis: qInter.platformBasis }
 );
 ok(
-  "inter-state: delivery charge row HIDDEN from customer summary (charge still in quote)",
-  !interText.includes("Delivery charge"),
+  "inter-state: customer-facing delivery charge is shown and matches the quote",
+  interText.includes("Delivery charge") &&
+    (!Number(qInter.deliveryCharge) ||
+      interText.includes(`₹${Number(qInter.deliveryCharge).toLocaleString("en-IN")}`)),
   { delivery: qInter.deliveryCharge, text: interText.slice(0, 300) }
 );
 ok(
@@ -347,13 +351,14 @@ ok(
 
 // ---------- switch to intra-state ----------
 await page.locator('[placeholder="State"]').fill("Uttar Pradesh");
-// No GST rows exist in the UI anymore — wait for the debounced quote
-// fetch to settle, then assert the breakdown stays fee-free.
+// Delivery stays customer-facing; GST and internal platform/fee
+// rows must never appear after the address switch.
 await page.waitForTimeout(1500);
 const intraText = (await breakdown.innerText()).replace(/\s+/g, " ");
 ok(
-  "intra-state: still NO GST/CGST/SGST/fee terms after address switch",
-  !/GST|IGST|CGST|SGST|Platform fee|Delivery charge/i.test(intraText),
+  "intra-state: delivery shown, but NO GST/CGST/SGST/platform fee terms",
+  intraText.includes("Delivery charge") &&
+    !/GST|IGST|CGST|SGST|Platform fee/i.test(intraText),
   { text: intraText.slice(0, 300) }
 );
 ok(

@@ -2910,6 +2910,219 @@ businessRouter.get(
   }
 );
 
+// =====================================================
+// SELLER — MY SCHEME (READ-ONLY FAMILY EARNING VIEW)
+// =====================================================
+// A seller sees the Family member linked to their own seller account
+// by mobile (or email), their Member/Sponsor/Referral IDs, the three
+// admin-controlled 3×3 schemes and their own earnings only. The
+// seller is resolved from the Bearer token — no memberId/sellerId is
+// ever accepted from the browser, so another seller's data cannot be
+// requested. Percentages and switches remain Admin-only; this route
+// has no write path.
+
+businessRouter.get(
+  "/api/sellers/my-scheme",
+  requireAuth,
+  requireType("seller"),
+  (req, res) => {
+    try {
+      const seller = db
+        .prepare(`SELECT * FROM sellers WHERE id = ?`)
+        .get(req.user.sellerId);
+
+      if (!seller) {
+        return res.status(404).json({ success: false, message: "Seller not found." });
+      }
+
+      // Seller registration has no OTP step, so a matching mobile/email
+      // alone must not unlock another person's Family earnings. The
+      // link is allowed only after Admin approves this seller's KYC.
+      const kyc = db
+        .prepare(`SELECT kycStatus FROM seller_kyc WHERE sellerId = ?`)
+        .get(seller.id);
+      const kycApproved = kyc?.kycStatus === "Approved";
+
+      const member = kycApproved
+        ? db
+            .prepare(`
+              SELECT * FROM mlm_members
+              WHERE (mobile = ? OR (email IS NOT NULL AND LOWER(email) = LOWER(?)))
+              LIMIT 1
+            `)
+            .get(clean(seller.mobile), clean(seller.email))
+        : null;
+
+      const rawSettings = getMlm3x3Settings();
+      // Never expose the Admin's staff identity to a seller.
+      const settings = Object.fromEntries(
+        Object.entries(rawSettings).map(([type, rule]) => {
+          const { updatedBy, ...safeRule } = rule;
+          return [type, safeRule];
+        })
+      );
+      const rules = getMlmRules();
+
+      // History is scheme-wide, but the Admin's staff identity is not
+      // exposed to sellers. Only the effective values and timestamps
+      // are shown.
+      const history = listMlm3x3SettingsAudit(25).map((row) => ({
+        at: row.at,
+        note: row.note || null,
+        before: row.before || null,
+        after: row.after || null,
+      }));
+
+      if (!member) {
+        return res.json({
+          success: true,
+          linked: false,
+          member: null,
+          schemes: settings,
+          earnings: {
+            pending: 0,
+            eligible: 0,
+            credited: 0,
+            void: 0,
+            pendingCount: 0,
+            eligibleCount: 0,
+            creditedCount: 0,
+            rows: [],
+          },
+          returnPeriod: {
+            days: Number(rules.returnPeriodDays) || 0,
+            afterReturn: rules.commissionAfterReturn !== false,
+          },
+          history,
+          message: kycApproved
+            ? "This seller account is not linked to a JustBrand Family Member ID. Register as a Family member with the same mobile/email to see your scheme."
+            : "Your seller KYC must be approved before Family Member ID and earnings can be shown. This prevents one person from viewing another member's scheme.",
+        });
+      }
+
+      const referral = db
+        .prepare(`SELECT * FROM mlm_referrals WHERE memberId = ? LIMIT 1`)
+        .get(member.memberId);
+
+      const placement = db
+        .prepare(`SELECT * FROM mlm_placements WHERE memberId = ? LIMIT 1`)
+        .get(member.memberId);
+
+      const wallet = db
+        .prepare(`SELECT * FROM mlm_wallets WHERE memberId = ?`)
+        .get(member.memberId) || { balance: 0, totalEarned: 0, totalPaid: 0 };
+
+      const commissions = db
+        .prepare(`
+          SELECT c.id, c.orderId, c.type, c.description, c.amount, c.status,
+                 c.createdAt, c.payableAt, c.paidAt, c.source, c.percentage,
+                 c.base_amount, c.calculation_base, c.eligible_at,
+                 o.orderNumber, o.status AS orderStatus,
+                 o.paymentStatus AS orderPaymentStatus
+          FROM mlm_commissions c
+          LEFT JOIN orders o ON o.id = c.orderId
+          WHERE c.memberId = ? AND c.source IS NOT NULL
+          ORDER BY c.id DESC
+          LIMIT 200
+        `)
+        .all(member.memberId);
+
+      const nowMs = Date.now();
+      const round2 = (value) => Math.round((Number(value) || 0) * 100) / 100;
+      const earnings = {
+        pending: 0,
+        eligible: 0,
+        credited: 0,
+        void: 0,
+        pendingCount: 0,
+        eligibleCount: 0,
+        creditedCount: 0,
+        rows: [],
+      };
+
+      for (const row of commissions) {
+        const status = String(row.status || "").toLowerCase();
+        const amount = Number(row.amount) || 0;
+        const payableMs = row.payableAt ? new Date(row.payableAt).getTime() : 0;
+        const withinReturn = status === "pending" && payableMs > nowMs;
+        const daysRemaining = withinReturn
+          ? Math.max(0, Math.ceil((payableMs - nowMs) / (24 * 60 * 60 * 1000)))
+          : 0;
+
+        if (status === "pending") {
+          earnings.pending = round2(earnings.pending + amount);
+          earnings.pendingCount += 1;
+        } else if (status === "payable") {
+          earnings.eligible = round2(earnings.eligible + amount);
+          earnings.eligibleCount += 1;
+        } else if (status === "paid") {
+          earnings.credited = round2(earnings.credited + amount);
+          earnings.creditedCount += 1;
+        } else if (status === "void" || status === "reversed") {
+          earnings.void = round2(earnings.void + amount);
+        }
+
+        earnings.rows.push({
+          id: row.id,
+          orderId: row.orderId,
+          orderNumber: row.orderNumber || null,
+          orderStatus: row.orderStatus || null,
+          orderPaymentStatus: row.orderPaymentStatus || null,
+          type: row.type,
+          source: row.source,
+          description: row.description,
+          percentage: row.percentage,
+          calculationBase: row.calculation_base,
+          baseAmount: Number(row.base_amount) || 0,
+          amount,
+          status: row.status,
+          createdAt: row.createdAt,
+          payableAt: row.payableAt,
+          paidAt: row.paidAt,
+          eligibleAt: row.eligible_at,
+          returnPeriodComplete: !withinReturn && status !== "pending",
+          returnPeriodPending: withinReturn,
+          daysRemaining,
+        });
+      }
+
+      res.json({
+        success: true,
+        linked: true,
+        member: {
+          memberId: member.memberId,
+          referralCode: member.referralCode || member.memberId,
+          sponsorId: referral?.sponsorId || member.sponsorId || null,
+          introductionType: referral?.introductionType || null,
+          directSlot: referral?.directSlot || null,
+          name: member.name,
+          status: member.status,
+          parentId: member.parentId,
+          position: member.position,
+          placed: Boolean(placement),
+        },
+        schemes: settings,
+        earnings: {
+          ...earnings,
+          wallet: {
+            balance: Number(wallet.balance) || 0,
+            totalEarned: Number(wallet.totalEarned) || 0,
+            totalPaid: Number(wallet.totalPaid) || 0,
+          },
+        },
+        returnPeriod: {
+          days: Number(rules.returnPeriodDays) || 0,
+          afterReturn: rules.commissionAfterReturn !== false,
+        },
+        history,
+      });
+    } catch (error) {
+      console.error("SELLER MY SCHEME ERROR:", error);
+      res.status(500).json({ success: false, message: "Could not load the seller scheme." });
+    }
+  }
+);
+
 // Seller updates fulfilment status of orders containing their products.
 businessRouter.put(
   "/api/sellers/orders/:id/status",
