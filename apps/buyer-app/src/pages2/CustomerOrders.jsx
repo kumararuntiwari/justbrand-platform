@@ -195,6 +195,43 @@ function CustomerOrders({ token, onBack, onNeedLogin }) {
                 {order.status !== "Cancelled" ? (
                   <div style={styles.trackBox}>
                     <div style={styles.trackTitle}>🚚 Delivery Tracking</div>
+                    {order.courierTracking?.courierPartnerName || order.courierTracking?.shipments?.length ? (
+                      <div
+                        style={{
+                          background: "#eff6ff",
+                          color: "#1e40af",
+                          borderRadius: 7,
+                          padding: "8px 9px",
+                          fontSize: 12,
+                          marginBottom: 7,
+                        }}
+                      >
+                        <strong>
+                          {order.courierTracking?.multiSeller
+                            ? `${order.courierTracking.shipments.length} courier shipments`
+                            : order.courierTracking?.courierPartnerName ||
+                              order.courierTracking?.shipments?.[0]?.courierPartnerName}
+                        </strong>
+                        {!order.courierTracking?.multiSeller &&
+                        (order.courierTracking?.awbNumber ||
+                          order.courierTracking?.shipments?.[0]?.awbNumber) ? (
+                          <div>
+                            AWB:{" "}
+                            {order.courierTracking?.awbNumber ||
+                              order.courierTracking?.shipments?.[0]?.awbNumber}
+                          </div>
+                        ) : null}
+                        <div>
+                          Status:{" "}
+                          {order.courierTracking?.courierStatus ||
+                            order.courierTracking?.shipments?.[0]?.courierStatus ||
+                            "Booked"}
+                          {order.courierTracking?.estimatedDeliveryDate
+                            ? ` · ETA ${order.courierTracking.estimatedDeliveryDate}`
+                            : ""}
+                        </div>
+                      </div>
+                    ) : null}
                     {order.deliveryPartnerName ? (
                       <div style={{ fontSize: 12, color: "#6b7280", margin: "2px 0 4px" }}>
                         🛵 Delivery Partner: {order.deliveryPartnerName}

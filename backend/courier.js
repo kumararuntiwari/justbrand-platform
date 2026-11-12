@@ -1,37 +1,44 @@
 // =====================================================
-// JUSTBRAND — COURIER / LOGISTICS PARTNER MODULE (ADDITIVE)
+// JUSTBRAND — COURIER / LOGISTICS PARTNER MODULE
 // =====================================================
-// Courier COMPANIES (India Post, Ekart, Shiprocket, DTDC, custom…)
-// configured by the admin — completely SEPARATE from the existing
-// person-based delivery_partners workflow in delivery.js (local
-// delivery boys with KYC/earnings). That workflow is untouched.
+// Courier COMPANIES (Shiprocket, India Post, Ekart, DTDC, Delhivery,
+// Xpressbees) are separate from the existing person-based delivery
+// partner workflow in delivery.js. That local delivery workflow, OTP
+// and earnings code is untouched.
 //
-// Design rules:
-//   - All tables are CREATE TABLE IF NOT EXISTS (additive only).
-//   - Order courier columns are guarded ALTER TABLE ADD COLUMN —
-//     existing databases (including production) migrate safely.
-//   - MANUAL MODE ONLY: no live courier API credentials exist in this
-//     project, so every partner runs in Manual Mode. The admin books
-//     on the courier's own dashboard/counter and records the real AWB
-//     + label reference here. Nothing is auto-synced and nothing fake
-//     is ever displayed.
-//   - API credentials (if ever added) are stored server-side only and
-//     are NEVER returned by any endpoint (write-only field; the API
-//     only reports whether credentials exist).
-//   - Courier assignment NEVER touches order totals, payment status,
-//     order status or the configured delivery-charge/GST calculation.
-//     It only writes the courier columns below.
-//   - The existing order deliveryPartnerId (person) and deliveryStatus
-//     columns are untouched — courier data lives in its own columns.
+// Security:
+//   - API credentials come ONLY from server-side environment secrets.
+//   - They are never written to SQLite, returned by an endpoint, logged
+//     or committed.
+//   - The legacy apiCredentials column is cleared at startup and the
+//     write endpoint rejects credential payloads.
+//
+// Live vs manual:
+//   - Shiprocket has a real server-side adapter. It is called only when
+//     credentials exist AND COURIER_LIVE_ENABLED=1.
+//   - Without live mode, no external courier call is made. Shiprocket
+//     must never present a sandbox/test AWB as a live booking.
+//   - Other partners remain Manual / Not Configured until onboarding
+//     and credentials exist.
+//
+// Business-logic safety:
+//   - Courier writes never change order totals, GST, payment status,
+//     Family commission or the configured delivery charge.
+//   - A multi-seller order is split into one shipment per seller so each
+//     seller can use its own pickup address/package.
 // =====================================================
 
+import crypto from "node:crypto";
 import express from "express";
 import db from "./db.js";
-import { requireAuth, requireRole } from "./auth.js";
+import { requireAuth, requireRole, requireType } from "./auth.js";
 import {
-  apiConfigStatus,
-  envNamesFor,
-  testConnection,
+  courierAdapterStatus,
+  getCourierAdapter,
+  parseShiprocketWebhook,
+  shiprocketWebhookConfigured,
+} from "./courier-adapters/index.js";
+import {
   buildShiprocketPayload,
   createSandboxShipment,
 } from "./courier-api.js";
@@ -44,6 +51,21 @@ function clean(value) {
 
 function now() {
   return new Date().toISOString();
+}
+
+function round2(value) {
+  return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+}
+
+function safeNumber(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function addDaysIso(days) {
+  const date = new Date();
+  date.setDate(date.getDate() + Math.max(0, Number(days) || 0));
+  return date.toISOString().slice(0, 10);
 }
 
 // =====================================
@@ -71,11 +93,6 @@ db.prepare(`
   )
 `).run();
 
-console.log("Courier partners table ready.");
-
-// SHIPMENTS — one row per shipment booking for an order (sandbox or
-// live). Holds AWB + label + a tracking HISTORY + the last API error so
-// the admin can see exactly what happened. Additive, IF NOT EXISTS.
 db.prepare(`
   CREATE TABLE IF NOT EXISTS courier_shipments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -91,23 +108,95 @@ db.prepare(`
     updatedAt TEXT
   )
 `).run();
-console.log("Courier shipments table ready.");
 
-// ADDITIVE ORDER COLUMNS — per-order courier booking record.
-// Guarded so existing databases (production included) migrate safely.
-//
-// These ALTERs run inside initCourier() (called by server.js AFTER
-// initBusiness() creates the orders table) — business.js imports this
-// module, so module-level ALTERs here would execute before the orders
-// table exists.
-const COURIER_ORDER_COLUMNS = [
-  { name: "courierPartnerId", decl: "INTEGER" },
-  { name: "awbNumber", decl: "TEXT" },
-  { name: "shippingLabelRef", decl: "TEXT" },
-  { name: "courierStatus", decl: "TEXT" },
-  { name: "courierAssignedAt", decl: "TEXT" },
-  { name: "courierStatusUpdatedAt", decl: "TEXT" },
-];
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS courier_pickup_locations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sellerRef TEXT UNIQUE NOT NULL,
+    contactName TEXT,
+    phone TEXT,
+    address TEXT,
+    city TEXT,
+    state TEXT,
+    pincode TEXT,
+    providerLocationName TEXT,
+    active INTEGER NOT NULL DEFAULT 1,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT
+  )
+`).run();
+
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS courier_webhook_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    provider TEXT NOT NULL,
+    eventKey TEXT UNIQUE NOT NULL,
+    awbNumber TEXT,
+    receivedAt TEXT NOT NULL,
+    processedAt TEXT,
+    result TEXT
+  )
+`).run();
+
+function ensureColumns(table, columns) {
+  const existing = new Set(
+    db.prepare(`PRAGMA table_info(${table})`).all().map((column) => column.name)
+  );
+  for (const column of columns) {
+    if (existing.has(column.name)) continue;
+    try {
+      db.prepare(`ALTER TABLE ${table} ADD COLUMN ${column.name} ${column.decl}`).run();
+    } catch (error) {
+      // Multiple preview panels may boot against the same isolated DB at
+      // the same time. Another process may have added the column between
+      // PRAGMA and ALTER; that is success, not a startup failure.
+      if (!String(error.message || "").includes("duplicate column")) throw error;
+    }
+  }
+}
+
+ensureColumns("courier_partners", [
+  { name: "pickupLocation", decl: "TEXT" },
+  { name: "pickupPincode", decl: "TEXT" },
+  { name: "freeShippingAbove", decl: "REAL NOT NULL DEFAULT 0" },
+  { name: "maxWeightKg", decl: "REAL NOT NULL DEFAULT 20" },
+  { name: "maxCodAmount", decl: "REAL NOT NULL DEFAULT 50000" },
+  { name: "returnWindowDays", decl: "INTEGER NOT NULL DEFAULT 7" },
+  { name: "rtoCharge", decl: "REAL NOT NULL DEFAULT 0" },
+]);
+
+ensureColumns("courier_shipments", [
+  { name: "sellerKey", decl: "TEXT" },
+  { name: "sellerId", decl: "INTEGER" },
+  { name: "sellerCode", decl: "TEXT" },
+  { name: "sellerName", decl: "TEXT" },
+  { name: "orderItemIds", decl: "TEXT" },
+  { name: "provider", decl: "TEXT" },
+  { name: "providerOrderId", decl: "TEXT" },
+  { name: "providerShipmentId", decl: "TEXT" },
+  { name: "courierCompanyId", decl: "TEXT" },
+  { name: "courierName", decl: "TEXT" },
+  { name: "pickupLocation", decl: "TEXT" },
+  { name: "pickupJson", decl: "TEXT" },
+  { name: "packageJson", decl: "TEXT" },
+  { name: "rate", decl: "REAL" },
+  { name: "estimatedDeliveryDays", decl: "INTEGER" },
+  { name: "estimatedDeliveryDate", decl: "TEXT" },
+  { name: "labelUrl", decl: "TEXT" },
+  { name: "manifestUrl", decl: "TEXT" },
+  { name: "pickupToken", decl: "TEXT" },
+  { name: "trackingStatus", decl: "TEXT" },
+  { name: "ndrStatus", decl: "TEXT" },
+  { name: "rtoStatus", decl: "TEXT" },
+  { name: "packedAt", decl: "TEXT" },
+  { name: "readyAt", decl: "TEXT" },
+  { name: "cancelledAt", decl: "TEXT" },
+  { name: "deliveredAt", decl: "TEXT" },
+  { name: "lastSyncedAt", decl: "TEXT" },
+  { name: "idempotencyKey", decl: "TEXT" },
+]);
+
+console.log("Courier tables ready.");
 
 // =====================================
 // DEFAULT PARTNERS (seeded once, never overwritten)
@@ -118,6 +207,8 @@ const DEFAULT_COURIER_PARTNERS = [
   { code: "EKART", name: "Ekart", partnerType: "courier" },
   { code: "SHIPROCKET", name: "Shiprocket", partnerType: "aggregator" },
   { code: "DTDC", name: "DTDC", partnerType: "courier" },
+  { code: "DELHIVERY", name: "Delhivery", partnerType: "courier" },
+  { code: "XPRESSBEES", name: "Xpressbees", partnerType: "courier" },
 ];
 
 function seedCourierPartners() {
@@ -137,9 +228,28 @@ seedCourierPartners();
 // HELPERS
 // =====================================
 
-// API credentials NEVER leave the backend — only a boolean flag.
+function parsePincodes(raw) {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
+function parseJson(raw, fallback = null) {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
+
 function publicCourierPartner(partner) {
   if (!partner) return null;
+  const status = courierAdapterStatus(partner.code);
   return {
     id: partner.id,
     code: partner.code,
@@ -151,37 +261,577 @@ function publicCourierPartner(partner) {
     baseRate: Number(partner.baseRate) || 0,
     perKgRate: Number(partner.perKgRate) || 0,
     codCharge: Number(partner.codCharge) || 0,
+    freeShippingAbove: Number(partner.freeShippingAbove) || 0,
+    maxWeightKg: Number(partner.maxWeightKg) || 20,
+    maxCodAmount: Number(partner.maxCodAmount) || 50000,
+    returnWindowDays: Number(partner.returnWindowDays) || 7,
+    rtoCharge: Number(partner.rtoCharge) || 0,
+    pickupLocation: partner.pickupLocation || "",
+    pickupPincode: partner.pickupPincode || "",
     trackingUrlTemplate: partner.trackingUrlTemplate || "",
-    apiMode: partner.apiMode || "manual",
-    hasApiCredentials: Boolean(partner.apiCredentials),
+    apiMode: status.mode,
+    apiStatus: status,
     notes: partner.notes || "",
     updatedAt: partner.updatedAt || null,
   };
 }
 
-function parsePincodes(raw) {
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.map(String) : [];
-  } catch {
-    return [];
-  }
-}
-
 const PARTNER_TYPES = ["postal", "courier", "aggregator", "other"];
 
-// Courier-level statuses the admin records MANUALLY from the courier's
-// own system. This is not an auto-synced feed — Manual Mode.
 const COURIER_STATUSES = [
   "Booked",
+  "Pickup Scheduled",
+  "Picked Up",
   "In Transit",
   "Out for Delivery",
   "Delivered",
   "Undelivered",
+  "NDR",
+  "RTO Initiated",
+  "RTO In Transit",
   "Returned",
   "Cancelled",
 ];
+
+function getPartner(id) {
+  return db.prepare(`SELECT * FROM courier_partners WHERE id = ?`).get(Number(id));
+}
+
+function getSellerByRef(raw) {
+  const ref = clean(String(raw ?? ""));
+  if (!ref) return null;
+  return db
+    .prepare(`SELECT * FROM sellers WHERE sellerCode = ? OR CAST(id AS TEXT) = ? LIMIT 1`)
+    .get(ref, ref);
+}
+
+function getSellerKyc(sellerId) {
+  if (!sellerId) return null;
+  return db.prepare(`SELECT * FROM seller_kyc WHERE sellerId = ?`).get(Number(sellerId)) || null;
+}
+
+function getPickup(sellerRef) {
+  const seller = getSellerByRef(sellerRef);
+  const code = seller?.sellerCode || clean(String(sellerRef || ""));
+  const stored = code
+    ? db.prepare(`SELECT * FROM courier_pickup_locations WHERE sellerRef = ?`).get(code)
+    : null;
+  const kyc = seller ? getSellerKyc(seller.id) : null;
+
+  return {
+    sellerId: seller?.id || null,
+    sellerCode: code || null,
+    sellerName: seller?.shopName || seller?.name || null,
+    contactName: stored?.contactName || seller?.name || "",
+    phone: stored?.phone || seller?.mobile || "",
+    address: stored?.address || kyc?.address || "",
+    city: stored?.city || kyc?.city || "",
+    state: stored?.state || kyc?.state || "",
+    pincode: stored?.pincode || kyc?.pincode || "",
+    providerLocationName: stored?.providerLocationName || "",
+    configured: Boolean(stored?.address || kyc?.address),
+    source: stored ? "seller_pickup" : kyc ? "seller_kyc" : "missing",
+    updatedAt: stored?.updatedAt || null,
+  };
+}
+
+function sellerPublicPickup(pickup) {
+  return {
+    sellerCode: pickup.sellerCode,
+    sellerName: pickup.sellerName,
+    contactName: pickup.contactName,
+    phone: pickup.phone,
+    address: pickup.address,
+    city: pickup.city,
+    state: pickup.state,
+    pincode: pickup.pincode,
+    providerLocationName: pickup.providerLocationName,
+    configured: pickup.configured,
+    source: pickup.source,
+  };
+}
+
+function normalizePackage(body = {}) {
+  const weightKg = Math.min(50, Math.max(0.01, safeNumber(body.weightKg ?? body.weight, 0.5)));
+  const length = Math.min(200, Math.max(1, safeNumber(body.length, 10)));
+  const breadth = Math.min(200, Math.max(1, safeNumber(body.breadth, 10)));
+  const height = Math.min(200, Math.max(1, safeNumber(body.height, 5)));
+  return {
+    weightKg: round2(weightKg),
+    length: round2(length),
+    breadth: round2(breadth),
+    height: round2(height),
+    declaredValue: Math.max(0, safeNumber(body.declaredValue, 0)),
+  };
+}
+
+function orderGroupKey(item) {
+  const seller = getSellerByRef(item.sellerId);
+  return seller ? `seller:${seller.id}` : `ref:${clean(String(item.sellerId || "unassigned"))}`;
+}
+
+function getOrder(orderId) {
+  return db.prepare(`SELECT * FROM orders WHERE id = ?`).get(Number(orderId));
+}
+
+function getOrderItems(orderId) {
+  return db
+    .prepare(
+      `SELECT oi.*, p.sku, p.sellerId AS productSellerId
+       FROM order_items oi LEFT JOIN products p ON p.id = oi.productId
+       WHERE oi.orderId = ? ORDER BY oi.id`
+    )
+    .all(Number(orderId));
+}
+
+function shipmentForGroup(orderId, sellerKey, sellerId) {
+  if (sellerKey) {
+    const exact = db
+      .prepare(
+        `SELECT * FROM courier_shipments
+         WHERE orderId = ? AND sellerKey = ? ORDER BY id DESC LIMIT 1`
+      )
+      .get(Number(orderId), sellerKey);
+    if (exact) return exact;
+  }
+  if (sellerId) {
+    const byId = db
+      .prepare(
+        `SELECT * FROM courier_shipments
+         WHERE orderId = ? AND sellerId = ? ORDER BY id DESC LIMIT 1`
+      )
+      .get(Number(orderId), Number(sellerId));
+    if (byId) return byId;
+  }
+  return null;
+}
+
+function buildGroups(orderId, { sellerRef } = {}) {
+  const order = getOrder(orderId);
+  if (!order) return { order: null, groups: [] };
+  const items = getOrderItems(orderId);
+  const wantedSeller = sellerRef ? getSellerByRef(sellerRef) : null;
+
+  const map = new Map();
+  for (const item of items) {
+    const seller = getSellerByRef(item.sellerId);
+    if (wantedSeller && (!seller || seller.id !== wantedSeller.id)) continue;
+
+    const key = orderGroupKey(item);
+    if (!map.has(key)) {
+      const pickup = getPickup(seller?.sellerCode || item.sellerId);
+      map.set(key, {
+        sellerKey: key,
+        sellerId: seller?.id || null,
+        sellerCode: seller?.sellerCode || clean(String(item.sellerId || "")),
+        sellerName: seller?.shopName || seller?.name || "Unassigned seller",
+        pickup: sellerPublicPickup(pickup),
+        items: [],
+      });
+    }
+    map.get(key).items.push({
+      orderItemId: item.id,
+      productId: item.productId,
+      productName: item.productName,
+      sku: item.sku || "",
+      price: item.price,
+      quantity: item.quantity,
+      sellerRef: item.sellerId,
+    });
+  }
+
+  const groups = [...map.values()].map((group) => {
+    const shipment = shipmentForGroup(orderId, group.sellerKey, group.sellerId);
+    const packageJson = parseJson(shipment?.packageJson, null);
+    return {
+      ...group,
+      destination: {
+        city: order.city || "",
+        state: order.state || "",
+        pincode: order.pincode || "",
+      },
+      paymentMethod: order.paymentMethod || "COD",
+      entitledAmount: group.items.reduce(
+        (sum, item) => sum + safeNumber(String(item.price).replace(/[^0-9.]/g, "")) * item.quantity,
+        0
+      ),
+      package: packageJson || {
+        weightKg: 0.5,
+        length: 10,
+        breadth: 10,
+        height: 5,
+      },
+      shipment: shipment ? publicShipment(shipment) : null,
+    };
+  });
+
+  return { order, groups };
+}
+
+function validateAssignment(partner, order, weightKg) {
+  if (!partner.enabled) {
+    return `${partner.name} is disabled. Enable it first.`;
+  }
+  if (order.paymentMethod === "COD" && !partner.codAvailable) {
+    return `${partner.name} does not accept Cash on Delivery. Enable COD for it, or choose another partner.`;
+  }
+  if (order.paymentMethod === "COD") {
+    const codAmount = safeNumber(order.totalAmount);
+    if (partner.maxCodAmount && codAmount > Number(partner.maxCodAmount)) {
+      return `COD amount ₹${codAmount} is above ${partner.name}'s configured limit of ₹${partner.maxCodAmount}.`;
+    }
+  }
+  if (weightKg && partner.maxWeightKg && Number(weightKg) > Number(partner.maxWeightKg)) {
+    return `Package weight ${weightKg} kg is above ${partner.name}'s configured limit of ${partner.maxWeightKg} kg.`;
+  }
+  const pincodes = parsePincodes(partner.serviceablePincodes);
+  if (pincodes.length > 0 && order.pincode && !pincodes.includes(String(order.pincode))) {
+    return `PIN ${order.pincode} is not in ${partner.name}'s configured serviceable area.`;
+  }
+  return null;
+}
+
+function localQuote(partner, { weightKg, cod, declaredValue, pickupPincode, deliveryPincode }) {
+  const billableKg = Math.max(1, Math.ceil(safeNumber(weightKg, 0.5)));
+  const free =
+    Number(partner.freeShippingAbove) > 0 &&
+    safeNumber(declaredValue) >= Number(partner.freeShippingAbove);
+  let rate = free ? 0 : Number(partner.baseRate) + Number(partner.perKgRate) * billableKg;
+  if (cod) rate += Number(partner.codCharge) || 0;
+
+  const pickupFirst = safeNumber(String(pickupPincode || "0")[0], 0);
+  const deliveryFirst = safeNumber(String(deliveryPincode || "0")[0], 0);
+  const days = Math.min(7, Math.max(2, 3 + Math.abs(pickupFirst - deliveryFirst)));
+
+  return {
+    rate: round2(Math.max(0, rate)),
+    estimatedDeliveryDays: days,
+    estimatedDeliveryDate: addDaysIso(days),
+    billableKg,
+  };
+}
+
+async function quoteForGroup({ order, group, partner, packageInfo, includeDisabled = false }) {
+  const status = courierAdapterStatus(partner.code);
+  const weightKg = packageInfo.weightKg;
+  const cod = order.paymentMethod === "COD";
+  const pickupPincode =
+    group?.pickup?.pincode || partner.pickupPincode || process.env.SHIPROCKET_PICKUP_PINCODE || "";
+
+  const problem = validateAssignment(partner, order, weightKg);
+  if (!includeDisabled && problem) {
+    return {
+      partnerId: partner.id,
+      partnerName: partner.name,
+      partnerCode: partner.code,
+      mode: status.mode,
+      serviceable: false,
+      reason: problem,
+      quotes: [],
+    };
+  }
+
+  if (status.mode === "live" && partner.code === "SHIPROCKET") {
+    const adapter = getCourierAdapter(partner.code);
+    const live = await adapter.getRates({
+      pickupPincode,
+      deliveryPincode: order.pincode,
+      weightKg,
+      cod,
+      declaredValue: safeNumber(order.totalAmount),
+    });
+
+    if (live.ok && live.quotes.length) {
+      return {
+        partnerId: partner.id,
+        partnerName: partner.name,
+        partnerCode: partner.code,
+        mode: "live",
+        serviceable: true,
+        source: "shiprocket_live",
+        quotes: live.quotes.map((quote) => ({
+          ...quote,
+          partnerId: partner.id,
+          partnerName: partner.name,
+          partnerCode: partner.code,
+          mode: "live",
+          source: "shiprocket_live",
+          serviceable: true,
+        })),
+        message: live.message,
+      };
+    }
+
+    // A live API failure is shown honestly; the configured rule quote
+    // remains available for planning/manual booking, clearly labelled.
+    const fallback = localQuote(partner, {
+      weightKg,
+      cod,
+      declaredValue: order.totalAmount,
+      pickupPincode,
+      deliveryPincode: order.pincode,
+    });
+    return {
+      partnerId: partner.id,
+      partnerName: partner.name,
+      partnerCode: partner.code,
+      mode: "live",
+      serviceable: true,
+      source: "configured_rule_fallback",
+      apiWarning: live.message,
+      quotes: [
+        {
+          ...fallback,
+          ...fallback,
+          partnerId: partner.id,
+          partnerName: partner.name,
+          partnerCode: partner.code,
+          mode: "live",
+          source: "configured_rule_fallback",
+          serviceable: true,
+          note: "Live Shiprocket rate lookup failed; this is the admin-configured estimate, not a live API rate.",
+        },
+      ],
+      message: live.message,
+    };
+  }
+
+  const estimate = localQuote(partner, {
+    weightKg,
+    cod,
+    declaredValue: order.totalAmount,
+    pickupPincode,
+    deliveryPincode: order.pincode,
+  });
+  return {
+    partnerId: partner.id,
+    partnerName: partner.name,
+    partnerCode: partner.code,
+    mode: status.mode,
+    serviceable: true,
+    source: status.mode === "sandbox" ? "sandbox_rule_estimate" : "configured_rule",
+    quotes: [
+      {
+        ...estimate,
+        partnerId: partner.id,
+        partnerName: partner.name,
+        partnerCode: partner.code,
+        courierName: partner.name,
+        mode: status.mode,
+        source: status.mode === "sandbox" ? "sandbox_rule_estimate" : "configured_rule",
+        serviceable: true,
+        note:
+          status.mode === "sandbox"
+            ? "Configured estimate only — no live Shiprocket rate call was made."
+            : "Admin-configured shipping rule — not a live courier API rate.",
+      },
+    ],
+  };
+}
+
+async function compareRates({ order, group, packageInfo, partnerId, includeDisabled = false }) {
+  const partners = partnerId
+    ? [getPartner(partnerId)].filter(Boolean)
+    : db.prepare(`SELECT * FROM courier_partners ORDER BY id`).all();
+
+  const rows = [];
+  for (const partner of partners) {
+    if (!includeDisabled && !partner.enabled) continue;
+    rows.push(await quoteForGroup({ order, group, partner, packageInfo, includeDisabled }));
+  }
+
+  const options = rows.flatMap((row) => row.quotes || []);
+  const recommended =
+    options
+      .filter((quote) => quote.serviceable !== false)
+      .sort((a, b) => {
+        if (a.rate !== b.rate) return a.rate - b.rate;
+        return a.estimatedDeliveryDays - b.estimatedDeliveryDays;
+      })[0] || null;
+
+  return { rows, options, recommended };
+}
+
+function appendHistory(shipment, entries) {
+  const history = parseJson(shipment?.historyJson, []) || [];
+  const seen = new Set(history.map((h) => `${h.at || ""}|${h.status || ""}|${h.note || ""}`));
+  for (const entry of entries) {
+    if (!entry) continue;
+    const key = `${entry.at || ""}|${entry.status || ""}|${entry.note || ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    history.push(entry);
+  }
+  return history;
+}
+
+function statusFromProvider(value) {
+  const text = String(value || "").toUpperCase();
+  if (!text) return "";
+  if (text.includes("RTO") && text.includes("DELIVER")) return "Returned";
+  if (text.includes("RTO")) return "RTO In Transit";
+  if (text.includes("CANCEL")) return "Cancelled";
+  if (text.includes("DELIVER")) return "Delivered";
+  if (text.includes("OUT FOR DELIVERY")) return "Out for Delivery";
+  if (text.includes("NDR") || text.includes("UNDELIVER")) return "Undelivered";
+  if (text.includes("PICKED") || text.includes("PICKUP")) return "Picked Up";
+  if (text.includes("TRANSIT") || text.includes("SHIPMENT")) return "In Transit";
+  return "";
+}
+
+function syncOrderCourierSummary(orderId) {
+  const shipments = db
+    .prepare(`SELECT * FROM courier_shipments WHERE orderId = ? ORDER BY id DESC`)
+    .all(Number(orderId));
+  if (shipments.length === 0) return;
+  const active = shipments.filter((s) => s.courierStatus !== "Cancelled");
+  const latest = active[0] || shipments[0];
+  const samePartner = active.length > 0 && active.every((s) => s.partnerId === active[0].partnerId);
+  const one = active.length === 1;
+  const allDelivered =
+    active.length > 0 && active.every((s) => ["Delivered", "Returned"].includes(s.courierStatus));
+
+  db.prepare(`
+    UPDATE orders
+    SET courierPartnerId = ?, awbNumber = ?, shippingLabelRef = ?,
+        courierStatus = ?, courierStatusUpdatedAt = ?, updatedAt = ?
+    WHERE id = ?
+  `).run(
+    samePartner ? latest.partnerId : null,
+    one ? latest.awbNumber : null,
+    one ? latest.shippingLabelRef : null,
+    allDelivered ? "Delivered" : latest.courierStatus || "Booked",
+    now(),
+    now(),
+    Number(orderId)
+  );
+}
+
+// SAFE shipment shape for admin responses. Provider ids are internal
+// integration identifiers; they are safe to show to staff but never
+// include any API credential.
+export function publicShipment(shipment) {
+  if (!shipment) return null;
+  const partner = db.prepare(`SELECT name FROM courier_partners WHERE id = ?`).get(shipment.partnerId);
+  const history = parseJson(shipment.historyJson, []) || [];
+  return {
+    id: shipment.id,
+    orderId: shipment.orderId,
+    partnerId: shipment.partnerId,
+    partnerName: partner ? partner.name : null,
+    sellerKey: shipment.sellerKey || null,
+    sellerId: shipment.sellerId || null,
+    sellerCode: shipment.sellerCode || null,
+    sellerName: shipment.sellerName || null,
+    orderItemIds: parseJson(shipment.orderItemIds, []) || [],
+    mode: shipment.mode,
+    provider: shipment.provider || null,
+    providerOrderId: shipment.providerOrderId || null,
+    providerShipmentId: shipment.providerShipmentId || null,
+    courierCompanyId: shipment.courierCompanyId || null,
+    courierName: shipment.courierName || partner?.name || null,
+    awbNumber: shipment.awbNumber || null,
+    shippingLabelRef: shipment.shippingLabelRef || null,
+    labelUrl: shipment.labelUrl || null,
+    manifestUrl: shipment.manifestUrl || null,
+    pickupToken: shipment.pickupToken || null,
+    pickupLocation: shipment.pickupLocation || null,
+    package: parseJson(shipment.packageJson, null),
+    pickup: parseJson(shipment.pickupJson, null),
+    rate: shipment.rate === null || shipment.rate === undefined ? null : Number(shipment.rate),
+    estimatedDeliveryDays:
+      shipment.estimatedDeliveryDays === null || shipment.estimatedDeliveryDays === undefined
+        ? null
+        : Number(shipment.estimatedDeliveryDays),
+    estimatedDeliveryDate: shipment.estimatedDeliveryDate || null,
+    courierStatus: shipment.courierStatus,
+    trackingStatus: shipment.trackingStatus || shipment.courierStatus,
+    trackingUrl: courierTrackingUrl(shipment.partnerId, shipment.awbNumber),
+    history,
+    ndrStatus: shipment.ndrStatus || null,
+    rtoStatus: shipment.rtoStatus || null,
+    packedAt: shipment.packedAt || null,
+    readyAt: shipment.readyAt || null,
+    cancelledAt: shipment.cancelledAt || null,
+    deliveredAt: shipment.deliveredAt || null,
+    lastSyncedAt: shipment.lastSyncedAt || null,
+    lastApiError: shipment.lastApiError || null,
+    createdAt: shipment.createdAt,
+    updatedAt: shipment.updatedAt,
+  };
+}
+
+export function courierPartnerNames() {
+  return new Map(
+    db.prepare(`SELECT id, name FROM courier_partners`).all().map((p) => [p.id, p.name])
+  );
+}
+
+export function courierTrackingUrl(partnerId, awbNumber) {
+  if (!awbNumber) return null;
+  const partner = db.prepare(`SELECT * FROM courier_partners WHERE id = ?`).get(Number(partnerId));
+  if (!partner) return null;
+  const template =
+    partner.trackingUrlTemplate ||
+    (partner.code === "SHIPROCKET" ? "https://shiprocket.co/tracking/{awb}" : "");
+  if (!template) return null;
+  return String(template).replace("{awb}", encodeURIComponent(awbNumber));
+}
+
+function publicTrackingEntry(history) {
+  return (Array.isArray(history) ? history : []).map((entry) => ({
+    at: entry.at || null,
+    status: entry.status || "",
+    note: entry.note || "",
+    location: entry.location || "",
+  }));
+}
+
+// VERIFIED buyer-facing tracking. Never includes API errors, provider
+// ids, credentials or internal pickup contact data.
+export function courierPublicTracking(order) {
+  if (!order) return null;
+  const shipments = db
+    .prepare(`SELECT * FROM courier_shipments WHERE orderId = ? ORDER BY id`)
+    .all(order.id);
+  if (!shipments.length && !order.courierPartnerId) return null;
+
+  const partnerNames = courierPartnerNames();
+  const mapped = shipments.map((shipment) => {
+    const history = parseJson(shipment.historyJson, []) || [];
+    return {
+      shipmentId: shipment.id,
+      sellerName: shipment.sellerName || null,
+      courierPartnerName: partnerNames.get(shipment.partnerId) || null,
+      courierName: shipment.courierName || partnerNames.get(shipment.partnerId) || null,
+      awbNumber: shipment.awbNumber || null,
+      courierStatus: shipment.courierStatus || null,
+      trackingStatus: shipment.trackingStatus || shipment.courierStatus || null,
+      courierStatusUpdatedAt: shipment.updatedAt || null,
+      estimatedDeliveryDate: shipment.estimatedDeliveryDate || null,
+      trackingUrl: courierTrackingUrl(shipment.partnerId, shipment.awbNumber),
+      returnStatus: shipment.rtoStatus || null,
+      ndrStatus: shipment.ndrStatus || null,
+      history: publicTrackingEntry(history),
+      mode: shipment.mode,
+    };
+  });
+
+  const primary = mapped[0] || null;
+  return {
+    courierPartnerName:
+      partnerNames.get(order.courierPartnerId) || primary?.courierPartnerName || null,
+    awbNumber: order.awbNumber || primary?.awbNumber || null,
+    courierStatus: order.courierStatus || primary?.courierStatus || null,
+    courierStatusUpdatedAt: order.courierStatusUpdatedAt || primary?.courierStatusUpdatedAt || null,
+    estimatedDeliveryDate: primary?.estimatedDeliveryDate || null,
+    trackingUrl:
+      courierTrackingUrl(order.courierPartnerId, order.awbNumber) || primary?.trackingUrl || null,
+    history: primary?.history || [],
+    shipments: mapped,
+    multiSeller: mapped.length > 1,
+  };
+}
 
 // =====================================
 // ADMIN: COURIER PARTNER CONFIGURATION
@@ -193,18 +843,15 @@ courierRouter.get(
   requireRole("super_admin", "manager", "accountant"),
   (req, res) => {
     try {
-      const partners = db
-        .prepare(`SELECT * FROM courier_partners ORDER BY id`)
-        .all();
-
+      const partners = db.prepare(`SELECT * FROM courier_partners ORDER BY id`).all();
       res.json({
         success: true,
         partners: partners.map(publicCourierPartner),
         partnerTypes: PARTNER_TYPES,
         courierStatuses: COURIER_STATUSES,
-        mode: "manual",
+        mode: "mixed",
         modeNote:
-          "Manual Mode: no live courier API is connected. Book on the courier's own site/dashboard, then record the real AWB and label reference here. Nothing is auto-synced.",
+          "Shiprocket has a real server-side adapter (live only when credentials exist and COURIER_LIVE_ENABLED=1). Other partners are Manual / Not Configured until their onboarding and API access are complete. No fake booking or tracking is ever shown.",
       });
     } catch (error) {
       console.error("COURIER PARTNERS LIST ERROR:", error);
@@ -219,25 +866,36 @@ courierRouter.put(
   requireRole("super_admin", "manager"),
   (req, res) => {
     try {
-      const partner = db
-        .prepare(`SELECT * FROM courier_partners WHERE id = ?`)
-        .get(Number(req.params.id));
-
+      const partner = getPartner(req.params.id);
       if (!partner) {
         return res.status(404).json({ success: false, message: "Courier partner not found." });
       }
 
       const body = req.body || {};
 
+      if (body.apiCredentials !== undefined) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "API credentials must be configured only in server-side environment secrets. They are never accepted or stored by this endpoint.",
+        });
+      }
+
+      if (body.apiMode !== undefined && !["auto", "manual"].includes(clean(body.apiMode))) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "API mode is controlled by the partner adapter and server-side environment secrets. Manual Mode is required until a real API is connected; this screen cannot switch a partner to live.",
+        });
+      }
+
       const partnerType = PARTNER_TYPES.includes(clean(body.partnerType))
         ? clean(body.partnerType)
         : partner.partnerType;
-
       const enabled = body.enabled === undefined ? partner.enabled : body.enabled ? 1 : 0;
       const codAvailable =
         body.codAvailable === undefined ? partner.codAvailable : body.codAvailable ? 1 : 0;
 
-      // Serviceable pincodes: array of 6-digit strings; empty = all India.
       let serviceablePincodes = parsePincodes(partner.serviceablePincodes);
       if (body.serviceablePincodes !== undefined) {
         if (!Array.isArray(body.serviceablePincodes)) {
@@ -258,74 +916,80 @@ courierRouter.put(
         serviceablePincodes = [...new Set(cleaned)];
       }
 
-      const readRate = (value, fallback) => {
+      const readNumber = (value, fallback, { min = 0, max = 100000 } = {}) => {
         if (value === undefined) return fallback;
         const numeric = Number(value);
-        if (!Number.isFinite(numeric) || numeric < 0 || numeric > 100000) {
-          return null;
-        }
+        if (!Number.isFinite(numeric) || numeric < min || numeric > max) return null;
         return numeric;
       };
 
-      const baseRate = readRate(body.baseRate, Number(partner.baseRate) || 0);
-      const perKgRate = readRate(body.perKgRate, Number(partner.perKgRate) || 0);
-      const codCharge = readRate(body.codCharge, Number(partner.codCharge) || 0);
-      if (baseRate === null || perKgRate === null || codCharge === null) {
-        return res.status(400).json({ success: false, message: "Shipping rates must be zero or more." });
+      const baseRate = readNumber(body.baseRate, Number(partner.baseRate) || 0);
+      const perKgRate = readNumber(body.perKgRate, Number(partner.perKgRate) || 0);
+      const codCharge = readNumber(body.codCharge, Number(partner.codCharge) || 0);
+      const freeShippingAbove = readNumber(
+        body.freeShippingAbove,
+        Number(partner.freeShippingAbove) || 0
+      );
+      const maxWeightKg = readNumber(body.maxWeightKg, Number(partner.maxWeightKg) || 20, {
+        min: 0.01,
+        max: 100,
+      });
+      const maxCodAmount = readNumber(body.maxCodAmount, Number(partner.maxCodAmount) || 50000, {
+        min: 0,
+        max: 1000000,
+      });
+      const returnWindowDays = readNumber(
+        body.returnWindowDays,
+        Number(partner.returnWindowDays) || 7,
+        { min: 0, max: 90 }
+      );
+      const rtoCharge = readNumber(body.rtoCharge, Number(partner.rtoCharge) || 0);
+
+      if (
+        [baseRate, perKgRate, codCharge, freeShippingAbove, maxWeightKg, maxCodAmount, returnWindowDays, rtoCharge].some(
+          (value) => value === null
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Rates and shipping limits must be valid non-negative numbers.",
+        });
       }
 
       let trackingUrlTemplate = partner.trackingUrlTemplate || "";
       if (body.trackingUrlTemplate !== undefined) {
         trackingUrlTemplate = clean(body.trackingUrlTemplate);
         if (trackingUrlTemplate.length > 500) {
-          return res.status(400).json({ success: false, message: "Tracking URL template is too long (max 500 characters)." });
-        }
-      }
-
-      let notes = partner.notes || "";
-      if (body.notes !== undefined) {
-        notes = clean(body.notes).slice(0, 500);
-      }
-
-      // API MODE: only 'manual' is accepted — no live courier API is
-      // integrated in this project, so enabling anything else would be
-      // a fake promise. The field stays forward-compatible.
-      let apiMode = partner.apiMode || "manual";
-      if (body.apiMode !== undefined) {
-        if (clean(body.apiMode) !== "manual") {
           return res.status(400).json({
             success: false,
-            message:
-              "Live API integration is not available for this partner yet — Manual Mode is required. Book on the courier's own system and record the AWB here.",
+            message: "Tracking URL template is too long (max 500 characters).",
           });
         }
-        apiMode = "manual";
-      }
-
-      // API credentials: write-only. Send { apiCredentials: {...} } to
-      // replace, or { apiCredentials: null } to clear. NEVER returned.
-      let apiCredentials = partner.apiCredentials || null;
-      if (body.apiCredentials !== undefined) {
-        if (body.apiCredentials === null) {
-          apiCredentials = null;
-        } else if (typeof body.apiCredentials === "object" && !Array.isArray(body.apiCredentials)) {
-          const sanitized = {};
-          for (const [key, value] of Object.entries(body.apiCredentials)) {
-            const k = clean(key).slice(0, 40);
-            if (!k) continue;
-            sanitized[k] = String(value ?? "").slice(0, 500);
-          }
-          apiCredentials = Object.keys(sanitized).length ? JSON.stringify(sanitized) : null;
-        } else {
-          return res.status(400).json({ success: false, message: "API credentials must be an object or null." });
+        if (trackingUrlTemplate && !trackingUrlTemplate.includes("{awb}")) {
+          return res.status(400).json({
+            success: false,
+            message: "Tracking URL template must contain {awb}.",
+          });
         }
       }
+
+      const pickupPincode =
+        body.pickupPincode === undefined
+          ? partner.pickupPincode || null
+          : clean(body.pickupPincode) || null;
+      if (pickupPincode && !/^\d{6}$/.test(pickupPincode)) {
+        return res.status(400).json({ success: false, message: "Pickup PIN code must be 6 digits." });
+      }
+
+      const notes = body.notes === undefined ? partner.notes || "" : clean(body.notes).slice(0, 500);
 
       db.prepare(`
         UPDATE courier_partners
         SET partnerType = ?, enabled = ?, codAvailable = ?, serviceablePincodes = ?,
-            baseRate = ?, perKgRate = ?, codCharge = ?, trackingUrlTemplate = ?,
-            apiMode = ?, apiCredentials = ?, notes = ?, updatedAt = ?
+            baseRate = ?, perKgRate = ?, codCharge = ?, freeShippingAbove = ?,
+            maxWeightKg = ?, maxCodAmount = ?, returnWindowDays = ?, rtoCharge = ?,
+            pickupLocation = ?, pickupPincode = ?, trackingUrlTemplate = ?,
+            notes = ?, updatedAt = ?
         WHERE id = ?
       `).run(
         partnerType,
@@ -335,18 +999,22 @@ courierRouter.put(
         baseRate,
         perKgRate,
         codCharge,
+        freeShippingAbove,
+        maxWeightKg,
+        maxCodAmount,
+        returnWindowDays,
+        rtoCharge,
+        body.pickupLocation === undefined
+          ? partner.pickupLocation || null
+          : clean(body.pickupLocation) || null,
+        pickupPincode,
         trackingUrlTemplate || null,
-        apiMode,
-        apiCredentials,
         notes || null,
         now(),
         partner.id
       );
 
-      const updated = db
-        .prepare(`SELECT * FROM courier_partners WHERE id = ?`)
-        .get(partner.id);
-
+      const updated = getPartner(partner.id);
       res.json({
         success: true,
         message: `${partner.name} settings saved.`,
@@ -360,25 +1028,463 @@ courierRouter.put(
 );
 
 // =====================================
-// ADMIN: PER-ORDER COURIER ASSIGNMENT
+// ADMIN: API INTEGRATION STATUS
 // =====================================
-// Assign / update the courier booking for an order. This ONLY writes
-// courier columns — order status, payment status, totals and the
-// configured delivery charge / GST calculation are never touched.
 
-function validateAssignment(partner, order) {
-  if (!partner.enabled) {
-    return `${partner.name} is disabled. Enable it first (Courier Partners section).`;
-  }
-  if (order.paymentMethod === "COD" && !partner.codAvailable) {
-    return `${partner.name} does not accept Cash on Delivery. Enable COD for it, or choose another partner.`;
-  }
-  const pincodes = parsePincodes(partner.serviceablePincodes);
-  if (pincodes.length > 0 && order.pincode && !pincodes.includes(String(order.pincode))) {
-    return `PIN ${order.pincode} is not in ${partner.name}'s serviceable area.`;
-  }
-  return null;
+const lastTests = new Map();
+function readLastTest(code) {
+  return lastTests.get(code) || null;
 }
+
+courierRouter.get(
+  "/api/admin/courier/api-status",
+  requireAuth,
+  requireRole("super_admin", "manager"),
+  (req, res) => {
+    try {
+      const partners = db.prepare(`SELECT * FROM courier_partners ORDER BY id`).all();
+      const list = partners.map((p) => {
+        const status = courierAdapterStatus(p.code);
+        return {
+          id: p.id,
+          code: p.code,
+          name: p.name,
+          enabled: Number(p.enabled) === 1,
+          ...status,
+          lastTest: readLastTest(p.code),
+        };
+      });
+      res.json({
+        success: true,
+        partners: list,
+        liveFlagSet: process.env.COURIER_LIVE_ENABLED === "1",
+        note:
+          "Credentials are read from server-side secrets only. They are never stored in the database, returned by an endpoint, logged or committed. Shiprocket is live only when credentials exist and COURIER_LIVE_ENABLED=1; otherwise it is sandbox and no external call is made.",
+      });
+    } catch (error) {
+      console.error("COURIER API STATUS ERROR:", error);
+      res.status(500).json({ success: false, message: "Failed to read courier API status." });
+    }
+  }
+);
+
+courierRouter.post(
+  "/api/admin/courier/api/test/:id",
+  requireAuth,
+  requireRole("super_admin", "manager"),
+  async (req, res) => {
+    try {
+      const partner = getPartner(req.params.id);
+      if (!partner) {
+        return res.status(404).json({ success: false, message: "Courier partner not found." });
+      }
+      const adapter = getCourierAdapter(partner.code);
+      if (!adapter) {
+        return res.status(400).json({ success: false, message: "No adapter is registered for this partner." });
+      }
+      const result = await adapter.testConnection();
+      lastTests.set(partner.code, result);
+      res.json({ success: true, code: partner.code, name: partner.name, result });
+    } catch (error) {
+      console.error("COURIER TEST CONNECTION ERROR:", error);
+      res.status(500).json({ success: false, message: "Failed to test courier connection." });
+    }
+  }
+);
+
+// =====================================
+// ADMIN: PICKUP LOCATIONS
+// =====================================
+
+courierRouter.get(
+  "/api/admin/courier/pickups",
+  requireAuth,
+  requireRole("super_admin", "manager", "accountant"),
+  (req, res) => {
+    const sellers = db.prepare(`SELECT * FROM sellers ORDER BY id`).all();
+    const rows = sellers.map((seller) => sellerPublicPickup(getPickup(seller.sellerCode)));
+    res.json({ success: true, pickups: rows });
+  }
+);
+
+courierRouter.put(
+  "/api/admin/courier/pickups/:sellerRef",
+  requireAuth,
+  requireRole("super_admin", "manager"),
+  (req, res) => {
+    const seller = getSellerByRef(req.params.sellerRef);
+    if (!seller) return res.status(404).json({ success: false, message: "Seller not found." });
+    const saved = savePickup(seller, req.body || {});
+    if (saved.error) return res.status(400).json({ success: false, message: saved.error });
+    res.json({ success: true, message: "Pickup address saved.", pickup: sellerPublicPickup(saved.pickup) });
+  }
+);
+
+function savePickup(seller, body) {
+  const contactName = clean(body.contactName || seller.name).slice(0, 100);
+  const phone = clean(body.phone || seller.mobile);
+  const address = clean(body.address);
+  const city = clean(body.city);
+  const state = clean(body.state);
+  const pincode = clean(body.pincode);
+  const providerLocationName = clean(body.providerLocationName).slice(0, 80);
+
+  if (!contactName) return { error: "Pickup contact name is required." };
+  if (!/^\d{10}$/.test(phone.replace(/\D/g, ""))) return { error: "A valid 10-digit pickup phone is required." };
+  if (address.length < 10) return { error: "A complete pickup address is required." };
+  if (!city || !state) return { error: "Pickup city and state are required." };
+  if (!/^\d{6}$/.test(pincode)) return { error: "Pickup PIN code must be 6 digits." };
+
+  db.prepare(`
+    INSERT INTO courier_pickup_locations
+      (sellerRef, contactName, phone, address, city, state, pincode,
+       providerLocationName, active, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+    ON CONFLICT(sellerRef) DO UPDATE SET
+      contactName = excluded.contactName, phone = excluded.phone,
+      address = excluded.address, city = excluded.city, state = excluded.state,
+      pincode = excluded.pincode, providerLocationName = excluded.providerLocationName,
+      active = 1, updatedAt = excluded.updatedAt
+  `).run(
+    seller.sellerCode,
+    contactName,
+    phone.replace(/\D/g, ""),
+    address,
+    city,
+    state,
+    pincode,
+    providerLocationName || null,
+    now(),
+    now()
+  );
+
+  return { pickup: getPickup(seller.sellerCode) };
+}
+
+// =====================================
+// PUBLIC SERVICEABILITY / RATE COMPARISON
+// =====================================
+
+courierRouter.post("/api/courier/serviceability", async (req, res) => {
+  try {
+    const body = req.body || {};
+    const pincode = clean(body.pincode);
+    if (!/^\d{6}$/.test(pincode)) {
+      return res.status(400).json({ success: false, message: "A valid 6-digit delivery PIN code is required." });
+    }
+    const packageInfo = normalizePackage(body);
+    const cod = Boolean(body.cod);
+    const pseudoOrder = {
+      id: 0,
+      pincode,
+      city: clean(body.city),
+      state: clean(body.state),
+      paymentMethod: cod ? "COD" : "Prepaid",
+      totalAmount: safeNumber(body.declaredValue),
+      customerName: "Buyer",
+      address: "",
+      phone: "",
+      email: "",
+    };
+    const partnerId = body.partnerId ? Number(body.partnerId) : null;
+    const { rows, options, recommended } = await compareRates({
+      order: pseudoOrder,
+      group: null,
+      packageInfo,
+      partnerId,
+    });
+
+    res.json({
+      success: true,
+      pincode,
+      cod,
+      package: packageInfo,
+      serviceable: Boolean(recommended),
+      quotes: options,
+      partners: rows.map((row) => ({
+        partnerId: row.partnerId,
+        partnerName: row.partnerName,
+        pageCode: row.partnerCode,
+        partnerCode: row.partnerCode,
+        mode: row.mode,
+        serviceable: row.serviceable,
+        reason: row.reason || null,
+        apiWarning: row.apiWarning || null,
+      })),
+      recommended,
+      note: recommended
+        ? "Rates are live Shiprocket rates only where mode=live; otherwise they are admin-configured estimates. No booking is made by this check."
+        : "No enabled courier partner is currently serviceable for this PIN/package. No fake option is shown.",
+    });
+  } catch (error) {
+    console.error("COURIER SERVICEABILITY ERROR:", error);
+    res.status(500).json({ success: false, message: "Failed to check courier serviceability." });
+  }
+});
+
+// =====================================
+// ADMIN: ORDER SHIPMENT GROUPS / RATES
+// =====================================
+
+courierRouter.get(
+  "/api/admin/orders/:id/shipment-groups",
+  requireAuth,
+  requireRole("super_admin", "manager", "accountant"),
+  (req, res) => {
+    const { order, groups } = buildGroups(req.params.id);
+    if (!order) return res.status(404).json({ success: false, message: "Order not found." });
+    res.json({ success: true, order: { ...order, items: undefined }, groups, courierStatuses: COURIER_STATUSES });
+  }
+);
+
+courierRouter.post(
+  "/api/admin/orders/:id/shipments/quote",
+  requireAuth,
+  requireRole("super_admin", "manager"),
+  async (req, res) => {
+    try {
+      const { order, groups } = buildGroups(req.params.id);
+      if (!order) return res.status(404).json({ success: false, message: "Order not found." });
+      const sellerRef = req.body?.sellerId || req.body?.sellerKey || req.body?.sellerCode;
+      const group = sellerRef
+        ? groups.find(
+            (g) =>
+              String(g.sellerId) === String(sellerRef) ||
+              g.sellerKey === String(sellerRef) ||
+              g.sellerCode === String(sellerRef)
+          )
+        : groups[0];
+      if (!group) return res.status(404).json({ success: false, message: "Seller shipment group not found." });
+
+      const packageInfo = normalizePackage(req.body?.package || req.body || {});
+      const { rows, options, recommended } = await compareRates({
+        order,
+        group,
+        packageInfo,
+        partnerId: req.body?.partnerId || null,
+      });
+      res.json({ success: true, group, package: packageInfo, partners: rows, quotes: options, recommended });
+    } catch (error) {
+      console.error("ADMIN COURIER QUOTE ERROR:", error);
+      res.status(500).json({ success: false, message: "Failed to compare courier rates." });
+    }
+  }
+);
+
+// =====================================
+// BOOKING CORE (admin + seller)
+// =====================================
+
+async function bookGroup({ order, group, partner, packageInfo, body, actorType, actorId, force = false }) {
+  const problem = validateAssignment(partner, order, packageInfo.weightKg);
+  if (problem) {
+    const error = new Error(problem);
+    error.status = 400;
+    throw error;
+  }
+
+  const existing = db
+    .prepare(`
+      SELECT * FROM courier_shipments
+      WHERE orderId = ? AND sellerKey = ? AND courierStatus != 'Cancelled'
+      ORDER BY id DESC LIMIT 1
+    `)
+    .get(order.id, group.sellerKey);
+
+  if (existing && !force) {
+    const fallback = !existing && group.sellerKey
+      ? db
+          .prepare(`
+            SELECT * FROM courier_shipments
+            WHERE orderId = ? AND sellerKey IS NULL AND courierStatus != 'Cancelled'
+            ORDER BY id DESC LIMIT 1
+          `)
+          .get(order.id)
+      : null;
+    const duplicate = existing || fallback;
+    if (duplicate) {
+      const error = new Error(
+        `This seller already has an active shipment for order #${order.orderNumber} (AWB ${duplicate.awbNumber || "—"}).`
+      );
+      error.status = 409;
+      error.shipmentId = duplicate.id;
+      throw error;
+    }
+  }
+
+  const status = courierAdapterStatus(partner.code);
+  const adapter = getCourierAdapter(partner.code);
+  if (!adapter) {
+    const error = new Error(`No adapter is registered for ${partner.name}.`);
+    error.status = 400;
+    throw error;
+  }
+
+  const packageInfoFinal = normalizePackage(packageInfo);
+  const pickup = getPickup(group.sellerCode);
+  let created = null;
+  let lastApiError = null;
+  let bookingMode = status.mode;
+
+  if (status.mode === "live") {
+    if (partner.code === "SHIPROCKET") {
+      const payload = buildShiprocketPayload({
+        order,
+        partner,
+        items: group.items,
+        packageInfo: packageInfoFinal,
+        pickup: {
+          ...pickup,
+          providerLocationName: body.pickupLocationName || pickup.providerLocationName,
+        },
+      });
+      created = await adapter.createShipment({
+        payload,
+        courierCompanyId: body.courierCompanyId || body.courierId || null,
+        requestPickup: body.requestPickup !== false,
+        generateLabel: body.generateLabel !== false,
+      });
+      if (!created.ok) {
+        const error = new Error(created.message || "Shiprocket booking failed.");
+        error.status = 502;
+        error.provider = "SHIPROCKET";
+        throw error;
+      }
+    } else {
+      const error = new Error(`${partner.name} live API is not integrated. Use Manual Mode.`);
+      error.status = 409;
+      throw error;
+    }
+  } else if (status.mode === "sandbox") {
+    created = createSandboxShipment({ code: partner.code, orderId: order.id, sellerKey: group.sellerKey });
+  } else {
+    const awbNumber = clean(body.awbNumber).slice(0, 64);
+    if (awbNumber && !/^[A-Za-z0-9\-/]+$/.test(awbNumber)) {
+      const error = new Error("AWB / tracking number may only contain letters, numbers, - and /.");
+      error.status = 400;
+      throw error;
+    }
+    created = {
+      mode: "manual",
+      awbNumber: awbNumber || null,
+      shippingLabelRef: clean(body.shippingLabelRef).slice(0, 64) || null,
+      note: "Manual booking record — booked outside this system. No courier API was contacted.",
+    };
+    bookingMode = "manual";
+  }
+
+  const awbNumber = clean(created.awbNumber || body.awbNumber).slice(0, 64) || null;
+  if (awbNumber && !/^[A-Za-z0-9\-/]+$/.test(awbNumber)) {
+    const error = new Error("AWB / tracking number may only contain letters, numbers, - and /.");
+    error.status = 400;
+    throw error;
+  }
+
+  const labelRef = clean(created.shippingLabelRef || body.shippingLabelRef).slice(0, 64) || null;
+  const etaFallback = localQuote(partner, {
+    weightKg: packageInfoFinal.weightKg,
+    cod: order.paymentMethod === "COD",
+    declaredValue: order.totalAmount,
+    pickupPincode: pickup.pincode,
+    deliveryPincode: order.pincode,
+  });
+  const estimatedDeliveryDays =
+    body.estimatedDeliveryDays === undefined || body.estimatedDeliveryDays === null
+      ? etaFallback.estimatedDeliveryDays
+      : safeNumber(body.estimatedDeliveryDays);
+  const estimatedDeliveryDate =
+    clean(body.estimatedDeliveryDate) || etaFallback.estimatedDeliveryDate;
+  const history = [
+    {
+      at: now(),
+      status: "Booked",
+      note:
+        created.mode === "live"
+          ? `Live ${partner.name} booking created.`
+          : created.mode === "sandbox"
+            ? "Sandbox/dry-run booking — no courier contacted. TEST AWB."
+            : "Manual booking recorded. No courier API contacted.",
+    },
+  ];
+
+  const info = db
+    .prepare(`
+      INSERT INTO courier_shipments
+        (orderId, partnerId, sellerKey, sellerId, sellerCode, sellerName,
+         orderItemIds, provider, providerOrderId, providerShipmentId,
+         courierCompanyId, courierName, mode, awbNumber, shippingLabelRef,
+         labelUrl, manifestUrl, pickupToken, pickupLocation, pickupJson,
+         packageJson, rate, estimatedDeliveryDays, estimatedDeliveryDate,
+         courierStatus, trackingStatus, historyJson, lastApiError, packedAt, readyAt,
+         createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    .run(
+      order.id,
+      partner.id,
+      group.sellerKey,
+      group.sellerId,
+      group.sellerCode,
+      group.sellerName,
+      JSON.stringify(group.items.map((item) => item.orderItemId)),
+      partner.code,
+      created.providerOrderId || null,
+      created.providerShipmentId || null,
+      clean(created.courierCompanyId || body.courierCompanyId || body.courierId) || null,
+      clean(created.courierName || body.courierName || partner.name) || partner.name,
+      bookingMode,
+      awbNumber,
+      labelRef,
+      clean(created.labelUrl || body.labelUrl) || null,
+      clean(created.manifestUrl || body.manifestUrl) || null,
+      clean(created.pickupToken || body.pickupToken) || null,
+      clean(body.pickupLocationName || pickup.providerLocationName || partner.pickupLocation) || null,
+      JSON.stringify({ ...pickup, providerLocationName: body.pickupLocationName || pickup.providerLocationName }),
+      JSON.stringify(packageInfoFinal),
+      body.rate === undefined ? null : safeNumber(body.rate),
+      estimatedDeliveryDays,
+      estimatedDeliveryDate,
+      "Booked",
+      "Booked",
+      JSON.stringify(history),
+      lastApiError,
+      now(), // packedAt
+      now(), // readyAt
+      now(), // createdAt
+      now() // updatedAt
+    );
+
+  syncOrderCourierSummary(order.id);
+  return db.prepare(`SELECT * FROM courier_shipments WHERE id = ?`).get(info.lastInsertRowid);
+}
+
+async function resolveGroupForBooking(orderId, body) {
+  const { order, groups } = buildGroups(orderId);
+  if (!order) return { error: { status: 404, message: "Order not found." } };
+  const ref = body?.sellerId || body?.sellerKey || body?.sellerCode || body?.sellerRef;
+  if (ref) {
+    const group = groups.find(
+      (g) =>
+        String(g.sellerId) === String(ref) ||
+        g.sellerKey === String(ref) ||
+        g.sellerCode === String(ref)
+    );
+    if (!group) return { error: { status: 404, message: "Seller shipment group not found for this order." } };
+    return { order, groups, group };
+  }
+  if (groups.length === 1) return { order, groups, group: groups[0] };
+  return {
+    error: {
+      status: 400,
+      message: "This order contains multiple sellers. Choose a seller group for each shipment.",
+      groups: groups.map((g) => ({ sellerId: g.sellerId, sellerKey: g.sellerKey, sellerCode: g.sellerCode, sellerName: g.sellerName })),
+    },
+  };
+}
+
+// =====================================
+// ADMIN: PER-ORDER COURIER ASSIGNMENT (legacy manual contract)
+// =====================================
 
 courierRouter.put(
   "/api/admin/orders/:id/courier",
@@ -387,14 +1493,11 @@ courierRouter.put(
   (req, res) => {
     try {
       const orderId = Number(req.params.id);
-      const order = db.prepare(`SELECT * FROM orders WHERE id = ?`).get(orderId);
-      if (!order) {
-        return res.status(404).json({ success: false, message: "Order not found." });
-      }
+      const order = getOrder(orderId);
+      if (!order) return res.status(404).json({ success: false, message: "Order not found." });
 
       const body = req.body || {};
 
-      // Clearing the courier booking (mistake fix): courierPartnerId = null.
       if (body.courierPartnerId === null || body.courierPartnerId === 0) {
         db.prepare(`
           UPDATE orders
@@ -403,8 +1506,7 @@ courierRouter.put(
               updatedAt = ?
           WHERE id = ?
         `).run(now(), orderId);
-
-        const cleared = db.prepare(`SELECT * FROM orders WHERE id = ?`).get(orderId);
+        const cleared = getOrder(orderId);
         return res.json({
           success: true,
           message: "Courier booking cleared for this order.",
@@ -412,36 +1514,27 @@ courierRouter.put(
         });
       }
 
-      const partner = db
-        .prepare(`SELECT * FROM courier_partners WHERE id = ?`)
-        .get(Number(body.courierPartnerId));
-
-      if (!partner) {
-        return res.status(404).json({ success: false, message: "Courier partner not found." });
-      }
+      const partner = getPartner(body.courierPartnerId);
+      if (!partner) return res.status(404).json({ success: false, message: "Courier partner not found." });
 
       const problem = validateAssignment(partner, order);
-      if (problem) {
-        return res.status(400).json({ success: false, message: problem });
-      }
+      if (problem) return res.status(400).json({ success: false, message: problem });
 
       const awbNumber = clean(body.awbNumber).slice(0, 64);
-      if (awbNumber && !/^[A-Za-z0-9\-\/]+$/.test(awbNumber)) {
+      if (awbNumber && !/^[A-Za-z0-9\-/]+$/.test(awbNumber)) {
         return res.status(400).json({
           success: false,
           message: "AWB / tracking number may only contain letters, numbers, - and /.",
         });
       }
-
       const shippingLabelRef = clean(body.shippingLabelRef).slice(0, 64);
-      if (shippingLabelRef && !/^[A-Za-z0-9\-\/_]+$/.test(shippingLabelRef)) {
+      if (shippingLabelRef && !/^[A-Za-z0-9\-/_]+$/.test(shippingLabelRef)) {
         return res.status(400).json({
           success: false,
           message: "Shipping label reference may only contain letters, numbers, - _ and /.",
         });
       }
-
-      let courierStatus = clean(body.courierStatus) || order.courierStatus || "Booked";
+      const courierStatus = clean(body.courierStatus) || order.courierStatus || "Booked";
       if (!COURIER_STATUSES.includes(courierStatus)) {
         return res.status(400).json({
           success: false,
@@ -450,12 +1543,10 @@ courierRouter.put(
       }
 
       const firstAssign = !order.courierPartnerId;
-
       db.prepare(`
         UPDATE orders
         SET courierPartnerId = ?, awbNumber = ?, shippingLabelRef = ?,
-            courierStatus = ?, courierAssignedAt = ?,
-            courierStatusUpdatedAt = ?, updatedAt = ?
+            courierStatus = ?, courierAssignedAt = ?, courierStatusUpdatedAt = ?, updatedAt = ?
         WHERE id = ?
       `).run(
         partner.id,
@@ -468,22 +1559,16 @@ courierRouter.put(
         orderId
       );
 
-      const updated = db.prepare(`SELECT * FROM orders WHERE id = ?`).get(orderId);
-
+      const updated = getOrder(orderId);
       res.json({
         success: true,
         message: firstAssign
           ? `Order assigned to ${partner.name}${awbNumber ? ` (AWB ${awbNumber})` : ""}.`
           : `Courier booking updated${awbNumber ? ` — AWB ${awbNumber}` : ""}.`,
         order: {
-          id: updated.id,
-          orderNumber: updated.orderNumber,
-          courierPartnerId: updated.courierPartnerId,
+          ...updated,
+          items: undefined,
           courierPartnerName: partner.name,
-          awbNumber: updated.awbNumber,
-          shippingLabelRef: updated.shippingLabelRef,
-          courierStatus: updated.courierStatus,
-          courierAssignedAt: updated.courierAssignedAt,
         },
       });
     } catch (error) {
@@ -493,8 +1578,6 @@ courierRouter.put(
   }
 );
 
-// Quick courier-status update (Manual Mode: admin records what the
-// courier's own system shows).
 courierRouter.put(
   "/api/admin/orders/:id/courier-status",
   requireAuth,
@@ -502,17 +1585,11 @@ courierRouter.put(
   (req, res) => {
     try {
       const orderId = Number(req.params.id);
-      const order = db.prepare(`SELECT * FROM orders WHERE id = ?`).get(orderId);
-      if (!order) {
-        return res.status(404).json({ success: false, message: "Order not found." });
-      }
+      const order = getOrder(orderId);
+      if (!order) return res.status(404).json({ success: false, message: "Order not found." });
       if (!order.courierPartnerId) {
-        return res.status(400).json({
-          success: false,
-          message: "No courier partner is assigned to this order yet.",
-        });
+        return res.status(400).json({ success: false, message: "No courier partner is assigned to this order yet." });
       }
-
       const status = clean(req.body.courierStatus);
       if (!COURIER_STATUSES.includes(status)) {
         return res.status(400).json({
@@ -520,12 +1597,9 @@ courierRouter.put(
           message: `Invalid courier status. Allowed: ${COURIER_STATUSES.join(", ")}.`,
         });
       }
-
       db.prepare(`
-        UPDATE orders SET courierStatus = ?, courierStatusUpdatedAt = ?, updatedAt = ?
-        WHERE id = ?
+        UPDATE orders SET courierStatus = ?, courierStatusUpdatedAt = ?, updatedAt = ? WHERE id = ?
       `).run(status, now(), now(), orderId);
-
       res.json({ success: true, message: `Courier status recorded as ${status}.` });
     } catch (error) {
       console.error("COURIER STATUS ERROR:", error);
@@ -535,252 +1609,90 @@ courierRouter.put(
 );
 
 // =====================================
-// ADMIN: API INTEGRATION STATUS (secure — status + env NAMES only)
+// ADMIN: CREATE SHIPMENT
 // =====================================
-// Reports, per partner, whether server-side credentials exist and the
-// mode (manual / sandbox / live). NEVER returns any secret value —
-// only the boolean "configured" flag and the NAMES of missing env vars.
 
-courierRouter.get(
-  "/api/admin/courier/api-status",
-  requireAuth,
-  requireRole("super_admin", "manager"),
-  (req, res) => {
-    try {
-      const partners = db.prepare(`SELECT * FROM courier_partners ORDER BY id`).all();
-      const list = partners.map((p) => {
-        const status = apiConfigStatus(p.code);
-        return {
-          id: p.id,
-          code: p.code,
-          name: p.name,
-          enabled: Number(p.enabled) === 1,
-          // Status-only (never secrets):
-          hasApi: status.hasApi,
-          configured: status.configured,
-          mode: status.mode,
-          liveEnabled: status.liveEnabled,
-          missingEnv: status.missingEnv, // names only
-          envNames: status.envNames,
-          note: status.note,
-          // Last recorded test result (from the DB, status-only too):
-          lastTest: readLastTest(p.code),
-        };
-      });
+async function createShipmentHandler(req, res) {
+  try {
+    const orderId = Number(req.params.id);
+    const { order, group, error } = await resolveGroupForBooking(orderId, req.body || {});
+    if (error) return res.status(error.status).json({ success: false, ...error });
+    const partner = getPartner(req.body?.courierPartnerId || req.body?.partnerId);
+    if (!partner) return res.status(404).json({ success: false, message: "Courier partner not found." });
 
-      res.json({
-        success: true,
-        partners: list,
-        liveFlagSet: process.env.COURIER_LIVE_ENABLED === "1",
-        note:
-          "Credentials are read from server-side secrets (Settings → Environment) and are never stored in the DB, returned by any endpoint, logged or committed. Without COURIER_LIVE_ENABLED=1 every partner runs as a dry-run/sandbox — shipment creation returns a clearly labelled TEST AWB and no courier is contacted.",
-      });
-    } catch (error) {
-      console.error("COURIER API STATUS ERROR:", error);
-      res.status(500).json({ success: false, message: "Failed to read courier API status." });
+    const packageInfo = normalizePackage(req.body?.package || req.body || {});
+    const shipment = await bookGroup({
+      order,
+      group,
+      partner,
+      packageInfo,
+      body: req.body || {},
+      actorType: "admin",
+      actorId: req.user?.id || req.user?.username || null,
+      force: Boolean(req.body?.force),
+    });
+
+    const payloadPreview =
+      partner.code === "SHIPROCKET"
+        ? buildShiprocketPayload({
+            order,
+            partner,
+            items: group.items,
+            packageInfo,
+            pickup: group.pickup,
+          })
+        : null;
+
+    res.status(201).json({
+      success: true,
+      message:
+        shipment.mode === "live"
+          ? `Live ${partner.name} shipment created${shipment.awbNumber ? ` with AWB ${shipment.awbNumber}` : ""}.`
+          : shipment.mode === "manual"
+            ? "Manual shipment recorded. No courier API was contacted."
+            : `Sandbox shipment recorded with TEST AWB ${shipment.awbNumber} — no courier contacted.`,
+      shipment: publicShipment(shipment),
+      partnerName: partner.name,
+      payloadPreview,
+      apiStatus: { mode: shipment.mode, configured: courierAdapterStatus(partner.code).configured },
+    });
+  } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({ success: false, message: error.message, shipmentId: error.shipmentId });
     }
+    console.error("SHIPMENT CREATE ERROR:", error);
+    res.status(500).json({ success: false, message: "Failed to create shipment." });
   }
-);
-
-// =====================================
-// ADMIN: TEST CONNECTION (dry-run by default; never fakes success)
-// =====================================
-
-const lastTests = new Map(); // code → last test result (status-only)
-function readLastTest(code) {
-  return lastTests.get(code) || null;
 }
-
-courierRouter.post(
-  "/api/admin/courier/api/test/:id",
-  requireAuth,
-  requireRole("super_admin", "manager"),
-  async (req, res) => {
-    try {
-      const partner = db
-        .prepare(`SELECT * FROM courier_partners WHERE id = ?`)
-        .get(Number(req.params.id));
-      if (!partner) {
-        return res.status(404).json({ success: false, message: "Courier partner not found." });
-      }
-
-      const result = await testConnection(partner.code);
-      // Store ONLY the status-only result (never any secret).
-      lastTests.set(partner.code, result);
-
-      res.json({
-        success: true,
-        code: partner.code,
-        name: partner.name,
-        result,
-      });
-    } catch (error) {
-      console.error("COURIER TEST CONNECTION ERROR:", error);
-      res.status(500).json({ success: false, message: "Failed to test courier connection." });
-    }
-  }
-);
-
-// =====================================
-// ADMIN: SHIPMENT MANAGEMENT (sandbox/mock by default)
-// =====================================
-// Creates a shipment for an order. With no live flag (the preview
-// default) this returns a clearly labelled TEST AWB + label reference
-// and records it — NO real courier is contacted. Duplicate bookings are
-// rejected. Order totals/payment/status are NEVER touched.
 
 courierRouter.post(
   "/api/admin/orders/:id/shipment",
   requireAuth,
   requireRole("super_admin", "manager"),
-  (req, res) => {
-    try {
-      const orderId = Number(req.params.id);
-      const order = db.prepare(`SELECT * FROM orders WHERE id = ?`).get(orderId);
-      if (!order) {
-        return res.status(404).json({ success: false, message: "Order not found." });
-      }
-
-      const body = req.body || {};
-      const partner = db
-        .prepare(`SELECT * FROM courier_partners WHERE id = ?`)
-        .get(Number(body.courierPartnerId));
-      if (!partner) {
-        return res.status(404).json({ success: false, message: "Courier partner not found." });
-      }
-
-      // Enable / COD / pincode validation (same rules as manual assign).
-      const problem = validateAssignment(partner, order);
-      if (problem) {
-        return res.status(400).json({ success: false, message: problem });
-      }
-
-      // DUPLICATE BOOKING GUARD: an existing active shipment for this
-      // order + partner blocks a second one (unless force=true, which a
-      // manager can use to intentionally re-create after clearing).
-      const existing = db
-        .prepare(`
-          SELECT * FROM courier_shipments
-          WHERE orderId = ? AND partnerId = ? AND courierStatus NOT IN ('Cancelled')
-          ORDER BY id DESC LIMIT 1
-        `)
-        .get(orderId, partner.id);
-      if (existing && !body.force) {
-        return res.status(409).json({
-          success: false,
-          message: `Order already has an active ${partner.name} shipment (AWB ${existing.awbNumber || "—"}). Clear it or pass force=true to recreate.`,
-          shipmentId: existing.id,
-        });
-      }
-
-      const status = apiConfigStatus(partner.code);
-      let created;
-      let lastApiError = null;
-
-      if (status.mode === "live") {
-        // LIVE path (only reachable with real creds + explicit flag).
-        // We do not implement a real Shiprocket booking here — the
-        // preview must never create real shipments. Report honestly.
-        lastApiError =
-          "Live mode is enabled but real booking is not implemented in this preview. Use Manual Mode / sandbox, or complete the live integration with real credentials.";
-        created = createSandboxShipment({ code: partner.code, orderId });
-        created.mode = "live-blocked";
-      } else {
-        // SANDBOX / DRY-RUN (the default) — labelled TEST AWB.
-        created = createSandboxShipment({ code: partner.code, orderId });
-      }
-
-      // Persist a payload preview for Shiprocket (sandbox only) so the
-      // admin can SEE what WOULD be sent — no live call is made.
-      let payloadPreview = null;
-      if (partner.code === "SHIPROCKET") {
-        let items = [];
-        try {
-          items = db
-            .prepare(
-              `SELECT oi.productId, oi.quantity, p.name, p.sku
-               FROM order_items oi LEFT JOIN products p ON p.id = oi.productId
-               WHERE oi.orderId = ?`
-            )
-            .all(orderId);
-        } catch {
-          items = [];
-        }
-        payloadPreview = buildShiprocketPayload({ order, partner, items });
-      }
-
-      const history = [
-        {
-          at: new Date().toISOString(),
-          status: "Booked",
-          note:
-            status.mode === "live"
-              ? "Live booking blocked in preview — recorded as sandbox."
-              : "Sandbox/mock shipment created — NOT a real booking. No courier contacted.",
-        },
-      ];
-
-      const info = db
-        .prepare(`
-          INSERT INTO courier_shipments
-            (orderId, partnerId, mode, awbNumber, shippingLabelRef, courierStatus,
-             historyJson, lastApiError, createdAt, updatedAt)
-          VALUES (?, ?, ?, ?, ?, 'Booked', ?, ?, ?, ?)
-        `)
-        .run(
-          orderId,
-          partner.id,
-          created.mode,
-          created.awbNumber,
-          created.shippingLabelRef,
-          JSON.stringify(history),
-          lastApiError,
-          now(),
-          now()
-        );
-
-      // Mirror onto the order's courier columns (same fields the manual
-      // booking uses) so the buyer/admin order views stay consistent.
-      db.prepare(`
-        UPDATE orders
-        SET courierPartnerId = ?, awbNumber = ?, shippingLabelRef = ?,
-            courierStatus = 'Booked', courierAssignedAt = ?,
-            courierStatusUpdatedAt = ?, updatedAt = ?
-        WHERE id = ?
-      `).run(partner.id, created.awbNumber, created.shippingLabelRef, now(), now(), now(), orderId);
-
-      const shipment = db
-        .prepare(`SELECT * FROM courier_shipments WHERE id = ?`)
-        .get(info.lastInsertRowid);
-
-      res.status(201).json({
-        success: true,
-        message:
-          status.mode === "live"
-            ? "Live booking is blocked in preview — recorded as a sandbox shipment (no real courier contacted)."
-            : `Sandbox shipment created with TEST AWB ${created.awbNumber} — NOT a real booking, no courier contacted.`,
-        shipment: publicShipment(shipment),
-        partnerName: partner.name,
-        payloadPreview, // what WOULD be sent to Shiprocket (sandbox only)
-        apiStatus: { mode: status.mode, configured: status.configured },
-      });
-    } catch (error) {
-      console.error("SHIPMENT CREATE ERROR:", error);
-      res.status(500).json({ success: false, message: "Failed to create shipment." });
-    }
-  }
+  createShipmentHandler
 );
 
-// List shipments (with history + last API error) for the admin.
+courierRouter.post(
+  "/api/admin/orders/:id/shipments",
+  requireAuth,
+  requireRole("super_admin", "manager"),
+  createShipmentHandler
+);
+
+// =====================================
+// ADMIN: SHIPMENT LIST + STATUS
+// =====================================
+
 courierRouter.get(
   "/api/admin/courier/shipments",
   requireAuth,
   requireRole("super_admin", "manager", "accountant"),
   (req, res) => {
     try {
-      const rows = db
-        .prepare(`SELECT * FROM courier_shipments ORDER BY id DESC LIMIT 200`)
-        .all();
+      const orderId = req.query.orderId ? Number(req.query.orderId) : null;
+      const rows = orderId
+        ? db.prepare(`SELECT * FROM courier_shipments WHERE orderId = ? ORDER BY id DESC`).all(orderId)
+        : db.prepare(`SELECT * FROM courier_shipments ORDER BY id DESC LIMIT 300`).all();
       res.json({
         success: true,
         shipments: rows.map(publicShipment),
@@ -793,8 +1705,6 @@ courierRouter.get(
   }
 );
 
-// Record a courier status update for a shipment (manual or from a
-// tracking refresh). Appends to the tracking history + sets lastApiError.
 courierRouter.put(
   "/api/admin/courier/shipments/:id/status",
   requireAuth,
@@ -804,17 +1714,11 @@ courierRouter.put(
       const shipment = db
         .prepare(`SELECT * FROM courier_shipments WHERE id = ?`)
         .get(Number(req.params.id));
-      if (!shipment) {
-        return res.status(404).json({ success: false, message: "Shipment not found." });
-      }
+      if (!shipment) return res.status(404).json({ success: false, message: "Shipment not found." });
 
       const body = req.body || {};
-      let history = [];
-      try {
-        history = shipment.historyJson ? JSON.parse(shipment.historyJson) : [];
-      } catch {
-        history = [];
-      }
+      let history = parseJson(shipment.historyJson, []) || [];
+      const updates = [];
 
       if (body.courierStatus !== undefined) {
         const status = clean(body.courierStatus);
@@ -824,30 +1728,49 @@ courierRouter.put(
             message: `Invalid courier status. Allowed: ${COURIER_STATUSES.join(", ")}.`,
           });
         }
-        history.push({
-          at: now(),
-          status,
-          note: clean(body.note).slice(0, 300) || "Status updated by admin.",
-        });
-        db.prepare(`
-          UPDATE courier_shipments SET courierStatus = ?, historyJson = ?, updatedAt = ?
-          WHERE id = ?
-        `).run(status, JSON.stringify(history), now(), shipment.id);
-        // Keep the order's courierStatus in sync (display-only field).
-        db.prepare(`
-          UPDATE orders SET courierStatus = ?, courierStatusUpdatedAt = ?, updatedAt = ?
-          WHERE id = ?
-        `).run(status, now(), now(), shipment.orderId);
+        history = appendHistory(shipment, [
+          {
+            at: now(),
+            status,
+            note: clean(body.note).slice(0, 300) || "Status updated manually by admin.",
+          },
+        ]);
+        updates.push(["courierStatus", status]);
+        updates.push(["trackingStatus", status]);
+        if (status === "Cancelled") updates.push(["cancelledAt", now()]);
+        if (status === "Delivered") updates.push(["deliveredAt", now()]);
       }
 
-      // Optional: record an API error (e.g. a failed tracking refresh).
+      for (const [field, limit] of [
+        ["awbNumber", 64],
+        ["shippingLabelRef", 64],
+        ["labelUrl", 1000],
+        ["manifestUrl", 1000],
+        ["pickupToken", 120],
+        ["courierName", 120],
+        ["ndrStatus", 80],
+        ["rtoStatus", 80],
+      ]) {
+        if (body[field] !== undefined) updates.push([field, clean(body[field]).slice(0, limit) || null]);
+      }
+
       if (body.apiError !== undefined) {
-        const err = clean(body.apiError).slice(0, 500) || null;
-        db.prepare(`
-          UPDATE courier_shipments SET lastApiError = ?, updatedAt = ? WHERE id = ?
-        `).run(err, now(), shipment.id);
+        updates.push(["lastApiError", clean(body.apiError).slice(0, 500) || null]);
       }
 
+      if (!updates.length) {
+        return res.status(400).json({ success: false, message: "No shipment fields were supplied." });
+      }
+
+      updates.push(["historyJson", JSON.stringify(history)]);
+      updates.push(["updatedAt", now()]);
+      const setSql = updates.map(([field]) => `${field} = ?`).join(", ");
+      db.prepare(`UPDATE courier_shipments SET ${setSql} WHERE id = ?`).run(
+        ...updates.map(([, value]) => value),
+        shipment.id
+      );
+
+      syncOrderCourierSummary(shipment.orderId);
       const updated = db.prepare(`SELECT * FROM courier_shipments WHERE id = ?`).get(shipment.id);
       res.json({ success: true, message: "Shipment updated.", shipment: publicShipment(updated) });
     } catch (error) {
@@ -857,96 +1780,504 @@ courierRouter.put(
   }
 );
 
-// SAFE shipment shape for admin responses (never leaks secrets).
-function publicShipment(shipment) {
-  if (!shipment) return null;
-  const partner = db.prepare(`SELECT name FROM courier_partners WHERE id = ?`).get(shipment.partnerId);
-  let history = [];
-  try {
-    history = shipment.historyJson ? JSON.parse(shipment.historyJson) : [];
-  } catch {
-    history = [];
+// =====================================
+// SHIPMENT ACTIONS (label, manifest, pickup, tracking, cancel, NDR, RTO)
+// =====================================
+
+async function runShipmentAction({ shipment, action, body, actorType }) {
+  const partner = getPartner(shipment.partnerId);
+  if (!partner) {
+    const error = new Error("Courier partner not found.");
+    error.status = 404;
+    throw error;
   }
-  return {
-    id: shipment.id,
-    orderId: shipment.orderId,
-    partnerId: shipment.partnerId,
-    partnerName: partner ? partner.name : null,
-    mode: shipment.mode,
-    awbNumber: shipment.awbNumber,
-    shippingLabelRef: shipment.shippingLabelRef,
-    courierStatus: shipment.courierStatus,
-    trackingUrl: courierTrackingUrl(shipment.partnerId, shipment.awbNumber),
-    history,
-    lastApiError: shipment.lastApiError || null,
-    createdAt: shipment.createdAt,
-    updatedAt: shipment.updatedAt,
-  };
-}
+  const adapter = getCourierAdapter(partner.code);
+  if (!adapter) {
+    const error = new Error("No adapter is registered for this partner.");
+    error.status = 400;
+    throw error;
+  }
 
-// =====================================
-// SHARED HELPERS (used by business.js responses)
-// =====================================
+  const status = courierAdapterStatus(partner.code);
+  let result = { ok: false, mode: status.mode, message: "Action not supported." };
+  let notes = [];
+  let updates = {};
 
-// Map of courier partner id → name, for order list responses.
-export function courierPartnerNames() {
-  return new Map(
-    db.prepare(`SELECT id, name FROM courier_partners`).all().map((p) => [p.id, p.name])
-  );
-}
-
-// Tracking URL for a partner+AWB (template uses {awb}). Empty if unset.
-export function courierTrackingUrl(partnerId, awbNumber) {
-  const partner = db.prepare(`SELECT * FROM courier_partners WHERE id = ?`).get(Number(partnerId));
-  if (!partner || !partner.trackingUrlTemplate || !awbNumber) return null;
-  return String(partner.trackingUrlTemplate).replace("{awb}", encodeURIComponent(awbNumber));
-}
-
-// SAFE buyer-facing tracking shape: status + public history entries only.
-// Never includes API errors, credentials or internal notes.
-export function courierPublicTracking(order) {
-  if (!order || !order.courierPartnerId) return null;
-  const partner = db.prepare(`SELECT * FROM courier_partners WHERE id = ?`).get(Number(order.courierPartnerId));
-  const shipment = db
-    .prepare(`SELECT * FROM courier_shipments WHERE orderId = ? ORDER BY id DESC LIMIT 1`)
-    .get(order.id);
-
-  let history = [];
-  if (shipment?.historyJson) {
-    try {
-      history = JSON.parse(shipment.historyJson);
-    } catch {
-      history = [];
+  if (action === "track" || action === "sync") {
+    if (status.mode === "live") {
+      result = await adapter.track({ awbNumber: shipment.awbNumber });
+      if (result.ok) {
+        const tracking = result.tracking || {};
+        const entries = (tracking.history || []).map((entry) => ({
+          at: entry.at,
+          status: entry.status,
+          note: entry.note,
+          location: entry.location,
+        }));
+        const mappedStatus = statusFromProvider(tracking.status);
+        if (mappedStatus) entries.push({ at: now(), status: mappedStatus, note: "Shiprocket tracking update." });
+        updates.history = appendHistory(shipment, entries);
+        if (mappedStatus) {
+          updates.courierStatus = mappedStatus;
+          updates.trackingStatus = mappedStatus;
+          if (mappedStatus === "Delivered") updates.deliveredAt = now();
+          if (mappedStatus === "Returned") updates.rtoStatus = "RTO Delivered";
+        }
+        updates.lastSyncedAt = now();
+        notes.push("Live tracking refreshed.");
+      }
+    } else {
+      result = {
+        ok: false,
+        mode: status.mode,
+        message:
+          status.mode === "sandbox"
+            ? "Sandbox mode: no live tracking call was made. No fake scan was added."
+            : "Manual Mode: no live tracking API. Record the courier's own scan below.",
+      };
     }
-  }
-
-  return {
-    courierPartnerName: partner ? partner.name : null,
-    awbNumber: order.awbNumber || null,
-    courierStatus: order.courierStatus || null,
-    courierStatusUpdatedAt: order.courierStatusUpdatedAt || null,
-    trackingUrl: courierTrackingUrl(order.courierPartnerId, order.awbNumber),
-    // Verified tracking history (public subset: label + timestamp + note).
-    history: Array.isArray(history)
-      ? history.map((h) => ({ at: h.at || null, status: h.status || "", note: h.note || "" }))
-      : [],
-  };
-}
-
-export function initCourier() {
-  // Called by server.js after initBusiness() — the orders table now
-  // exists, so the additive column migration is safe here.
-  for (const column of COURIER_ORDER_COLUMNS) {
-    try {
-      db.prepare(
-        `ALTER TABLE orders ADD COLUMN ${column.name} ${column.decl}`
-      ).run();
-    } catch (error) {
-      // "duplicate column name" simply means the column already exists.
-      if (!String(error.message || "").includes("duplicate column")) {
-        throw error;
+  } else if (action === "label") {
+    if (status.mode === "live") {
+      result = await adapter.generateLabel({ providerShipmentId: shipment.providerShipmentId });
+      if (result.ok) updates.labelUrl = result.labelUrl;
+    } else if (body?.labelUrl) {
+      result = { ok: true, mode: "manual", message: "Label URL recorded manually." };
+      updates.labelUrl = clean(body.labelUrl).slice(0, 1000);
+    } else {
+      result = { ok: false, mode: status.mode, message: "No live label API in this mode. Paste a label URL to record it." };
+    }
+  } else if (action === "manifest") {
+    if (status.mode === "live") {
+      result = await adapter.generateManifest({ providerShipmentId: shipment.providerShipmentId });
+      if (result.ok) updates.manifestUrl = result.manifestUrl;
+    } else if (body?.manifestUrl) {
+      result = { ok: true, mode: "manual", message: "Manifest URL recorded manually." };
+      updates.manifestUrl = clean(body.manifestUrl).slice(0, 1000);
+    } else {
+      result = { ok: false, mode: status.mode, message: "No live manifest API in this mode. Paste a manifest URL to record it." };
+    }
+  } else if (action === "pickup") {
+    if (status.mode === "live") {
+      result = await adapter.requestPickup({ providerShipmentId: shipment.providerShipmentId });
+      if (result.ok) {
+        updates.pickupToken = result.pickupToken || null;
+        if (result.scheduledAt) updates.estimatedDeliveryDate = shipment.estimatedDeliveryDate || null;
+      }
+    } else if (body?.pickupToken) {
+      result = { ok: true, mode: "manual", message: "Pickup token recorded manually." };
+      updates.pickupToken = clean(body.pickupToken).slice(0, 120);
+    } else {
+      result = { ok: false, mode: status.mode, message: "No live pickup API in this mode. Paste the pickup token to record it." };
+    }
+  } else if (action === "cancel") {
+    if (["Delivered", "Returned", "Cancelled"].includes(shipment.courierStatus)) {
+      result = { ok: false, mode: status.mode, message: "This shipment cannot be cancelled in its current state." };
+    } else if (status.mode === "live") {
+      result = await adapter.cancel({
+        providerOrderId: shipment.providerOrderId,
+        awbNumber: shipment.awbNumber,
+      });
+      if (result.ok) {
+        updates.courierStatus = "Cancelled";
+        updates.trackingStatus = "Cancelled";
+        updates.cancelledAt = now();
+      }
+    } else {
+      result = { ok: true, mode: "manual", message: "Shipment marked Cancelled manually. No courier API was contacted." };
+      updates.courierStatus = "Cancelled";
+      updates.trackingStatus = "Cancelled";
+      updates.cancelledAt = now();
+    }
+  } else if (action === "ndr" || action === "rto") {
+    const ndrAction = action === "rto" ? "rto" : clean(body?.ndrAction || "reattempt");
+    if (status.mode === "live") {
+      result = await adapter.ndrAction({
+        awbNumber: shipment.awbNumber,
+        action: ndrAction,
+        remarks: body?.remarks,
+        address: body?.address,
+      });
+    } else {
+      result = {
+        ok: true,
+        mode: "manual",
+        message: "NDR/RTO state recorded manually. No courier API was contacted.",
+      };
+    }
+    if (result.ok) {
+      updates.ndrStatus = ndrAction;
+      if (ndrAction === "rto") {
+        updates.rtoStatus = "RTO Initiated";
+        updates.courierStatus = "RTO Initiated";
+        updates.trackingStatus = "RTO Initiated";
+      } else {
+        updates.courierStatus = "NDR";
+        updates.trackingStatus = "NDR";
       }
     }
+  } else {
+    const error = new Error("Unknown shipment action.");
+    error.status = 400;
+    throw error;
+  }
+
+  if (!result.ok) return { result, shipment: publicShipment(shipment) };
+
+  if (updates.history) {
+    updates.historyJson = JSON.stringify(updates.history);
+    delete updates.history;
+  } else if (notes.length) {
+    updates.historyJson = JSON.stringify(
+      appendHistory(shipment, notes.map((note) => ({ at: now(), status: action, note })))
+    );
+  }
+
+  updates.lastSyncedAt = updates.lastSyncedAt || now();
+  updates.updatedAt = now();
+  updates.lastApiError = result.ok ? null : result.message;
+
+  const fields = Object.keys(updates);
+  db.prepare(`UPDATE courier_shipments SET ${fields.map((field) => `${field} = ?`).join(", ")} WHERE id = ?`).run(
+    ...fields.map((field) => updates[field]),
+    shipment.id
+  );
+  syncOrderCourierSummary(shipment.orderId);
+  const updated = db.prepare(`SELECT * FROM courier_shipments WHERE id = ?`).get(shipment.id);
+  return { result, shipment: publicShipment(updated) };
+}
+
+courierRouter.post(
+  "/api/admin/courier/shipments/:id/action",
+  requireAuth,
+  requireRole("super_admin", "manager"),
+  async (req, res) => {
+    try {
+      const shipment = db
+        .prepare(`SELECT * FROM courier_shipments WHERE id = ?`)
+        .get(Number(req.params.id));
+      if (!shipment) return res.status(404).json({ success: false, message: "Shipment not found." });
+      const action = clean(req.body?.action).toLowerCase();
+      const outcome = await runShipmentAction({
+        shipment,
+        action,
+        body: req.body || {},
+        actorType: "admin",
+      });
+      res.status(outcome.result.ok ? 200 : 409).json({
+        success: outcome.result.ok,
+        message: outcome.result.message,
+        result: outcome.result,
+        shipment: outcome.shipment,
+      });
+    } catch (error) {
+      if (error.status) return res.status(error.status).json({ success: false, message: error.message });
+      console.error("SHIPMENT ACTION ERROR:", error);
+      res.status(500).json({ success: false, message: "Failed to run shipment action." });
+    }
+  }
+);
+
+// =====================================
+// SELLER: PICKUP + SHIPMENT WORKFLOW
+// =====================================
+
+function currentSeller(req) {
+  return db.prepare(`SELECT * FROM sellers WHERE id = ?`).get(req.user.sellerId);
+}
+
+courierRouter.get(
+  "/api/sellers/courier/pickup",
+  requireAuth,
+  requireType("seller"),
+  (req, res) => {
+    const seller = currentSeller(req);
+    if (!seller) return res.status(404).json({ success: false, message: "Seller not found." });
+    res.json({ success: true, pickup: sellerPublicPickup(getPickup(seller.sellerCode)) });
+  }
+);
+
+courierRouter.put(
+  "/api/sellers/courier/pickup",
+  requireAuth,
+  requireType("seller"),
+  (req, res) => {
+    const seller = currentSeller(req);
+    if (!seller) return res.status(404).json({ success: false, message: "Seller not found." });
+    const saved = savePickup(seller, req.body || {});
+    if (saved.error) return res.status(400).json({ success: false, message: saved.error });
+    res.json({ success: true, message: "Pickup address saved.", pickup: sellerPublicPickup(saved.pickup) });
+  }
+);
+
+courierRouter.get(
+  "/api/sellers/orders/:id/shipment-groups",
+  requireAuth,
+  requireType("seller"),
+  (req, res) => {
+    const seller = currentSeller(req);
+    if (!seller) return res.status(404).json({ success: false, message: "Seller not found." });
+    const { order, groups } = buildGroups(req.params.id, { sellerRef: seller.sellerCode });
+    if (!order) return res.status(404).json({ success: false, message: "Order not found." });
+    if (!groups.length) {
+      return res.status(403).json({ success: false, message: "This order does not contain your products." });
+    }
+    res.json({ success: true, order: { ...order, items: undefined }, groups, courierStatuses: COURIER_STATUSES });
+  }
+);
+
+courierRouter.post(
+  "/api/sellers/orders/:id/shipments/quote",
+  requireAuth,
+  requireType("seller"),
+  async (req, res) => {
+    try {
+      const seller = currentSeller(req);
+      if (!seller) return res.status(404).json({ success: false, message: "Seller not found." });
+      const { order, groups } = buildGroups(req.params.id, { sellerRef: seller.sellerCode });
+      if (!order) return res.status(404).json({ success: false, message: "Order not found." });
+      const group = groups[0];
+      if (!group) return res.status(403).json({ success: false, message: "This order does not contain your products." });
+      const packageInfo = normalizePackage(req.body?.package || req.body || {});
+      const { rows, options, recommended } = await compareRates({ order, group, packageInfo });
+      res.json({ success: true, group, package: packageInfo, partners: rows, quotes: options, recommended });
+    } catch (error) {
+      console.error("SELLER COURIER QUOTE ERROR:", error);
+      res.status(500).json({ success: false, message: "Failed to compare courier rates." });
+    }
+  }
+);
+
+courierRouter.post(
+  "/api/sellers/orders/:id/shipments",
+  requireAuth,
+  requireType("seller"),
+  async (req, res) => {
+    try {
+      const seller = currentSeller(req);
+      if (!seller) return res.status(404).json({ success: false, message: "Seller not found." });
+      const { order, groups } = buildGroups(req.params.id, { sellerRef: seller.sellerCode });
+      if (!order) return res.status(404).json({ success: false, message: "Order not found." });
+      const group = groups[0];
+      if (!group) return res.status(403).json({ success: false, message: "This order does not contain your products." });
+      const partner = getPartner(req.body?.courierPartnerId || req.body?.partnerId);
+      if (!partner) return res.status(404).json({ success: false, message: "Courier partner not found." });
+      const packageInfo = normalizePackage(req.body?.package || req.body || {});
+      const shipment = await bookGroup({
+        order,
+        group,
+        partner,
+        packageInfo,
+        body: req.body || {},
+        actorType: "seller",
+        actorId: seller.id,
+        force: Boolean(req.body?.force),
+      });
+      res.status(201).json({
+        success: true,
+        message:
+          shipment.mode === "live"
+            ? `Live ${partner.name} shipment created${shipment.awbNumber ? ` with AWB ${shipment.awbNumber}` : ""}.`
+            : shipment.mode === "manual"
+              ? "Manual shipment recorded. No courier API was contacted."
+              : `Sandbox shipment created with TEST AWB ${shipment.awbNumber} — no courier contacted.`,
+        shipment: publicShipment(shipment),
+      });
+    } catch (error) {
+      if (error.status) {
+        return res.status(error.status).json({ success: false, message: error.message, shipmentId: error.shipmentId });
+      }
+      console.error("SELLER SHIPMENT CREATE ERROR:", error);
+      res.status(500).json({ success: false, message: "Failed to create shipment." });
+    }
+  }
+);
+
+courierRouter.post(
+  "/api/sellers/courier/shipments/:id/action",
+  requireAuth,
+  requireType("seller"),
+  async (req, res) => {
+    try {
+      const seller = currentSeller(req);
+      if (!seller) return res.status(404).json({ success: false, message: "Seller not found." });
+      const shipment = db
+        .prepare(`SELECT * FROM courier_shipments WHERE id = ?`)
+        .get(Number(req.params.id));
+      if (!shipment) return res.status(404).json({ success: false, message: "Shipment not found." });
+      const shipmentGroup = buildGroups(shipment.orderId, { sellerRef: seller.sellerCode });
+      const owns = shipmentGroup.groups.some(
+        (g) => g.sellerKey === shipment.sellerKey || String(g.sellerId) === String(shipment.sellerId)
+      );
+      if (!owns) return res.status(403).json({ success: false, message: "This shipment is not yours." });
+
+      const action = clean(req.body?.action).toLowerCase();
+      if (!["track", "label"].includes(action)) {
+        return res.status(403).json({
+          success: false,
+          message: "Sellers can refresh tracking or generate a label. Cancellation and NDR/RTO are admin actions.",
+        });
+      }
+      const outcome = await runShipmentAction({ shipment, action, body: req.body || {}, actorType: "seller" });
+      res.status(outcome.result.ok ? 200 : 409).json({
+        success: outcome.result.ok,
+        message: outcome.result.message,
+        result: outcome.result,
+        shipment: outcome.shipment,
+      });
+    } catch (error) {
+      if (error.status) return res.status(error.status).json({ success: false, message: error.message });
+      console.error("SELLER SHIPMENT ACTION ERROR:", error);
+      res.status(500).json({ success: false, message: "Failed to run shipment action." });
+    }
+  }
+);
+
+// =====================================
+// SHIPROCKET WEBHOOK
+// =====================================
+
+courierRouter.post("/api/courier/webhook/shiprocket", (req, res) => {
+  try {
+    if (!shiprocketWebhookConfigured()) {
+      return res.status(503).json({
+        success: false,
+        message: "Shiprocket webhook is not configured. Set SHIPROCKET_WEBHOOK_TOKEN server-side.",
+      });
+    }
+
+    const supplied =
+      clean(req.get("x-api-key")) || clean(req.query?.token);
+    const expected = clean(process.env.SHIPROCKET_WEBHOOK_TOKEN);
+    if (!supplied || supplied.length !== expected.length) {
+      return res.status(401).json({ success: false, message: "Invalid webhook token." });
+    }
+    const suppliedBuffer = Buffer.from(supplied);
+    const expectedBuffer = Buffer.from(expected);
+    if (!crypto.timingSafeEqual(suppliedBuffer, expectedBuffer)) {
+      return res.status(401).json({ success: false, message: "Invalid webhook token." });
+    }
+
+    const parsed = parseShiprocketWebhook(req.body || {});
+    const scanKey = parsed.scans.map((scan) => `${scan.at}|${scan.status}|${scan.note}`).join(";");
+    const eventKey = crypto
+      .createHash("sha256")
+      .update(`SHIPROCKET|${parsed.awbNumber}|${parsed.status}|${parsed.eventAt || ""}|${scanKey}`)
+      .digest("hex");
+
+    const duplicate = db
+      .prepare(`SELECT id FROM courier_webhook_events WHERE provider = 'SHIPROCKET' AND eventKey = ?`)
+      .get(eventKey);
+    if (duplicate) {
+      return res.json({ success: true, duplicate: true, message: "Webhook already processed." });
+    }
+
+    const shipment = db
+      .prepare(`
+        SELECT * FROM courier_shipments
+        WHERE awbNumber = ? OR providerShipmentId = ? OR providerOrderId = ?
+        ORDER BY id DESC LIMIT 1
+      `)
+      .get(
+        parsed.awbNumber || "__none__",
+        parsed.providerShipmentId || "__none__",
+        parsed.providerOrderId || "__none__"
+      );
+
+    const info = db
+      .prepare(`
+        INSERT INTO courier_webhook_events
+          (provider, eventKey, awbNumber, receivedAt)
+        VALUES ('SHIPROCKET', ?, ?, ?)
+      `)
+      .run(eventKey, parsed.awbNumber || null, now());
+
+    if (!shipment) {
+      db.prepare(`UPDATE courier_webhook_events SET processedAt = ?, result = ? WHERE id = ?`).run(
+        now(),
+        "shipment_not_found",
+        info.lastInsertRowid
+      );
+      // 200 prevents Shiprocket retry storms for an event that does not
+      // belong to this account/project.
+      return res.json({ success: true, matched: false, message: "No matching shipment." });
+    }
+
+    const entries = parsed.scans.map((scan) => ({
+      at: scan.at,
+      status: scan.status,
+      note: scan.note,
+      location: scan.location,
+    }));
+    const mapped = statusFromProvider(parsed.status);
+    if (mapped) {
+      entries.push({
+        at: parsed.eventAt || now(),
+        status: mapped,
+        note: `Shiprocket: ${parsed.status}`,
+      });
+    }
+    const history = appendHistory(shipment, entries);
+    const updates = {
+      historyJson: JSON.stringify(history),
+      trackingStatus: mapped || shipment.trackingStatus || parsed.status || shipment.courierStatus,
+      lastSyncedAt: now(),
+      updatedAt: now(),
+      lastApiError: null,
+      ...(parsed.courierName ? { courierName: parsed.courierName } : {}),
+      ...(parsed.etd ? { estimatedDeliveryDate: String(parsed.etd).slice(0, 10) } : {}),
+      ...(mapped ? { courierStatus: mapped } : {}),
+      ...(mapped === "Delivered" ? { deliveredAt: now() } : {}),
+      ...(mapped === "Returned" ? { rtoStatus: "RTO Delivered" } : {}),
+      ...(mapped === "Cancelled" ? { cancelledAt: now() } : {}),
+    };
+    const fields = Object.keys(updates);
+    db.prepare(
+      `UPDATE courier_shipments SET ${fields.map((field) => `${field} = ?`).join(", ")} WHERE id = ?`
+    ).run(...fields.map((field) => updates[field]), shipment.id);
+
+    syncOrderCourierSummary(shipment.orderId);
+    db.prepare(`UPDATE courier_webhook_events SET processedAt = ?, result = ? WHERE id = ?`).run(
+      now(),
+      `updated:${shipment.id}`,
+      info.lastInsertRowid
+    );
+
+    res.json({ success: true, matched: true, shipmentId: shipment.id });
+  } catch (error) {
+    console.error("SHIPROCKET WEBHOOK ERROR:", error);
+    res.status(500).json({ success: false, message: "Webhook processing failed." });
+  }
+});
+
+// =====================================
+// INIT
+// =====================================
+
+const COURIER_ORDER_COLUMNS = [
+  { name: "courierPartnerId", decl: "INTEGER" },
+  { name: "awbNumber", decl: "TEXT" },
+  { name: "shippingLabelRef", decl: "TEXT" },
+  { name: "courierStatus", decl: "TEXT" },
+  { name: "courierAssignedAt", decl: "TEXT" },
+  { name: "courierStatusUpdatedAt", decl: "TEXT" },
+];
+
+export function initCourier() {
+  for (const column of COURIER_ORDER_COLUMNS) {
+    try {
+      db.prepare(`ALTER TABLE orders ADD COLUMN ${column.name} ${column.decl}`).run();
+    } catch (error) {
+      if (!String(error.message || "").includes("duplicate column")) throw error;
+    }
+  }
+
+  // SECURITY CLEANUP: older builds allowed write-only credentials in
+  // this table. Credentials are now env-only. Clear any legacy value
+  // without ever logging it.
+  const legacy = db.prepare(`SELECT COUNT(*) AS count FROM courier_partners WHERE apiCredentials IS NOT NULL`).get();
+  if (legacy?.count) {
+    db.prepare(`UPDATE courier_partners SET apiCredentials = NULL`).run();
+    console.log("Legacy courier credentials cleared from SQLite (env-only credentials enforced).");
   }
 
   console.log("Order courier columns ready (additive migration).");

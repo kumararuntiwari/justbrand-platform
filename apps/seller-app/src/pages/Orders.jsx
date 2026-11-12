@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import "../index.css";
 
 import { API_URL } from "../api.js";
+import CourierShipment from "../components/CourierShipment";
 
 function Orders({ onBack }) {
   const [orders, setOrders] = useState([]);
@@ -1496,6 +1497,13 @@ function OrderDetails({
                 delivery flow — assignment and reassignment are handled by the
                 JustBrand admin team.
               </div>
+          </DetailSection>
+
+          <DetailSection title="📦 Courier Booking (AWB / Label / Tracking)">
+            <CourierShipment
+              order={order}
+              onStatusUpdate={onUpdateStatus}
+            />
           </DetailSection>
 
           <DetailSection title="🧾 Your Invoice Snapshot">

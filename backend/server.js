@@ -30,6 +30,9 @@ import marketplacesRouter, {
   initMarketplaces,
   marketplaceCheckoutStockGuard,
 } from "./marketplaces.js";
+import supplierIntegrationsRouter, {
+  initSupplierIntegrations,
+} from "./supplier-orders.js";
 import {
   hashPassword,
   comparePassword,
@@ -74,7 +77,16 @@ app.use(
   express.raw({ type: "application/octet-stream", limit: "5mb" })
 );
 
-app.use(express.json({ limit: "10mb" }));
+app.use(
+  express.json({
+    limit: "10mb",
+    // Preserve the exact bytes for supplier webhook HMAC verification.
+    // The buffer is request-scoped and never logged or persisted.
+    verify: (req, res, buffer) => {
+      req.rawBody = Buffer.from(buffer);
+    },
+  })
+);
 
 // =====================================
 // PRODUCTION SAFETY LIMITS (additive)
@@ -2662,6 +2674,9 @@ initDelivery();
 // scheduled-sync timer. Runs after initBusiness() so the products /
 // sellers tables already exist.
 initSellerImports();
+// Supplier / manufacturer order sync, webhooks and launch status.
+// Runs after initSellerImports() so the integration columns exist.
+initSupplierIntegrations();
 // Amazon / Flipkart / Meesho / GlowRoad connectors (additive tables) and
 // their scheduled sync timer — same admin schedule as supplier sync.
 initMarketplaces();
@@ -2692,6 +2707,7 @@ app.use(paymentAdminRouter);
 // Protected product chat (buyer ↔ seller) — additive, distinct paths.
 app.use(chatRouter);
 app.use(sellerImportsRouter);
+app.use(supplierIntegrationsRouter);
 app.use(marketplacesRouter);
 
 async function startServer() {

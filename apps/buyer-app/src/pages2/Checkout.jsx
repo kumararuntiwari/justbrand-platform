@@ -32,6 +32,8 @@ function Checkout({
   // platform and GST rows are hidden — the grand total still includes
   // them. The quote itself (and every calculation) is untouched.
   const [quote, setQuote] = useState(null);
+  const [courierCheck, setCourierCheck] = useState(null);
+  const [courierChecking, setCourierChecking] = useState(false);
 
   // Final customer price of one unit — exactly what the product card /
   // PDP displayed (customerPrice), never the raw seller price.
@@ -90,6 +92,55 @@ function Checkout({
   }, [token, cart, stateName]);
 
   const displayTotal = quote ? quote.grandTotal : total;
+
+  // Logistics serviceability is ADDITIVE: it never changes the
+  // authoritative JustBrand order total, GST, payment or commission.
+  // No courier is contacted unless the admin has enabled live mode.
+  useEffect(() => {
+    if (!/^\d{6}$/.test(pincode) || !cart.length) {
+      setCourierCheck(null);
+      setCourierChecking(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    setCourierChecking(true);
+    const timer = setTimeout(async () => {
+      try {
+        const estimatedWeight = Math.max(
+          0.5,
+          cart.reduce((sum, item) => sum + (Number(item.quantity) || 1), 0) * 0.5
+        );
+        const data = await api("/api/courier/serviceability", {
+          method: "POST",
+          body: {
+            pincode,
+            city: city.trim(),
+            state: stateName.trim(),
+            weightKg: estimatedWeight,
+            cod: paymentMethod === "COD",
+            declaredValue: total,
+          },
+        });
+        if (!cancelled) setCourierCheck(data);
+      } catch {
+        if (!cancelled) {
+          setCourierCheck({
+            success: false,
+            serviceable: false,
+            message: "Courier serviceability could not be checked right now.",
+          });
+        }
+      } finally {
+        if (!cancelled) setCourierChecking(false);
+      }
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [pincode, city, stateName, paymentMethod, cart, total]);
 
   // Products whose GST classification still needs admin review must not
   // be ordered. The server flags them in the quote; block placement here
@@ -386,6 +437,64 @@ function Checkout({
             </div>
           </div>
 
+          <div
+            style={{
+              border: "1px solid #e5e7eb",
+              background: "#f8fafc",
+              borderRadius: "10px",
+              padding: "12px 14px",
+              marginBottom: "14px",
+            }}
+          >
+            <div style={{ fontSize: "13px", fontWeight: "bold", color: "#334155" }}>
+              🚚 Delivery serviceability
+            </div>
+            {courierChecking ? (
+              <div style={{ fontSize: "12px", color: "#64748b", marginTop: "5px" }}>
+                Checking courier service for PIN {pincode}…
+              </div>
+            ) : courierCheck ? (
+              courierCheck.serviceable ? (
+                <div style={{ fontSize: "12px", color: "#166534", marginTop: "5px" }}>
+                  Delivery available. Recommended:{" "}
+                  <strong>
+                    {courierCheck.recommended?.courierName ||
+                      courierCheck.recommended?.partnerName}
+                  </strong>{" "}
+                  {courierCheck.recommended?.estimatedDeliveryDays
+                    ? `· about ${courierCheck.recommended.estimatedDeliveryDays} day(s)`
+                    : ""}
+                  {courierCheck.recommended?.estimatedDeliveryDate
+                    ? ` · ETA ${courierCheck.recommended.estimatedDeliveryDate}`
+                    : ""}
+                  .
+                  <div style={{ color: "#64748b", marginTop: "4px" }}>
+                    Courier estimate ₹{Number(courierCheck.recommended?.rate || 0).toFixed(2)}. The
+                    delivery charge already included in your JustBrand total is ₹
+                    {Number(quote?.deliveryCharge || 0).toFixed(2)}; the courier estimate is not added
+                    again.
+                  </div>
+                  {courierCheck.quotes?.length > 1 ? (
+                    <div style={{ color: "#64748b", marginTop: "4px" }}>
+                      {courierCheck.quotes.length} serviceable option(s) — the admin can choose the
+                      best courier.
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <div style={{ fontSize: "12px", color: "#b45309", marginTop: "5px" }}>
+                  No enabled courier is currently serviceable for this PIN/package. Your order can
+                  still be placed; the JustBrand team will arrange delivery. No fake courier option
+                  is shown.
+                </div>
+              )
+            ) : (
+              <div style={{ fontSize: "12px", color: "#64748b", marginTop: "5px" }}>
+                Enter a 6-digit PIN to check courier serviceability.
+              </div>
+            )}
+          </div>
+
           {/* CONTACT EMAIL (OPTIONAL) */}
           <div style={styles.field}>
             <label style={styles.label}>Email (optional — for order updates)</label>
@@ -470,11 +579,16 @@ function Checkout({
                 </div>
               )}
 
-              {/* DISPLAY-ONLY (final-price-only UI): the Platform fee,
-                  Delivery charge and GST (IGST/CGST/SGST) rows are
-                  intentionally NOT shown to customers. The grand total
-                  below still includes all of them — nothing in the
-                  quote or the order calculation changed. */}
+              {/* The delivery charge is part of the authoritative
+                  JustBrand quote. Showing it does not add it twice —
+                  the grand total below already contains it. */}
+
+              {quote && Number(quote.deliveryCharge) > 0 ? (
+                <div style={styles.summaryRow}>
+                  <span>Delivery charge (included)</span>
+                  <strong>₹{Number(quote.deliveryCharge).toLocaleString("en-IN")}</strong>
+                </div>
+              ) : null}
 
               <div
                 style={{

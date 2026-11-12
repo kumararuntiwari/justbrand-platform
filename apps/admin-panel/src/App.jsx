@@ -2,6 +2,7 @@
 import "./App.css";
 import Business from "./Business";
 import OverviewSection from "./OverviewSection";
+import LaunchControl from "./LaunchControl";
 import BuyersSection from "./BuyersSection";
 import ContentManager from "./ContentManager";
 import {
@@ -12,6 +13,7 @@ import BuyerSettingsPanel from "./BuyerSettingsPanel";
 import DeliveryManager from "./DeliveryManager";
 import SchemeApprovals from "./SchemeApprovals";
 import ImportSyncManager from "./ImportSyncManager";
+import SupplierIntegrations from "./SupplierIntegrations";
 import ChargesTaxSettings from "./ChargesTaxSettings";
 import CourierPartners from "./CourierPartners";
 import PaymentSettings from "./PaymentSettings";
@@ -812,6 +814,7 @@ function App() {
       label: "Business",
       items: [
         { key: "overview", label: "📊 Overview", enabled: true, crumb: "Overview" },
+        { key: "launch", label: "🚦 Launch Control", enabled: canUseSellers, crumb: "Business · Launch Control" },
         { key: "cm-about", label: "📖 About Us", enabled: canUseSellers, crumb: "Business · About Us" },
         { key: "cm-contact", label: "📞 Contact Us", enabled: canUseSellers, crumb: "Business · Contact Us" },
         { key: "cm-branding", label: "🎨 Logo & Branding", enabled: canUseSellers, crumb: "Business · Logo & Branding" },
@@ -839,6 +842,7 @@ function App() {
         { key: "kyc", label: "🪪 KYC", enabled: canUseSellers, crumb: "KYC" },
         { key: "schemes", label: "🎟️ Scheme Approvals", enabled: canUseSellers, crumb: "Commerce · Scheme Approvals" },
         { key: "import-sync", label: "📥 Import & Sync", enabled: canUseSellers, crumb: "Commerce · Import & Sync" },
+        { key: "supplier-integrations", label: "🏭 Supplier & Manufacturer", enabled: canUseSellers, crumb: "Commerce · Supplier & Manufacturer" },
         { key: "cm-categories", label: "📂 Categories", enabled: canUseSellers, crumb: "Commerce · Categories" },
         { key: "charges-tax", label: "💰 Charges & Tax", enabled: canUseSellers, crumb: "Commerce · Charges & Tax" },
         { key: "courier-partners", label: "📦 Courier Partners", enabled: canUseSellers, crumb: "Commerce · Courier Partners" },
@@ -1124,6 +1128,12 @@ function App() {
           />
         )}
 
+        {/* BUSINESS LAUNCH CONTROL (read-only readiness + blockers) */}
+
+        {activeView === "launch" && canUseSellers && (
+          <LaunchControl token={token} onNavigate={(key) => openView(key)} />
+        )}
+
         {/* BUYERS */}
 
         {activeView === "buyers" && canUseCustomers && (
@@ -1164,6 +1174,19 @@ function App() {
               setMessage(msg);
 
               setTimeout(() => setMessage(""), 4000);
+            }}
+          />
+        )}
+
+        {/* SUPPLIER / MANUFACTURER INTEGRATIONS (API, sync, orders, webhooks) */}
+
+        {activeView === "supplier-integrations" && canUseSellers && (
+          <SupplierIntegrations
+            token={token}
+            onMessage={(msg) => {
+              setMessage(msg);
+
+              setTimeout(() => setMessage(""), 5000);
             }}
           />
         )}
@@ -1331,6 +1354,8 @@ function App() {
             "fam-gifts",
             "delivery",
             "schemes",
+            "supplier-integrations",
+            "launch",
             "charges-tax",
             "courier-partners",
             "payments",

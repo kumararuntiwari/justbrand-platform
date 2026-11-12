@@ -104,70 +104,122 @@ function statusBadgeStyle(status) {
 // recorded for this order. Shows nothing until the backend actually
 // carries courier data — no fake or estimated tracking is fabricated.
 function CourierTracking({ tracking }) {
-  const history = Array.isArray(tracking.history) ? tracking.history : [];
+  const shipments =
+    Array.isArray(tracking.shipments) && tracking.shipments.length
+      ? tracking.shipments
+      : [tracking];
 
   return (
     <div style={styles.card}>
       <div style={styles.timelineTitle}>Courier Tracking</div>
-      <div style={styles.detailsGrid}>
-        <div style={styles.detailCell}>
-          <div style={styles.detailLabel}>Courier</div>
-          <div style={styles.detailValue}>{tracking.courierPartnerName || "—"}</div>
-        </div>
-        <div style={styles.detailCell}>
-          <div style={styles.detailLabel}>AWB / Tracking No.</div>
-          <div style={styles.detailValue}>{tracking.awbNumber || "Not assigned yet"}</div>
-        </div>
-        <div style={styles.detailCell}>
-          <div style={styles.detailLabel}>Status</div>
-          <div style={styles.detailValue}>{tracking.courierStatus || "—"}</div>
-        </div>
-        <div style={styles.detailCell}>
-          <div style={styles.detailLabel}>Last Updated</div>
-          <div style={styles.detailValue}>{fmtDate(tracking.courierStatusUpdatedAt)}</div>
-        </div>
-      </div>
-
-      {tracking.trackingUrl ? (
-        <div style={{ marginTop: 10 }}>
-          <a
-            href={tracking.trackingUrl}
-            target="_blank"
-            rel="noreferrer"
-            style={{ color: "#1d4ed8", fontSize: 13, fontWeight: 600 }}
-          >
-            Open courier tracking page ↗
-          </a>
+      {shipments.length > 1 ? (
+        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 10 }}>
+          Your order has {shipments.length} shipments because it contains products from different
+          sellers. Each shipment has its own courier, AWB and tracking history.
         </div>
       ) : null}
 
-      {history.length > 0 ? (
-        <div style={{ marginTop: 12 }}>
-          <div style={{ ...styles.detailLabel, marginBottom: 6 }}>Tracking history</div>
-          <div style={styles.timeline}>
-            {history.map((h, index) => {
-              const isLast = index === history.length - 1;
-              return (
-                <div key={`${h.at}-${index}`} style={styles.stepRow}>
-                  <div style={styles.stepRail}>
-                    <div style={{ ...styles.stepDot, ...styles.stepDotDone }}>✓</div>
-                    {!isLast ? <div style={{ ...styles.stepLine, ...styles.stepLineDone }} /> : null}
-                  </div>
-                  <div style={styles.stepBody}>
-                    <div style={styles.stepLabel}>{h.status}</div>
-                    {h.note ? <div style={styles.stepTime}>{h.note}</div> : null}
-                    <div style={styles.stepTime}>{fmtDate(h.at)}</div>
+      {shipments.map((shipment, shipmentIndex) => {
+        const history = Array.isArray(shipment.history) ? shipment.history : [];
+        const returned =
+          shipment.returnStatus ||
+          ["Returned", "RTO Initiated", "RTO In Transit"].includes(shipment.courierStatus);
+        return (
+          <div
+            key={shipment.shipmentId || `${shipment.awbNumber}-${shipmentIndex}`}
+            style={{
+              borderTop: shipmentIndex ? "1px solid #e5e7eb" : "none",
+              paddingTop: shipmentIndex ? 14 : 0,
+              marginTop: shipmentIndex ? 14 : 0,
+            }}
+          >
+            {shipment.sellerName ? (
+              <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 6 }}>
+                Sold by <strong style={{ color: "#374151" }}>{shipment.sellerName}</strong>
+              </div>
+            ) : null}
+            <div style={styles.detailsGrid}>
+              <div style={styles.detailCell}>
+                <div style={styles.detailLabel}>Courier</div>
+                <div style={styles.detailValue}>
+                  {shipment.courierPartnerName || shipment.courierName || "—"}
+                </div>
+              </div>
+              <div style={styles.detailCell}>
+                <div style={styles.detailLabel}>AWB / Tracking No.</div>
+                <div style={styles.detailValue}>{shipment.awbNumber || "Not assigned yet"}</div>
+              </div>
+              <div style={styles.detailCell}>
+                <div style={styles.detailLabel}>Delivery Status</div>
+                <div style={styles.detailValue}>{shipment.courierStatus || "—"}</div>
+              </div>
+              <div style={styles.detailCell}>
+                <div style={styles.detailLabel}>Estimated Delivery</div>
+                <div style={styles.detailValue}>
+                  {shipment.estimatedDeliveryDate
+                    ? fmtShort(shipment.estimatedDeliveryDate)
+                    : "Not available"}
+                </div>
+              </div>
+              <div style={styles.detailCell}>
+                <div style={styles.detailLabel}>Last Updated</div>
+                <div style={styles.detailValue}>{fmtDate(shipment.courierStatusUpdatedAt)}</div>
+              </div>
+              {returned ? (
+                <div style={styles.detailCell}>
+                  <div style={styles.detailLabel}>Return / RTO</div>
+                  <div style={styles.detailValue}>
+                    {shipment.returnStatus || shipment.courierStatus}
                   </div>
                 </div>
-              );
-            })}
+              ) : null}
+            </div>
+
+            {shipment.trackingUrl ? (
+              <div style={{ marginTop: 10 }}>
+                <a
+                  href={shipment.trackingUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: "#1d4ed8", fontSize: 13, fontWeight: 600 }}
+                >
+                  Open courier tracking page ↗
+                </a>
+              </div>
+            ) : null}
+
+            {history.length > 0 ? (
+              <div style={{ marginTop: 12 }}>
+                <div style={{ ...styles.detailLabel, marginBottom: 6 }}>Tracking history</div>
+                <div style={styles.timeline}>
+                  {history.map((h, index) => {
+                    const isLast = index === history.length - 1;
+                    return (
+                      <div key={`${h.at}-${index}`} style={styles.stepRow}>
+                        <div style={styles.stepRail}>
+                          <div style={{ ...styles.stepDot, ...styles.stepDotDone }}>✓</div>
+                          {!isLast ? <div style={{ ...styles.stepLine, ...styles.stepLineDone }} /> : null}
+                        </div>
+                        <div style={styles.stepBody}>
+                          <div style={styles.stepLabel}>{h.status}</div>
+                          {h.note ? <div style={styles.stepTime}>{h.note}</div> : null}
+                          {h.location ? <div style={styles.stepTime}>{h.location}</div> : null}
+                          <div style={styles.stepTime}>{fmtDate(h.at)}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div style={{ marginTop: 10, fontSize: 12, color: "#6b7280" }}>
+                No courier scan events recorded yet — tracking appears only after a real courier
+                update.
+              </div>
+            )}
           </div>
-        </div>
-      ) : (
-        <div style={{ marginTop: 12, fontSize: 13, color: "#6b7280" }}>
-          No courier scan events recorded yet — tracking appears once the courier records an update.
-        </div>
-      )}
+        );
+      })}
     </div>
   );
 }

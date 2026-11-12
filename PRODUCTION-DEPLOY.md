@@ -37,8 +37,12 @@ sh ./scripts/package-production.sh
 Output: `downloads/justbrand-production-YYYY-MM-DD.zip`
 
 Package contents:
-- `backend/` — server source (`server.js`, `auth.js`, `business.js`,
-  `chat.js`, `db.js`, `delivery.js`, `package.json`, `package-lock.json`)
+- `backend/` — the complete server source, including `server.js`,
+  `auth.js`, `business.js`, `chat.js`, `db.js`, `delivery.js`,
+  `courier.js` + `courier-adapters/`, `seller-imports.js`,
+  `supplier-orders.js`, `marketplaces.js`, `mlm-3x3.js`,
+  `payment-admin.js`, `seller-tax.js`, `gst.js`, `package.json` and
+  `package-lock.json`
 - `apps/{buyer-app,seller-app,admin-panel,delivery-panel}/dist/` — built frontends
 - `PRODUCTION-DEPLOY.md` — this file
 
@@ -47,11 +51,14 @@ Explicitly **excluded** (script enforces this): `*.db`, `*.db-shm`,
 
 ## 2. Deploy the backend (Node app on Hostinger)
 
-1. **Back up first**: download the current backend folder and rename it
-   `backend-backup-YYYY-MM-DD` on the server (same convention already used
-   in `deploy-staging/`). Do **not** delete anything yet.
-2. Upload the package's `backend/` source over the existing backend folder,
-   **overwriting only the source files listed above**.
+1. **Back up first**: copy the current backend folder to a permanent
+   location outside the versioned build folder and rename it
+   `backend-backup-YYYY-MM-DD`. Copy `justbrand.db`, `justbrand.db-wal`
+   and `justbrand.db-shm` consistently (stop writes or use SQLite
+   `.backup`), then verify `PRAGMA integrity_check` and SHA-256. Do **not**
+   delete anything yet.
+2. Upload the package's complete `backend/` source over the existing
+   backend folder, **without removing the live database or `.env`**.
 3. **NEVER upload/overwrite/delete:**
    - `justbrand.db` (and `-shm`/`-wal`) — the live production database
    - `.env` — production environment variables (`JWT_SECRET`, `CORS_ORIGINS`, ports)
@@ -94,6 +101,14 @@ done
 ```
 
 Expected after backend update: **all 200** (categories was 404 before).
+Admin-only integration endpoints must return **401 without a token**:
+`/api/admin/supplier-integrations`, `/api/admin/courier/api-status`,
+`/api/admin/launch-status`.
+
+Supplier credentials are configured in Admin → Commerce → Supplier &
+Manufacturer. Courier live booking requires the server-side secrets listed
+in `docs/COURIER-INTEGRATION.md`; without them the UI must show
+Manual / Not Configured or Sandbox. Never put API keys in this file.
 
 Anonymous security checks (must NOT be 200):
 

@@ -133,11 +133,15 @@ console.log("\n# courier partners");
 const list = await api("GET", "/api/admin/courier-partners", { token: superTok });
 const names = (list.data?.partners || []).map((p) => p.name);
 ok(
-  "seeded partners: India Post, Ekart, Shiprocket, DTDC",
-  ["India Post", "Ekart", "Shiprocket", "DTDC"].every((n) => names.includes(n)),
+  "seeded partners: India Post, Ekart, Shiprocket, DTDC, Delhivery, Xpressbees",
+  ["India Post", "Ekart", "Shiprocket", "DTDC", "Delhivery", "Xpressbees"].every((n) => names.includes(n)),
   names
 );
-ok("manual mode declared (no fake live API)", list.data?.mode === "manual");
+ok(
+  "mixed mode declared honestly (Shiprocket adapter + manual partners)",
+  list.data?.mode === "mixed" &&
+    (list.data?.partners || []).every((p) => p.apiStatus?.mode !== "live")
+);
 const ekartSeed = (list.data?.partners || []).find((p) => p.code === "EKART");
 ok("seeded partners start DISABLED (nothing live by accident)", ekartSeed?.enabled === false, ekartSeed);
 ok("no API credentials leaked in list response", !(list.data?.partners || []).some((p) => "apiCredentials" in p && typeof p.apiCredentials === "string"));
@@ -174,15 +178,19 @@ ok(
   fakeLive.data
 );
 
-// credentials write-only
+// credentials are env-only — this endpoint must reject them outright
 const credSave = await api("PUT", `/api/admin/courier-partners/${ekartSeed.id}`, {
   token: superTok,
   body: { apiCredentials: { accountId: "ACC-123", token: "SECRET-TOKEN-XYZ" } },
 });
-ok("api credentials saved", credSave.status === 200 && credSave.data?.partner?.hasApiCredentials === true, credSave.data);
 ok(
-  "credential VALUES never returned (only hasApiCredentials flag)",
-  JSON.stringify(credSave.data?.partner || {}).includes("SECRET-TOKEN-XYZ") === false &&
+  "api credentials are rejected — server-side env secrets only",
+  credSave.status === 400 && /environment secrets/i.test(credSave.data?.message || ""),
+  credSave.data
+);
+ok(
+  "credential VALUES never returned by the rejected write or list",
+  JSON.stringify(credSave.data || {}).includes("SECRET-TOKEN-XYZ") === false &&
     JSON.stringify(list.data?.partners || []).includes("SECRET-TOKEN-XYZ") === false
 );
 

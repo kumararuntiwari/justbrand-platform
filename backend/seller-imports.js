@@ -50,6 +50,7 @@ const MAX_STORED_ROW_ERRORS = 500;
 const MAX_SYNC_ERRORS = 200;
 const MAX_SUPPLIER_RESPONSE_BYTES = 8 * 1024 * 1024;
 const SUPPLIER_FETCH_TIMEOUT_MS = 20000;
+const MAX_FEED_ITEMS = 5000;
 
 function now() {
   return new Date().toISOString();
@@ -223,6 +224,17 @@ function ensureImportTables() {
     ["nextSyncAt", "TEXT"],
     ["lastSuccessfulSyncAt", "TEXT"],
     ["syncRetryCount", "INTEGER NOT NULL DEFAULT 0"],
+    // Separate feeds are optional. When omitted, the products feed
+    // remains the single source of price + stock, exactly as before.
+    ["stockPath", "TEXT"],
+    ["pricePath", "TEXT"],
+    ["orderPath", "TEXT"],
+    ["orderStatusPath", "TEXT"],
+    ["webhookSecretEnc", "TEXT"],
+    ["enabled", "INTEGER NOT NULL DEFAULT 1"],
+    ["orderSyncEnabled", "INTEGER NOT NULL DEFAULT 0"],
+    ["lastOrderSyncAt", "TEXT"],
+    ["lastOrderSyncError", "TEXT"],
   ];
 
   for (const [name, definition] of extraIntegrationColumns) {
@@ -2249,6 +2261,16 @@ function publicIntegration(row) {
     hasApiSecret: Boolean(row.apiSecretEnc),
     productsPath: row.productsPath,
     productsKey: row.productsKey || "",
+    stockPath: row.stockPath || "",
+    pricePath: row.pricePath || "",
+    orderPath: row.orderPath || "",
+    orderStatusPath: row.orderStatusPath || "",
+    hasWebhookSecret: Boolean(row.webhookSecretEnc),
+    enabled: row.enabled === undefined ? true : Number(row.enabled) === 1,
+    orderSyncEnabled: Number(row.orderSyncEnabled) === 1,
+    lastOrderSyncAt: row.lastOrderSyncAt || null,
+    lastOrderSyncError: row.lastOrderSyncError || null,
+    webhookPath: `/api/supplier-webhook/${row.id}`,
     mapping: readMapping(row.mappingJson),
     status: row.status,
     rejectionReason: row.rejectionReason || null,
@@ -2309,9 +2331,9 @@ function integrationHeaders(integration) {
   return headers;
 }
 
-function supplierUrl(integration) {
+function supplierUrl(integration, pathOverride) {
   const base = assertPublicUrl(integration.baseUrl);
-  const path = clean(integration.productsPath) || "/products";
+  const path = clean(pathOverride) || clean(integration.productsPath) || "/products";
 
   const build = (rawUrl) => {
     const url = new URL(rawUrl);
@@ -2333,8 +2355,8 @@ function supplierUrl(integration) {
   return build(url.toString());
 }
 
-async function fetchSupplierItems(integration, maxItems) {
-  const url = supplierUrl(integration);
+async function fetchSupplierItems(integration, maxItems, pathOverride) {
+  const url = supplierUrl(integration, pathOverride);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), SUPPLIER_FETCH_TIMEOUT_MS);
 
@@ -2374,7 +2396,7 @@ async function fetchSupplierItems(integration, maxItems) {
       );
     }
 
-    return list.slice(0, maxItems);
+    return list.slice(0, Math.min(Number(maxItems) || MAX_FEED_ITEMS, MAX_FEED_ITEMS));
   } catch (error) {
     if (error.name === "AbortError") {
       throw new Error("Supplier API timed out after 20 seconds.");
@@ -2383,6 +2405,48 @@ async function fetchSupplierItems(integration, maxItems) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+// Merge optional stock / price feeds into the product feed by SKU.
+// A dedicated feed only overrides the field it is responsible for, so
+// name / description / images from the product feed are never lost.
+function setMappedPath(target, path, value) {
+  const segments = String(path || "").split(".").filter(Boolean);
+  if (!segments.length) return;
+
+  let current = target;
+  for (let index = 0; index < segments.length - 1; index += 1) {
+    const key = segments[index];
+    if (!current[key] || typeof current[key] !== "object") current[key] = {};
+    current = current[key];
+  }
+  current[segments[segments.length - 1]] = value;
+}
+
+function mergeFeedItems(items, stockItems, priceItems, mapping) {
+  if (!stockItems.length && !priceItems.length) return items;
+
+  const stockBySku = new Map();
+  for (const item of stockItems) {
+    const sku = clean(pickPath(item, mapping.sku));
+    if (sku) stockBySku.set(sku.toUpperCase(), pickPath(item, mapping.stock));
+  }
+
+  const priceBySku = new Map();
+  for (const item of priceItems) {
+    const sku = clean(pickPath(item, mapping.sku));
+    if (sku) priceBySku.set(sku.toUpperCase(), pickPath(item, mapping.price));
+  }
+
+  return items.map((item) => {
+    const sku = clean(pickPath(item, mapping.sku)).toUpperCase();
+    if (!sku) return item;
+
+    const merged = JSON.parse(JSON.stringify(item));
+    if (stockBySku.has(sku)) setMappedPath(merged, mapping.stock, stockBySku.get(sku));
+    if (priceBySku.has(sku)) setMappedPath(merged, mapping.price, priceBySku.get(sku));
+    return merged;
+  });
 }
 
 function normalizeSupplierItem(item, mapping) {
@@ -2582,7 +2646,23 @@ async function runSupplierSync(integration, trigger) {
   let failed = 0;
 
   try {
-    const items = await fetchSupplierItems(integration, settings.maxSyncItems);
+    const productItems = await fetchSupplierItems(
+      integration,
+      settings.maxSyncItems,
+      integration.productsPath
+    );
+    // Dedicated stock / price feeds are optional. They are merged by
+    // SKU before the same validated product writer runs, so pricing,
+    // GST and duplicate-SKU protection are never bypassed.
+    const [stockItems, priceItems] = await Promise.all([
+      integration.stockPath
+        ? fetchSupplierItems(integration, settings.maxSyncItems, integration.stockPath)
+        : Promise.resolve([]),
+      integration.pricePath
+        ? fetchSupplierItems(integration, settings.maxSyncItems, integration.pricePath)
+        : Promise.resolve([]),
+    ]);
+    const items = mergeFeedItems(productItems, stockItems, priceItems, mapping);
     fetched = items.length;
 
     const insert = db.prepare(`
@@ -3777,13 +3857,19 @@ export {
   encryptSecret,
   decryptSecret,
   secretHint,
+  publicIntegration,
+  fetchSupplierItems,
+  supplierUrl,
+  integrationHeaders,
+  assertPublicUrl,
+  normalizeSupplierItem,
+  runSupplierSync,
   computeMarkup,
   resolveMarginRule,
   buildSupplierPricing,
   computeNextSyncAt,
   getImportSettings,
   readMapping,
-  normalizeSupplierItem,
   splitImages,
 };
 
