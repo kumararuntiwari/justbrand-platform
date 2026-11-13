@@ -8,10 +8,12 @@ function Checkout({
   onBack,
   onOrderPlaced,
 }) {
-  const [address, setAddress] = useState("");
-  const [city, setCity] = useState("");
-  const [stateName, setStateName] = useState("");
-  const [pincode, setPincode] = useState("");
+  // Reuse the buyer's saved default delivery address at checkout.
+  // CustomerAccount persists these fields through PUT /api/customers/me.
+  const [address, setAddress] = useState(customer?.address || "");
+  const [city, setCity] = useState(customer?.city || "");
+  const [stateName, setStateName] = useState(customer?.state || "");
+  const [pincode, setPincode] = useState(customer?.pincode || "");
   const [email, setEmail] = useState(
     customer?.email ? String(customer.email) : ""
   );
