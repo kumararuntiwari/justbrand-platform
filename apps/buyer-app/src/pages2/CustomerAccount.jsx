@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { api, getCustomerToken } from "../api";
 
 function CustomerAccount({
@@ -18,9 +18,122 @@ function CustomerAccount({
   const [pincode, setPincode] = useState(customer?.pincode || "");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [addresses, setAddresses] = useState([]);
+  const [addressFormOpen, setAddressFormOpen] = useState(false);
+  const [editingAddressId, setEditingAddressId] = useState(null);
+  const [addressSaving, setAddressSaving] = useState(false);
+  const [addressMessage, setAddressMessage] = useState("");
+  const [addressDraft, setAddressDraft] = useState({
+    label: "Home",
+    recipientName: customer?.name || "",
+    mobile: customer?.mobile || "",
+    address: "",
+    city: "",
+    state: "",
+    pincode: "",
+  });
+
+  async function loadAddresses() {
+    try {
+      const data = await api("/api/customers/addresses", {
+        token: getCustomerToken(),
+      });
+      if (data?.success) setAddresses(data.addresses || []);
+    } catch (error) {
+      setAddressMessage(error.message || "Could not load saved addresses.");
+    }
+  }
+
+  useEffect(() => {
+    loadAddresses();
+  }, []);
 
   if (!customer) {
     return null;
+  }
+
+  function startAddressForm(item = null) {
+    setEditingAddressId(item?.id ?? null);
+    setAddressDraft(item ? {
+      label: item.label || "Home",
+      recipientName: item.recipientName || customer?.name || "",
+      mobile: item.mobile || customer?.mobile || "",
+      address: item.address || "",
+      city: item.city || "",
+      state: item.state || "",
+      pincode: item.pincode || "",
+    } : {
+      label: "Home",
+      recipientName: customer?.name || "",
+      mobile: customer?.mobile || "",
+      address: "",
+      city: "",
+      state: "",
+      pincode: "",
+    });
+    setAddressMessage("");
+    setAddressFormOpen(true);
+  }
+
+  async function saveAddress() {
+    setAddressMessage("");
+    if (!addressDraft.recipientName.trim() || !addressDraft.address.trim() ||
+        !addressDraft.city.trim() || !addressDraft.state.trim() ||
+        !/^\\d{6}$/.test(addressDraft.pincode.trim())) {
+      setAddressMessage("Name, full address, city, state and 6-digit PIN are required.");
+      return;
+    }
+    setAddressSaving(true);
+    try {
+      const data = await api(editingAddressId
+        ? `/api/customers/addresses/${editingAddressId}`
+        : "/api/customers/addresses", {
+        method: editingAddressId ? "PUT" : "POST",
+        token: getCustomerToken(),
+        body: addressDraft,
+      });
+      if (!data?.success) throw new Error(data?.message || "Could not save address.");
+      setAddressFormOpen(false);
+      await loadAddresses();
+      setAddressMessage("Address saved successfully.");
+    } catch (error) {
+      setAddressMessage(error.message || "Could not save address.");
+    } finally {
+      setAddressSaving(false);
+    }
+  }
+
+  async function makeDefaultAddress(id) {
+    try {
+      const data = await api(`/api/customers/addresses/${id}/default`, {
+        method: "PUT",
+        token: getCustomerToken(),
+      });
+      if (!data?.success) throw new Error(data?.message || "Could not set default address.");
+      await loadAddresses();
+      if (onProfileUpdated) {
+        const profile = await api("/api/customers/me", { token: getCustomerToken() });
+        if (profile?.success && profile.customer) onProfileUpdated(profile.customer);
+      }
+    } catch (error) {
+      setAddressMessage(error.message || "Could not set default address.");
+    }
+  }
+
+  async function deleteAddress(id) {
+    if (!window.confirm("Delete this saved address?")) return;
+    try {
+      const data = await api(`/api/customers/addresses/${id}`, {
+        method: "DELETE",
+        token: getCustomerToken(),
+      });
+      if (!data?.success) throw new Error(data?.message || "Could not delete address.");
+      await loadAddresses();
+      const profile = await api("/api/customers/me", { token: getCustomerToken() });
+      if (profile?.success && profile.customer && onProfileUpdated) onProfileUpdated(profile.customer);
+    } catch (error) {
+      setAddressMessage(error.message || "Could not delete address.");
+    }
   }
 
   async function handleSaveProfile() {
@@ -219,6 +332,52 @@ function CustomerAccount({
               </button>
             </div>
           )}
+
+          {/* SAVED DELIVERY ADDRESSES */}
+          <section style={{ ...styles.editBox, marginTop: 16 }}>
+            <h2 style={{ margin: "0 0 10px", fontSize: 18 }}>📍 My Delivery Addresses</h2>
+            <p style={{ margin: "0 0 12px", color: "#666", fontSize: 13 }}>Save up to 10 addresses and choose one as your default checkout address.</p>
+            {addresses.map((item) => (
+              <div key={item.id} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 12, marginBottom: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+                  <strong>{item.label} {item.isDefault ? "· Default" : ""}</strong>
+                  <span style={{ fontSize: 12, color: "#666" }}>{item.recipientName} · {item.mobile}</span>
+                </div>
+                <div style={{ fontSize: 14, margin: "7px 0" }}>{item.address}, {item.city}, {item.state} - {item.pincode}</div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {!item.isDefault && <button type="button" onClick={() => makeDefaultAddress(item.id)} style={styles.editButton}>Make Default</button>}
+                  <button type="button" onClick={() => startAddressForm(item)} style={styles.editButton}>Edit</button>
+                  <button type="button" onClick={() => deleteAddress(item.id)} style={styles.cancelButton}>Delete</button>
+                </div>
+              </div>
+            ))}
+            {addressFormOpen ? (
+              <div style={{ display: "grid", gap: 8 }}>
+                {[
+                  ["label", "Address label (Home / Work)"],
+                  ["recipientName", "Receiver name"],
+                  ["mobile", "Mobile number"],
+                  ["address", "House no, street, area, landmark"],
+                  ["city", "City"],
+                  ["state", "State"],
+                  ["pincode", "6-digit PIN code"],
+                ].map(([key, placeholder]) => (
+                  <input key={key} value={addressDraft[key]} placeholder={placeholder}
+                    inputMode={key === "mobile" || key === "pincode" ? "numeric" : undefined}
+                    maxLength={key === "pincode" ? 6 : key === "mobile" ? 10 : undefined}
+                    onChange={(e) => setAddressDraft((old) => ({ ...old, [key]: key === "pincode" || key === "mobile" ? e.target.value.replace(/\\D/g, "") : e.target.value }))}
+                    style={styles.editInput} />
+                ))}
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button type="button" disabled={addressSaving} onClick={saveAddress} style={styles.saveButton}>{addressSaving ? "Saving..." : "Save Address"}</button>
+                  <button type="button" onClick={() => setAddressFormOpen(false)} style={styles.cancelButton}>Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <button type="button" disabled={addresses.length >= 10} onClick={() => startAddressForm()} style={styles.saveButton}>＋ Add New Address</button>
+            )}
+            {addressMessage && <p style={{ color: "#b45309", fontSize: 13 }}>{addressMessage}</p>}
+          </section>
 
           <div style={styles.menuBox}>
             <button type="button" onClick={onOrders} style={styles.menuButton}>
