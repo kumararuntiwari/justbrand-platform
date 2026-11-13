@@ -242,11 +242,18 @@ function ComparePrice({
   // CURRENT PRODUCT IMAGE
   // =====================================
 
-  const productImage = getImageUrl(product.image);
-
-  console.log("COMPARE PRODUCT:", product);
-console.log("COMPARE IMAGE:", product.image);
-console.log("COMPARE IMAGE URL:", productImage);
+  // Prefer the selected product's own gallery image. Some seller
+  // records store the correct primary photo in images[0], while the
+  // legacy image field can contain an older/demo thumbnail.
+  const primaryProductImage = Array.isArray(product.images)
+    ? product.images.find((image) => Boolean(String(image || "").trim()))
+    : null;
+  const productImage = getImageUrl(
+    primaryProductImage ||
+    product.image ||
+    product.imageUrl ||
+    product.photo
+  );
 
   // =====================================
   // PRICE
