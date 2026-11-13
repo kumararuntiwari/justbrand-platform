@@ -79,7 +79,7 @@ function CustomerAccount({
     setAddressMessage("");
     if (!addressDraft.recipientName.trim() || !addressDraft.address.trim() ||
         !addressDraft.city.trim() || !addressDraft.state.trim() ||
-        !/^\\d{6}$/.test(addressDraft.pincode.trim())) {
+        !/^\d{6}$/.test(addressDraft.pincode.trim())) {
       setAddressMessage("Name, full address, city, state and 6-digit PIN are required.");
       return;
     }
@@ -365,7 +365,7 @@ function CustomerAccount({
                   <input key={key} value={addressDraft[key]} placeholder={placeholder}
                     inputMode={key === "mobile" || key === "pincode" ? "numeric" : undefined}
                     maxLength={key === "pincode" ? 6 : key === "mobile" ? 10 : undefined}
-                    onChange={(e) => setAddressDraft((old) => ({ ...old, [key]: key === "pincode" || key === "mobile" ? e.target.value.replace(/\\D/g, "") : e.target.value }))}
+                    onChange={(e) => setAddressDraft((old) => ({ ...old, [key]: key === "pincode" || key === "mobile" ? e.target.value.replace(/\D/g, "") : e.target.value }))}
                     style={styles.editInput} />
                 ))}
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
