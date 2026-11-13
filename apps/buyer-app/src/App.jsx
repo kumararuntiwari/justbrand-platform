@@ -102,9 +102,9 @@ function HomeHero({ banners, promo, onCta, fitMode }) {
   const bannerHeight = isMobile ? 300 : 380;
   const bannerMargin = "18px auto 16px";
 
-  // "Fit to Cell" (contain) shows the whole image; "cover" keeps
-  // the original fill-the-strip behaviour.
-  const bannerFit = fitMode === "contain" ? "contain" : "cover";
+  // Buyer banners must remain fully visible inside the banner box.
+  // Never crop the seller/admin-uploaded artwork on the storefront.
+  const bannerFit = "contain";
 
   const slides = (banners || []).filter((b) => {
     if (!b || !b.active) return false;
@@ -175,7 +175,7 @@ function HomeHero({ banners, promo, onCta, fitMode }) {
             }}
           />
 
-          {(banner.title || banner.subtitle || banner.ctaText) && (
+          {(banner.subtitle || banner.ctaText) && (
             <div
               style={{
                 position: "absolute",
@@ -194,17 +194,6 @@ function HomeHero({ banners, promo, onCta, fitMode }) {
               }}
             >
               <div>
-                {banner.title ? (
-                  <strong
-                    style={{
-                      fontSize: "18px",
-                      display: "block",
-                      textShadow: "0 1px 4px rgba(0,0,0,0.4)",
-                    }}
-                  >
-                    {banner.title}
-                  </strong>
-                ) : null}
                 {banner.subtitle ? (
                   <span style={{ fontSize: "13px", opacity: 0.95 }}>
                     {banner.subtitle}
