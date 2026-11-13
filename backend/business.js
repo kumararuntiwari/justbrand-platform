@@ -77,6 +77,8 @@ import {
 
 export const businessRouter = express.Router();
 
+
+
 // =====================================
 // HELPERS
 // =====================================
@@ -696,6 +698,27 @@ db.prepare(`
     pincode TEXT
   )
 `).run();
+
+// Buyer delivery address book. Additive table; existing customer profile
+// address columns remain the legacy default-address source.
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS customer_addresses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customerId INTEGER NOT NULL,
+    label TEXT NOT NULL DEFAULT 'Home',
+    recipientName TEXT NOT NULL,
+    mobile TEXT NOT NULL,
+    address TEXT NOT NULL,
+    city TEXT NOT NULL,
+    state TEXT NOT NULL,
+    pincode TEXT NOT NULL,
+    isDefault INTEGER NOT NULL DEFAULT 0,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL,
+    FOREIGN KEY (customerId) REFERENCES customers(id) ON DELETE CASCADE
+  )
+`).run();
+db.prepare("CREATE INDEX IF NOT EXISTS idx_customer_addresses_customer ON customer_addresses(customerId)").run();
 
 db.prepare(`
   CREATE TABLE IF NOT EXISTS orders (
@@ -3495,6 +3518,183 @@ businessRouter.put(
       console.error("CUSTOMER PROFILE UPDATE ERROR:", error);
       res.status(500).json({ success: false, message: "Failed to update profile." });
     }
+  }
+);
+
+// =====================================================
+// CUSTOMER DELIVERY ADDRESS BOOK
+// =====================================================
+
+function addressRow(row) {
+  return {
+    id: row.id,
+    label: row.label,
+    recipientName: row.recipientName,
+    mobile: row.mobile,
+    address: row.address,
+    city: row.city,
+    state: row.state,
+    pincode: row.pincode,
+    isDefault: Boolean(row.isDefault),
+  };
+}
+
+function syncCustomerDefaultAddress(customerId, address) {
+  db.prepare(`
+    UPDATE customers
+    SET address = ?, city = ?, state = ?, pincode = ?
+    WHERE id = ?
+  `).run(address?.address || "", address?.city || "", address?.state || "", address?.pincode || "", customerId);
+}
+
+businessRouter.get(
+  "/api/customers/addresses",
+  requireAuth,
+  requireType("customer"),
+  (req, res) => {
+    const customerId = req.user.customerId;
+    let rows = db.prepare("SELECT * FROM customer_addresses WHERE customerId = ? ORDER BY isDefault DESC, id DESC").all(customerId);
+    // Preserve an existing legacy default address when the customer first
+    // opens the address book after this additive feature is deployed.
+    if (!rows.length) {
+      const customer = db.prepare("SELECT * FROM customers WHERE id = ?").get(customerId);
+      if (customer?.address && customer?.city && customer?.state && customer?.pincode) {
+        const now = new Date().toISOString();
+        const result = db.prepare(`
+          INSERT INTO customer_addresses
+            (customerId, label, recipientName, mobile, address, city, state, pincode, isDefault, createdAt, updatedAt)
+          VALUES (?, 'Home', ?, ?, ?, ?, ?, ?, 1, ?, ?)
+        `).run(customerId, customer.name || "Customer", customer.mobile || "", customer.address, customer.city, customer.state, customer.pincode, now, now);
+        rows = db.prepare("SELECT * FROM customer_addresses WHERE customerId = ? ORDER BY isDefault DESC, id DESC").all(customerId);
+      }
+    }
+    res.json({ success: true, addresses: rows.map(addressRow) });
+  }
+);
+
+businessRouter.post(
+  "/api/customers/addresses",
+  requireAuth,
+  requireType("customer"),
+  (req, res) => {
+    try {
+      const customerId = req.user.customerId;
+      const fields = {
+        label: clean(req.body.label) || "Home",
+        recipientName: clean(req.body.recipientName),
+        mobile: clean(req.body.mobile).replace(/\D/g, ""),
+        address: clean(req.body.address),
+        city: clean(req.body.city),
+        state: clean(req.body.state),
+        pincode: clean(req.body.pincode),
+      };
+      if (!fields.recipientName || !fields.address || !fields.city || !fields.state || !/^\d{6}$/.test(fields.pincode)) {
+        return res.status(400).json({ success: false, message: "Name, full address, city, state and valid 6-digit PIN are required." });
+      }
+      if (fields.mobile && !/^\d{10}$/.test(fields.mobile)) {
+        return res.status(400).json({ success: false, message: "Mobile number must be 10 digits." });
+      }
+      const count = db.prepare("SELECT COUNT(*) AS count FROM customer_addresses WHERE customerId = ?").get(customerId).count;
+      if (count >= 10) return res.status(400).json({ success: false, message: "You can save up to 10 addresses." });
+      const now = new Date().toISOString();
+      const isDefault = count === 0 || Boolean(req.body.isDefault);
+      const insert = db.transaction(() => {
+        if (isDefault) db.prepare("UPDATE customer_addresses SET isDefault = 0 WHERE customerId = ?").run(customerId);
+        const result = db.prepare(`
+          INSERT INTO customer_addresses
+            (customerId, label, recipientName, mobile, address, city, state, pincode, isDefault, createdAt, updatedAt)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(customerId, fields.label, fields.recipientName, fields.mobile, fields.address, fields.city, fields.state, fields.pincode, isDefault ? 1 : 0, now, now);
+        const saved = db.prepare("SELECT * FROM customer_addresses WHERE id = ? AND customerId = ?").get(result.lastInsertRowid, customerId);
+        if (isDefault) syncCustomerDefaultAddress(customerId, saved);
+        return saved;
+      });
+      res.status(201).json({ success: true, address: addressRow(insert()) });
+    } catch (error) {
+      console.error("CUSTOMER ADDRESS CREATE ERROR:", error);
+      res.status(500).json({ success: false, message: "Could not save address." });
+    }
+  }
+);
+
+businessRouter.put(
+  "/api/customers/addresses/:id",
+  requireAuth,
+  requireType("customer"),
+  (req, res) => {
+    try {
+      const customerId = req.user.customerId;
+      const current = db.prepare("SELECT * FROM customer_addresses WHERE id = ? AND customerId = ?").get(Number(req.params.id), customerId);
+      if (!current) return res.status(404).json({ success: false, message: "Address not found." });
+      const fields = {
+        label: clean(req.body.label) || "Home",
+        recipientName: clean(req.body.recipientName),
+        mobile: clean(req.body.mobile).replace(/\D/g, ""),
+        address: clean(req.body.address),
+        city: clean(req.body.city),
+        state: clean(req.body.state),
+        pincode: clean(req.body.pincode),
+      };
+      if (!fields.recipientName || !fields.address || !fields.city || !fields.state || !/^\d{6}$/.test(fields.pincode)) {
+        return res.status(400).json({ success: false, message: "Name, full address, city, state and valid 6-digit PIN are required." });
+      }
+      if (fields.mobile && !/^\d{10}$/.test(fields.mobile)) return res.status(400).json({ success: false, message: "Mobile number must be 10 digits." });
+      const now = new Date().toISOString();
+      db.prepare(`
+        UPDATE customer_addresses SET label = ?, recipientName = ?, mobile = ?, address = ?, city = ?, state = ?, pincode = ?, updatedAt = ?
+        WHERE id = ? AND customerId = ?
+      `).run(fields.label, fields.recipientName, fields.mobile, fields.address, fields.city, fields.state, fields.pincode, now, current.id, customerId);
+      const saved = db.prepare("SELECT * FROM customer_addresses WHERE id = ? AND customerId = ?").get(current.id, customerId);
+      if (saved.isDefault) syncCustomerDefaultAddress(customerId, saved);
+      res.json({ success: true, address: addressRow(saved) });
+    } catch (error) {
+      console.error("CUSTOMER ADDRESS UPDATE ERROR:", error);
+      res.status(500).json({ success: false, message: "Could not update address." });
+    }
+  }
+);
+
+businessRouter.put(
+  "/api/customers/addresses/:id/default",
+  requireAuth,
+  requireType("customer"),
+  (req, res) => {
+    const customerId = req.user.customerId;
+    const selected = db.prepare("SELECT * FROM customer_addresses WHERE id = ? AND customerId = ?").get(Number(req.params.id), customerId);
+    if (!selected) return res.status(404).json({ success: false, message: "Address not found." });
+    const setDefault = db.transaction(() => {
+      db.prepare("UPDATE customer_addresses SET isDefault = 0 WHERE customerId = ?").run(customerId);
+      db.prepare("UPDATE customer_addresses SET isDefault = 1, updatedAt = ? WHERE id = ? AND customerId = ?").run(new Date().toISOString(), selected.id, customerId);
+      const saved = db.prepare("SELECT * FROM customer_addresses WHERE id = ? AND customerId = ?").get(selected.id, customerId);
+      syncCustomerDefaultAddress(customerId, saved);
+      return saved;
+    });
+    res.json({ success: true, address: addressRow(setDefault()) });
+  }
+);
+
+businessRouter.delete(
+  "/api/customers/addresses/:id",
+  requireAuth,
+  requireType("customer"),
+  (req, res) => {
+    const customerId = req.user.customerId;
+    const current = db.prepare("SELECT * FROM customer_addresses WHERE id = ? AND customerId = ?").get(Number(req.params.id), customerId);
+    if (!current) return res.status(404).json({ success: false, message: "Address not found." });
+    const remove = db.transaction(() => {
+      db.prepare("DELETE FROM customer_addresses WHERE id = ? AND customerId = ?").run(current.id, customerId);
+      if (current.isDefault) {
+        const next = db.prepare("SELECT * FROM customer_addresses WHERE customerId = ? ORDER BY id DESC LIMIT 1").get(customerId);
+        if (next) {
+          db.prepare("UPDATE customer_addresses SET isDefault = 1 WHERE id = ?").run(next.id);
+          syncCustomerDefaultAddress(customerId, next);
+        } else {
+          syncCustomerDefaultAddress(customerId, null);
+        }
+      }
+    });
+    remove();
+    res.json({ success: true, message: "Address deleted." });
   }
 );
 

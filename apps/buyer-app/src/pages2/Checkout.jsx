@@ -8,10 +8,12 @@ function Checkout({
   onBack,
   onOrderPlaced,
 }) {
-  const [address, setAddress] = useState("");
-  const [city, setCity] = useState("");
-  const [stateName, setStateName] = useState("");
-  const [pincode, setPincode] = useState("");
+  // Reuse the buyer's saved default delivery address at checkout.
+  // CustomerAccount persists these fields through PUT /api/customers/me.
+  const [address, setAddress] = useState(customer?.address || "");
+  const [city, setCity] = useState(customer?.city || "");
+  const [stateName, setStateName] = useState(customer?.state || "");
+  const [pincode, setPincode] = useState(customer?.pincode || "");
   const [email, setEmail] = useState(
     customer?.email ? String(customer.email) : ""
   );
@@ -19,6 +21,32 @@ function Checkout({
     customer?.mobile ? String(customer.mobile) : ""
   );
   const [paymentMethod, setPaymentMethod] = useState("COD");
+  const [savedAddresses, setSavedAddresses] = useState([]);
+  const [selectedAddressId, setSelectedAddressId] = useState("");
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    api("/api/customers/addresses", { token })
+      .then((data) => {
+        if (cancelled || !data?.success) return;
+        const list = data.addresses || [];
+        setSavedAddresses(list);
+        const preferred = list.find((item) => item.isDefault);
+        if (preferred) {
+          setSelectedAddressId(String(preferred.id));
+          setAddress(preferred.address || "");
+          setCity(preferred.city || "");
+          setStateName(preferred.state || "");
+          setPincode(preferred.pincode || "");
+          if (preferred.mobile) setPhone(preferred.mobile);
+        }
+      })
+      .catch(() => {
+        // Keep the legacy saved profile address as a fallback.
+      });
+    return () => { cancelled = true; };
+  }, [token]);
 
   const [placing, setPlacing] = useState(false);
   const [placedOrder, setPlacedOrder] = useState(null);
@@ -378,6 +406,35 @@ function Checkout({
               </div>
             ))}
           </div>
+
+          {/* SAVED ADDRESS PICKER */}
+          {savedAddresses.length > 0 && (
+            <div style={styles.field}>
+              <label style={styles.label}>Choose a Saved Address</label>
+              <select
+                value={selectedAddressId}
+                onChange={(e) => {
+                  const selected = savedAddresses.find((item) => String(item.id) === e.target.value);
+                  setSelectedAddressId(e.target.value);
+                  if (selected) {
+                    setAddress(selected.address || "");
+                    setCity(selected.city || "");
+                    setStateName(selected.state || "");
+                    setPincode(selected.pincode || "");
+                    if (selected.mobile) setPhone(selected.mobile);
+                  }
+                }}
+                style={styles.input}
+              >
+                <option value="">Enter a different address</option>
+                {savedAddresses.map((item) => (
+                  <option key={item.id} value={String(item.id)}>
+                    {item.label}{item.isDefault ? " (Default)" : ""} — {item.city}, {item.pincode}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* ADDRESS */}
           <div style={styles.field}>
