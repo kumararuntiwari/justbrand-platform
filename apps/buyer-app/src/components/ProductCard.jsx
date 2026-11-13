@@ -262,7 +262,7 @@ function ProductCard({
             width: "100%",
             height: "100%",
             objectFit: "contain",
-            padding: "10px",
+            padding: "3px",
             boxSizing: "border-box",
             display: "block",
           }}
