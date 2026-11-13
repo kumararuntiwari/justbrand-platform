@@ -77,26 +77,7 @@ import {
 
 export const businessRouter = express.Router();
 
-// Buyer delivery address book. Additive table; existing customer profile
-// address columns remain the legacy default-address source.
-db.prepare(`
-  CREATE TABLE IF NOT EXISTS customer_addresses (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    customerId INTEGER NOT NULL,
-    label TEXT NOT NULL DEFAULT 'Home',
-    recipientName TEXT NOT NULL,
-    mobile TEXT NOT NULL,
-    address TEXT NOT NULL,
-    city TEXT NOT NULL,
-    state TEXT NOT NULL,
-    pincode TEXT NOT NULL,
-    isDefault INTEGER NOT NULL DEFAULT 0,
-    createdAt TEXT NOT NULL,
-    updatedAt TEXT NOT NULL,
-    FOREIGN KEY (customerId) REFERENCES customers(id) ON DELETE CASCADE
-  )
-`).run();
-db.prepare("CREATE INDEX IF NOT EXISTS idx_customer_addresses_customer ON customer_addresses(customerId)").run();
+
 
 // =====================================
 // HELPERS
@@ -717,6 +698,27 @@ db.prepare(`
     pincode TEXT
   )
 `).run();
+
+// Buyer delivery address book. Additive table; existing customer profile
+// address columns remain the legacy default-address source.
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS customer_addresses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customerId INTEGER NOT NULL,
+    label TEXT NOT NULL DEFAULT 'Home',
+    recipientName TEXT NOT NULL,
+    mobile TEXT NOT NULL,
+    address TEXT NOT NULL,
+    city TEXT NOT NULL,
+    state TEXT NOT NULL,
+    pincode TEXT NOT NULL,
+    isDefault INTEGER NOT NULL DEFAULT 0,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL,
+    FOREIGN KEY (customerId) REFERENCES customers(id) ON DELETE CASCADE
+  )
+`).run();
+db.prepare("CREATE INDEX IF NOT EXISTS idx_customer_addresses_customer ON customer_addresses(customerId)").run();
 
 db.prepare(`
   CREATE TABLE IF NOT EXISTS orders (
