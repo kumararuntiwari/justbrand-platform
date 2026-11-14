@@ -235,13 +235,13 @@ function ProductDetails({
           Desktop: two columns (gallery left, details right). */}
       <div
         style={{
-          maxWidth: "1000px",
+          maxWidth: "1180px",
           margin: "auto",
           background: "white",
           borderRadius: "15px",
           padding: isMobile ? "16px" : "25px",
           display: "grid",
-          gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+          gridTemplateColumns: isMobile ? "1fr" : "1.15fr 0.85fr",
           gap: isMobile ? "20px" : "30px",
           boxShadow: "0 2px 10px #ddd",
           boxSizing: "border-box",
@@ -254,7 +254,7 @@ function ProductDetails({
         <div>
           <div
             style={{
-              height: isMobile ? "390px" : "400px",
+              height: isMobile ? "450px" : "520px",
               background: "#f8f8f8",
               borderRadius: "12px",
               display: "flex",
