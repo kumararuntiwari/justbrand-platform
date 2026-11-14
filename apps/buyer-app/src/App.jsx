@@ -57,6 +57,27 @@ const FALLBACK_CATEGORY_CHIPS = [
   "Beauty",
   "Home",
   "Grocery",
+  "Sports & Fitness",
+  "Baby & Kids",
+  "Jewellery & Accessories",
+  "Books & Stationery",
+  "Automotive",
+  "Pet Supplies",
+];
+
+const HOME_CATEGORY_CARDS = [
+  { label: "Mobiles & Accessories", value: "Electronics", icon: "📱", subcategories: "Smartphones • Covers • Earbuds" },
+  { label: "Fashion & Clothing", value: "Fashion", icon: "👗", subcategories: "Men • Women • Kids • Footwear" },
+  { label: "Electronics", value: "Electronics", icon: "💻", subcategories: "Laptops • Audio • Smart Watches" },
+  { label: "Beauty & Personal Care", value: "Beauty", icon: "💄", subcategories: "Makeup • Skin • Hair Care" },
+  { label: "Home & Kitchen", value: "Home", icon: "🏠", subcategories: "Cookware • Decor • Storage" },
+  { label: "Grocery & Food", value: "Grocery", icon: "🛒", subcategories: "Staples • Snacks • Beverages" },
+  { label: "Sports & Fitness", value: "Sports & Fitness", icon: "🏸", subcategories: "Gym • Yoga • Outdoor" },
+  { label: "Baby & Kids", value: "Baby & Kids", icon: "🧸", subcategories: "Toys • Baby Care • Clothing" },
+  { label: "Jewellery & Accessories", value: "Jewellery & Accessories", icon: "💍", subcategories: "Jewellery • Watches • Bags" },
+  { label: "Books & Stationery", value: "Books & Stationery", icon: "📚", subcategories: "Books • Office • Art" },
+  { label: "Automotive", value: "Automotive", icon: "🚗", subcategories: "Car • Bike • Vehicle Care" },
+  { label: "Pet Supplies", value: "Pet Supplies", icon: "🐾", subcategories: "Pet Food • Toys • Care" },
 ];
 
 // Admin-managed site content (logo, banners, About/Contact copy).
@@ -99,7 +120,7 @@ function HomeHero({ banners, promo, onCta, fitMode }) {
   // promo-gradient fallback below, so the two states never jump in
   // height. The title/subtitle/CTA overlay is pinned to the bottom
   // edge and wraps, so it is never cropped at any viewport.
-  const bannerHeight = isMobile ? 300 : 380;
+  const bannerHeight = isMobile ? 190 : 300;
   const bannerMargin = "18px auto 16px";
 
   // Buyer banners must remain fully visible inside the banner box.
@@ -1265,6 +1286,10 @@ function App() {
     cartCount,
     search,
     setSearch,
+    onCategorySelect: (selectedCategory) => {
+      setCategory(selectedCategory);
+      setSearch("");
+    },
     filteredProducts,
     filteredCategories,
     onProductSelect: (product) =>
@@ -1956,53 +1981,63 @@ function App() {
       />
 
       {/* ======================================
-          CATEGORY BAR
+          MARKETPLACE CATEGORY DISCOVERY
       ====================================== */}
 
-      <div
-        style={{
-          width: "100%",
-          background: "white",
-          padding: "15px",
-          display: "flex",
-          gap: "10px",
-          overflowX: "auto",
-          borderBottom:
-            "1px solid #ddd",
-          boxSizing: "border-box",
-        }}
-      >
-        {categoryChips.map((item) => (
+      <section className="jb-category-section" aria-label="Shop by category">
+        <div className="jb-category-heading">
+          <div>
+            <span className="jb-section-eyebrow">EXPLORE JUSTBRAND</span>
+            <h2>Shop by Category</h2>
+            <p>Find what you need from everyday essentials to your favourite brands.</p>
+          </div>
           <button
-            key={item}
-            onClick={() =>
-              setCategory(item)
-            }
-            style={{
-              padding:
-                "9px 16px",
-              borderRadius:
-                "20px",
-              border:
-                "1px solid #ddd",
-              background:
-                category === item
-                  ? "#ff6b00"
-                  : "white",
-              color:
-                category === item
-                  ? "white"
-                  : "#333",
-              cursor: "pointer",
-              whiteSpace:
-                "nowrap",
-              flexShrink: 0,
+            type="button"
+            className="jb-view-all-categories"
+            onClick={() => {
+              setCategory("All");
+              setSearch("");
             }}
           >
-            {item}
+            View all products <span aria-hidden="true">→</span>
           </button>
-        ))}
-      </div>
+        </div>
+
+        <div className="jb-category-grid">
+          {HOME_CATEGORY_CARDS.map((item) => (
+            <button
+              type="button"
+              key={item.label}
+              className={`jb-category-card${category === item.value ? " is-active" : ""}`}
+              onClick={() => {
+                setCategory(item.value);
+                setSearch("");
+              }}
+              aria-pressed={category === item.value}
+            >
+              <span className="jb-category-icon" aria-hidden="true">{item.icon}</span>
+              <span className="jb-category-name">{item.label}</span>
+              <span className="jb-category-subcategories">{item.subcategories}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="jb-category-quickfilters" aria-label="Quick category filters">
+          {categoryChips.map((item) => (
+            <button
+              type="button"
+              key={item}
+              className={category === item ? "is-active" : ""}
+              onClick={() => {
+                setCategory(item);
+                setSearch("");
+              }}
+            >
+              {item === "All" ? "All products" : item}
+            </button>
+          ))}
+        </div>
+      </section>
 
       {/* ======================================
           MAIN CONTENT
