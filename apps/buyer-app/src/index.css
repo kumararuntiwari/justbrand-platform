@@ -265,3 +265,176 @@ select {
   outline: 3px solid var(--jb-saffron);
   outline-offset: 2px;
 }
+
+
+/* ============================================================
+   JUSTBRAND MARKETPLACE HOME — category discovery and storefront
+   ============================================================ */
+.jb-page {
+  background: #f4f6f9;
+}
+.jb-category-section {
+  width: min(1240px, calc(100% - 32px));
+  margin: 18px auto 8px;
+  padding: 22px;
+  background: #fff;
+  border: 1px solid #e8ebf0;
+  border-radius: 14px;
+  box-shadow: 0 4px 18px rgba(28, 34, 50, 0.045);
+}
+.jb-category-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+.jb-section-eyebrow {
+  display: block;
+  margin-bottom: 5px;
+  color: #e85d04;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+}
+.jb-category-heading h2 {
+  margin: 0;
+  color: #202b3c;
+  font-size: clamp(20px, 2vw, 25px);
+  line-height: 1.2;
+  letter-spacing: -0.45px;
+}
+.jb-category-heading p {
+  margin: 6px 0 0;
+  color: #6b7280;
+  font-size: 13px;
+}
+.jb-view-all-categories {
+  flex: 0 0 auto;
+  padding: 9px 13px;
+  border: 1px solid #ffd7bd;
+  border-radius: 8px;
+  background: #fff8f3;
+  color: #d95100;
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.jb-category-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+}
+.jb-category-card {
+  min-width: 0;
+  min-height: 132px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 7px;
+  padding: 14px 13px;
+  border: 1px solid #e9edf2;
+  border-radius: 11px;
+  background: linear-gradient(180deg, #fff 0%, #fbfcfe 100%);
+  color: #263247;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+.jb-category-card:hover,
+.jb-category-card.is-active {
+  border-color: #ffb27f;
+  box-shadow: 0 5px 16px rgba(232, 93, 4, .10);
+  transform: translateY(-2px);
+}
+.jb-category-card.is-active {
+  background: #fff8f3;
+}
+.jb-category-icon {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: #fff1e7;
+  font-size: 23px;
+}
+.jb-category-name {
+  color: #202b3c;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+.jb-category-subcategories {
+  color: #818a99;
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+.jb-category-quickfilters {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 15px 1px 1px;
+  scrollbar-width: thin;
+}
+.jb-category-quickfilters button {
+  flex: 0 0 auto;
+  padding: 7px 12px;
+  border: 1px solid #e2e6ec;
+  border-radius: 20px;
+  background: #fff;
+  color: #4b5563;
+  font-size: 11.5px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.jb-category-quickfilters button.is-active,
+.jb-category-quickfilters button:hover {
+  border-color: #ff6b00;
+  background: #fff4eb;
+  color: #d95100;
+}
+.jb-product-grid {
+  gap: 14px;
+}
+.jb-pcard {
+  border-color: #e8ebf0 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 2px 9px rgba(28, 34, 50, .06) !important;
+}
+.jb-pcard:hover {
+  box-shadow: 0 9px 24px rgba(28, 34, 50, .12) !important;
+}
+@media (max-width: 1000px) {
+  .jb-category-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .jb-category-section {
+    width: calc(100% - 20px);
+    margin: 12px auto 6px;
+    padding: 15px 12px;
+    border-radius: 12px;
+  }
+  .jb-category-heading {
+    align-items: flex-start;
+    margin-bottom: 13px;
+  }
+  .jb-category-heading p { max-width: 230px; font-size: 11.5px; }
+  .jb-view-all-categories { padding: 8px 9px; font-size: 10.5px; }
+  .jb-category-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .jb-category-card {
+    min-height: 112px;
+    padding: 10px 8px;
+    gap: 6px;
+  }
+  .jb-category-icon { width: 34px; height: 34px; font-size: 20px; }
+  .jb-category-name { font-size: 11px; }
+  .jb-category-subcategories { font-size: 9px; }
+}
+@media (max-width: 380px) {
+  .jb-category-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
