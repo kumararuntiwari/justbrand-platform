@@ -89,6 +89,9 @@ async function startServer() {
       env: {
         ...process.env,
         PORT: String(PORT),
+        // Explicit throwaway DB path — never use the production database.
+        JUSTBRAND_DB_PATH: path.join(TMP_DIR, "justbrand.db"),
+        JUSTBRAND_ALLOW_CREATE_DB: "1",
         // Deterministic test secret — never the production secret.
         JWT_SECRET: "jb-flow-test-secret-local-only",
         // Legacy flow test registers its own root member. Public
