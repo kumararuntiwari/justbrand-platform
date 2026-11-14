@@ -224,6 +224,7 @@ function Header({
   onCart,
   search,
   setSearch,
+  onCategorySelect,
   filteredProducts,
   filteredCategories,
   onProductSelect,
@@ -306,7 +307,11 @@ function Header({
   // ==================================================
 
   const handleCategory = (category) => {
-    setSearch(category);
+    if (onCategorySelect) {
+      onCategorySelect(category);
+    } else {
+      setSearch(category);
+    }
     closeMenu();
   };
 
@@ -543,7 +548,7 @@ function Header({
           </button>
 
           <button
-            onClick={() => handleCategory("Mobiles")}
+            onClick={() => handleCategory("Electronics")}
           >
             📱 Mobiles
           </button>
@@ -870,7 +875,7 @@ function Header({
 
             <button
               className="jb-side-item"
-              onClick={() => handleCategory("Mobiles")}
+              onClick={() => handleCategory("Electronics")}
             >
               📱
               <span>
@@ -1985,6 +1990,105 @@ function Header({
             padding: 3px;
           }
 
+        }
+
+
+        /* JUSTBRAND marketplace refresh — desktop and mobile */
+        .jb-header {
+          min-height: 76px;
+          padding: 12px clamp(12px, 2.4vw, 30px);
+          background: linear-gradient(100deg, #ff6b00 0%, #ff7a18 55%, #f41483 100%);
+          box-shadow: 0 3px 14px rgba(28, 34, 50, 0.14);
+        }
+        .jb-logo span.jb-logo-name {
+          font-size: 24px;
+          letter-spacing: -0.35px;
+        }
+        .jb-nav {
+          min-height: 58px;
+          padding: 9px clamp(12px, 2.4vw, 30px);
+          gap: 18px;
+          background: #fff;
+          border-bottom: 1px solid #e7eaf0;
+          box-shadow: 0 3px 12px rgba(28, 34, 50, 0.06);
+        }
+        .jb-search-wrapper.jb-nav-search {
+          flex: 1 1 560px;
+          max-width: 760px;
+        }
+        .jb-nav-search .jb-search-input {
+          height: 44px;
+          border: 1px solid #d9dee8;
+          border-radius: 9px;
+          background: #f7f8fa;
+          font-size: 14.5px;
+        }
+        .jb-nav-search .jb-search-input:focus {
+          background: #fff;
+          border-color: #ff7a18;
+          box-shadow: 0 0 0 3px rgba(255, 122, 24, 0.13);
+        }
+        .jb-nav-search .jb-search-btn {
+          top: 4px;
+          right: 4px;
+          height: 36px;
+          width: 40px;
+          border-radius: 7px;
+          background: #ff6b00;
+        }
+        .jb-nav-left {
+          order: 2;
+          flex: 1 1 auto;
+          justify-content: flex-end;
+          gap: 2px;
+        }
+        .jb-nav-left button {
+          padding: 10px 11px;
+          border-radius: 7px;
+          color: #293348;
+          font-size: 13px;
+          font-weight: 650;
+        }
+        .jb-nav-left button:hover {
+          background: #fff3e9;
+          color: #e85d04;
+        }
+        @media (max-width: 1100px) {
+          .jb-nav { gap: 8px; }
+          .jb-search-wrapper.jb-nav-search { flex-basis: 360px; }
+          .jb-nav-left button { padding: 9px 7px; font-size: 12px; }
+        }
+        @media (max-width: 700px) {
+          .jb-header {
+            min-height: 64px;
+            padding: 8px 10px;
+            background: linear-gradient(100deg, #ff6b00 0%, #ff7a18 58%, #f41483 100%);
+          }
+          .jb-logo span.jb-logo-name { font-size: 16px; }
+          .jb-nav {
+            padding: 9px 10px 7px;
+            gap: 8px;
+            row-gap: 8px;
+            background: #fff;
+          }
+          .jb-search-wrapper.jb-nav-search {
+            order: 1;
+            flex: 1 1 100%;
+            width: 100%;
+            max-width: none;
+          }
+          .jb-nav-left {
+            order: 2;
+            flex: 0 0 100%;
+            width: 100%;
+            justify-content: flex-start;
+            gap: 2px;
+            padding-bottom: 2px;
+          }
+          .jb-nav-left button {
+            padding: 8px 10px;
+            font-size: 12px;
+          }
         }
 
       `}</style>
