@@ -160,6 +160,7 @@ function HomeHero({ banners, promo, onCta, fitMode }) {
 
     return (
       <div
+        className="jb-home-hero-shell"
         style={{
           width: "100%",
           maxWidth: "1200px",
@@ -280,6 +281,7 @@ function HomeHero({ banners, promo, onCta, fitMode }) {
   // original built-in JustBrand hero (unchanged default behaviour).
   return (
     <div
+      className="jb-home-hero-shell"
       style={{
         width: "100%",
         maxWidth: "1200px",
@@ -2044,6 +2046,7 @@ function App() {
       ====================================== */}
 
       <div
+        className="jb-home-main"
         style={{
           width: "100%",
           maxWidth: "1200px",
