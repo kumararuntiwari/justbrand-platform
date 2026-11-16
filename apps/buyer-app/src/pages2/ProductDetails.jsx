@@ -207,7 +207,7 @@ function ProductDetails({
 
   return (
     <div
-      className="jb-page"
+      className="jb-page jb-product-detail-page"
       style={{
         minHeight: "100vh",
         padding: isMobile ? "12px" : "20px",
@@ -234,6 +234,7 @@ function ProductDetails({
       {/* Mobile: one column (gallery on top, details below).
           Desktop: two columns (gallery left, details right). */}
       <div
+        className="jb-product-detail-shell"
         style={{
           maxWidth: "1180px",
           margin: "auto",
@@ -251,8 +252,9 @@ function ProductDetails({
             cropped (Fit to Cell / contain). Multi-image products get a
             slider with thumbnails, arrows, swipe and keyboard control;
             clicking the main image opens the zoom overlay. */}
-        <div>
+        <div className="jb-pdp-gallery-column">
           <div
+            className="jb-pdp-main-image"
             style={{
               height: isMobile ? "450px" : "520px",
               background: "#f8f8f8",
@@ -374,6 +376,7 @@ function ProductDetails({
           {/* thumbnails (multi-image only) */}
           {hasMultipleImages && (
             <div
+              className="jb-pdp-thumbnails"
               style={{
                 display: "flex",
                 gap: "8px",
@@ -440,6 +443,7 @@ function ProductDetails({
 
         {/* PRODUCT INFORMATION */}
         <div
+          className="jb-pdp-info"
           style={{
             minWidth: 0,
             display: "flex",
@@ -514,6 +518,7 @@ function ProductDetails({
 
           {/* PRICE / MRP / DISCOUNT */}
           <div
+            className="jb-pdp-price-row"
             style={{
               display: "flex",
               alignItems: "center",
@@ -684,6 +689,7 @@ function ProductDetails({
 
           {/* ACTION BUTTONS */}
           <div
+            className="jb-pdp-actions"
             style={{
               marginTop: "auto",
               paddingTop: isMobile ? "8px" : "16px",
@@ -1034,6 +1040,7 @@ function ProductReviews({ product }) {
 
   return (
     <section
+      className="jb-pdp-reviews"
       aria-label="Customer reviews"
       style={{
         marginTop: "26px",
